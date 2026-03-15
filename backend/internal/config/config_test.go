@@ -23,6 +23,15 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadFirebaseCredentials(t *testing.T) {
+	t.Setenv("FIREBASE_CREDENTIALS_FILE", "/tmp/creds.json")
+
+	cfg := config.Load()
+	if cfg.FirebaseCredentialsFile != "/tmp/creds.json" {
+		t.Errorf("expected /tmp/creds.json, got %s", cfg.FirebaseCredentialsFile)
+	}
+}
+
 func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("PORT", "9090")
 	t.Setenv("DATABASE_PATH", "/tmp/test.db")

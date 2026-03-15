@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
 
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
@@ -12,6 +15,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
+	"google.golang.org/api/option"
 )
 
 func main() {
@@ -28,6 +32,25 @@ func main() {
 	}
 	defer db.Close()
 
+	// Firebase auth client (nil = dev mode)
+	var firebaseAuthClient *auth.Client
+	if cfg.FirebaseCredentialsFile != "" {
+		opt := option.WithCredentialsFile(cfg.FirebaseCredentialsFile)
+		app, err := firebase.NewApp(context.Background(), nil, opt)
+		if err != nil {
+			slog.Error("failed to initialize Firebase app", "error", err)
+			os.Exit(1)
+		}
+		firebaseAuthClient, err = app.Auth(context.Background())
+		if err != nil {
+			slog.Error("failed to initialize Firebase auth client", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("Firebase auth enabled")
+	} else {
+		slog.Warn("Firebase auth disabled — running in dev mode")
+	}
+
 	// Repositories
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
@@ -42,7 +65,7 @@ func main() {
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
 
 	// Middleware
-	firebaseAuth := middleware.FirebaseAuth(nil) // dev mode: no Firebase client
+	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
 	agentAuth := middleware.AgentAuth(tokenRepo)
 
 	// Router

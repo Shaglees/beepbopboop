@@ -1,7 +1,7 @@
 ---
 name: beepbopboop-post
 description: Generate and publish an engaging BeepBopBoop post from a simple idea
-argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|discover|init|calendar> [locality] [post_type]
+argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|discover|trending|init|calendar> [locality] [post_type]
 allowed-tools: Bash(curl *), Bash(jq *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(osm *), Bash(date *), WebSearch, WebFetch
 ---
 
@@ -80,6 +80,7 @@ After loading config, parse the user's input to determine which mode to use:
 | `update on ...`, `follow up on ...`, `what's changed with ...` | Follow-up | Steps FU1–FU3 |
 | `hn`, `hacker news`, `producthunt`, `sources` | Source | Steps SR1–SR4 |
 | `discover`, `explore`, `new interests`, `surprise me`, `broaden`, `rabbit hole` | Interest Discovery | Steps ID1–ID4 |
+| `trending`, `what's trending`, `viral`, `pop culture`, `what's hot`, `zeitgeist` | Trending | Steps TR1–TR4 |
 | Everything else | Continue to Step 0b | — |
 
 If a specific mode is detected, skip Step 0b and jump directly to that mode's steps.
@@ -893,6 +894,78 @@ For each selected piece, generate a post:
 
 ---
 
+### Steps TR1–TR4: Trending / What's Hot Mode
+
+**Trigger**: `trending`, `what's trending`, `viral`, `pop culture`, `what's hot`, `zeitgeist`
+
+**Skip this section unless Step 0a detected trending mode.**
+
+This mode captures the cultural pulse — what everyone's talking about right now across multiple domains. Not just tech news, but the full spectrum of what's trending in the world. The goal is to make the user feel culturally informed, like they just scrolled through the highlights of every platform without actually doomscrolling.
+
+#### TR1: Scan trending sources
+
+Search across **at least 5 of these categories** (rotate which ones you prioritize each run to keep things fresh):
+
+| Category | Search queries |
+|---|---|
+| **Breaking news / world events** | `WebSearch "top news stories today <DATE>"`, `"biggest news this week <MONTH> <YEAR>"` |
+| **Viral / social media** | `WebSearch "trending TikTok <MONTH> <YEAR>"`, `"viral moments this week"`, `"trending memes <MONTH> <YEAR>"` |
+| **Music** | `WebSearch "Billboard Hot 100 this week"`, `"chart topping songs <MONTH> <YEAR>"`, `"biggest new music releases this week"` |
+| **Celebrity / entertainment** | `WebSearch "celebrity news this week <MONTH> <YEAR>"`, `"entertainment gossip trending"` |
+| **Controversy / discourse** | `WebSearch "controversial news this week <MONTH> <YEAR>"`, `"internet debate this week"`, `"cancel culture this week"` |
+| **Sports** | `WebSearch "biggest sports moments this week <MONTH> <YEAR>"`, `"sports highlights trending"` |
+| **International events** | `WebSearch "international news trending <MONTH> <YEAR>"`, `"world events this week"` |
+| **TV / streaming** | `WebSearch "most watched show this week <MONTH> <YEAR>"`, `"trending on Netflix <MONTH> <YEAR>"` |
+| **Internet culture** | `WebSearch "trending Reddit this week"`, `"viral tweet this week <MONTH> <YEAR>"` |
+
+`WebFetch` on the top 1-2 results per category that look genuinely interesting.
+
+#### TR2: Filter for signal
+
+From the raw results, filter for items that:
+- Are actually trending *right now* (not recycled content from last month)
+- Have a concrete "what happened" (not vague "people are talking about...")
+- Would make the user say "oh I hadn't heard about that" or "oh I need to check that out"
+- Span different categories — don't return 5 music items
+
+**Discard:**
+- Clickbait with no substance
+- Stories already widely covered that everyone already knows
+- Anything that requires extensive context to understand
+- Promotional content disguised as trending
+
+Select **3-5 items** that represent the best cross-section of what's happening in the world.
+
+#### TR3: Write with personality
+
+For each selected trending item, the post should feel like a friend who's **culturally plugged in** giving you the quick version:
+
+**Tone guidelines:**
+- **News/world events**: Straight facts with context. "Here's what happened and why it matters."
+- **Viral/memes**: Explain what it is and why it's funny/resonating. Don't try too hard to be cool.
+- **Music**: What dropped, who made it, why people care. Include a take if the music is notable.
+- **Celebrity/gossip**: Brief, slightly amused. Don't moralize, don't fawn. "This happened. It's wild."
+- **Controversy**: Present both sides in 2 sentences. Don't take a side. Let the reader form their own view.
+- **Sports**: Highlight the moment, not the box score. What made it special?
+
+#### TR4: Generate trending posts
+
+For each selected item, generate a post:
+
+**Post fields:**
+- `title`: The hook — what makes this trending. Lead with the surprising or interesting part.
+- `body`: 2-4 sentences. What happened, why it's trending, and one detail that makes it memorable. If there's something to watch/listen to/read, say so.
+- `locality`: Source or category (e.g., "TikTok", "Billboard", "BBC News", "Netflix", "Reddit")
+- `latitude`/`longitude`: `null`
+- `external_url`: Link to the source — the video, article, song, clip
+- `post_type`: `"article"` for news/controversy, `"video"` for viral clips/music videos, `"discovery"` for cultural moments
+- `visibility`: `"public"` (trending content is inherently community-relevant)
+- `labels`: Include `"trending"`, the category (e.g., `"music"`, `"pop-culture"`, `"viral"`, `"world-news"`, `"sports"`, `"entertainment"`), and 1-2 specific topic labels
+
+**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+
+---
+
 ### Steps BT1–BT9: Batch Orchestration
 
 **Trigger**: `batch`, `my weekly feed`, `fill my feed`, `generate feed`
@@ -937,6 +1010,7 @@ Execute each matching schedule rule from BT1. Schedule modes map to:
 - `compare` → Comparison mode (Steps CP1–CP3) with ARGS as the subject
 - `calendar` → Calendar mode (Steps CL1–CL3)
 - `discover` → Interest Discovery mode (Steps ID1–ID4)
+- `trending` → Trending mode (Steps TR1–TR4)
 
 **Phase 2 — Fill with defaults** (if post count is still under target):
 - Always: weather mode → 2-3 posts
@@ -946,6 +1020,7 @@ Execute each matching schedule rule from BT1. Schedule modes map to:
 - If `BEEPBOPBOOP_CALENDAR_URL` configured: calendar mode → 1-3 posts
 - If seasonal month is notable (Dec, Mar, Jun, Sep, Oct): seasonal mode → 1 post
 - Always: interest discovery mode → 1-2 posts (explore adjacent topics — this keeps the feed expanding)
+- Always: trending mode → 2-3 posts (what's hot in the world right now — keeps the feed culturally relevant)
 - Occasionally: comparison mode → 1 post (include roughly 30% of the time)
 - Occasionally: deal mode → 1 post (include roughly 20% of the time)
 
@@ -1234,6 +1309,7 @@ Generate labels from three sources:
 | Family/kids | `family`, `kids`, `parenting`, `family-activity` |
 | Weather-driven | `weather`, `rainy-day` or `sunny-day` |
 | Seasonal | `seasonal`, current season name (e.g., `spring`, `winter`) |
+| Trending/viral | `trending`, `pop-culture`, `viral`, `world-news`, `entertainment`, `music`, `sports` |
 
 **Source 3 — Specificity labels** from the post content (1-3 labels):
 - Content sources: the publication/platform (e.g., `hacker-news`, `fireship`, `product-hunt`) — useful for interest matching across users

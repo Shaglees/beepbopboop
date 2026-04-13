@@ -96,6 +96,7 @@ func main() {
 	// Agent-token-authenticated routes (Claude skill / agent client)
 	r.Group(func(r chi.Router) {
 		r.Use(agentAuth)
+		r.Get("/posts", postH.ListPosts)
 		r.Post("/posts", postH.CreatePost)
 	})
 

@@ -64,14 +64,6 @@ Parse the output and store the values for use in later steps. You need at minimu
 
 **Do NOT proceed past Step 0 if `BEEPBOPBOOP_API_URL` or `BEEPBOPBOOP_AGENT_TOKEN` are missing.** The user must provide them.
 
-### Step 0–deps: Ensure graphify is available
-
-```bash
-which graphify >/dev/null 2>&1 && echo "OK" || pip install --user graphifyy 2>/dev/null
-```
-
-Graphify is used for post deduplication (Step 4d) and post history tracking (Step 5b).
-
 ### Step 0a: Parse command
 
 After loading config, parse the user's input to determine which mode to use:
@@ -109,198 +101,11 @@ Examine the user's idea to determine the content mode:
 - Mentions a physical place, activity, or "near me" → local mode
 - Ambiguous → default to local mode
 
-### Steps IN1–IN10: Init Wizard
+### Init Wizard
 
-**Trigger**: `init`, `setup`, `configure`, `config`, or auto-triggered when config file is missing/incomplete.
+**Trigger**: `init`, `setup`, `configure`, `config`, or auto-triggered when config file is missing.
 
-**Skip this section unless Step 0a detected init mode or Step 0 found missing config.**
-
-Interactive wizard using `AskUserQuestion` at each step. If re-running with an existing config, show current values as defaults.
-
-#### IN1: Welcome
-
-Tell the user:
-> "Welcome to BeepBopBoop setup! This takes about 2 minutes and only needs to happen once. I'll walk you through connecting to the API, setting your home location, interests, and optional extras like family context and calendar integration. You can re-run this anytime with `/beepbopboop-post init` to update your config."
-
-#### IN2: API Connection
-
-Ask for:
-- **API URL** — suggest `http://localhost:8080` as default
-- **Agent token** — the `bbp_` token from their agent setup
-
-Test the connection:
-```bash
-curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer <TOKEN>" <API_URL>/feed
-```
-
-If the response is not `200`, warn the user: "Could not connect to the API. Check the URL and token. Continue anyway?" If they say no, stop the wizard.
-
-#### IN3: Home Address
-
-Ask for their full street address (e.g., "1234 Oak Bay Ave, Victoria, BC").
-
-Geocode it:
-```bash
-osm geocode "ADDRESS" | jq '.[0] | {lat, lon, display_name}'
-```
-
-Show the resolved result and ask for confirmation: "Is this correct? [resolved display_name] (lat, lon)". If not, let them try again or enter lat/lon manually.
-
-Store: `BEEPBOPBOOP_HOME_ADDRESS`, `BEEPBOPBOOP_HOME_LAT`, `BEEPBOPBOOP_HOME_LON`.
-
-This step is optional — the user can skip it and fall back to city-level location.
-
-#### IN4: Display Location
-
-Auto-derive a city-level display name from the IN3 geocoded result (e.g., "Victoria, BC, Canada"). Show the derived name and let the user override it.
-
-If IN3 was skipped, ask the user for their city/area directly.
-
-Store as `BEEPBOPBOOP_DEFAULT_LOCATION`.
-
-#### IN5: Interests
-
-Ask for comma-separated topics. Suggest examples based on common categories:
-> "What topics interest you? Examples: AI, startups, investing, cooking, fitness, gaming, music, travel, parenting"
-
-Store as `BEEPBOPBOOP_INTERESTS`.
-
-This step is optional — the user can skip it.
-
-#### IN6: Family
-
-Ask: "Would you like to add family members? This helps personalize content — e.g., suggesting kid-friendly venues or date-night spots."
-
-If yes, loop for each member:
-1. **Relationship**: partner, child, or pet
-2. **Name**: first name
-3. **Age**: number (children only — skip for partner/pet, store as `na`)
-4. **Interests**: comma-separated (optional)
-
-Continue asking "Add another family member?" until they say no.
-
-Format into `BEEPBOPBOOP_FAMILY` string: `role:name:age_or_na:interests` per member, separated by `;`.
-
-Example: `partner:Sarah:na:hiking,wine;child:Max:5:dinosaurs,lego;pet:Luna:na:walks`
-
-This step is optional — the user can skip it entirely.
-
-#### IN7: Content Sources
-
-Explain source types:
-> "You can add content sources that batch mode pulls from automatically:
-> - `hn` — Hacker News top stories filtered by your interests
-> - `ph` — Product Hunt daily launches
-> - `rss:<URL>` — any RSS/Atom feed (e.g., `rss:https://simonwillison.net/atom/everything`)
-> - `substack:<URL>` — a Substack newsletter"
-
-Ask for a comma-separated list. This step is optional.
-
-Store as `BEEPBOPBOOP_SOURCES`.
-
-#### IN8: Calendar
-
-Ask: "Do you have a calendar URL (ICS format) you'd like to connect? This lets BeepBopBoop turn your upcoming events into posts with travel time, weather, and practical details."
-
-Explain how to get it:
-> - **Google Calendar**: Settings → calendar → "Secret address in iCal format"
-> - **Apple Calendar**: Share calendar → copy the webcal:// URL
-> - **Outlook**: Settings → Shared calendars → Publish a calendar → ICS link
-
-If they provide a URL, test-fetch it:
-```bash
-curl -s -o /dev/null -w "%{http_code}" "<CALENDAR_URL>"
-```
-
-If the fetch fails, warn and let them skip or retry.
-
-Store as `BEEPBOPBOOP_CALENDAR_URL`. This step is optional.
-
-#### IN8b: Image Services
-
-Ask: "Posts look much better with images. Two free services are supported — Unsplash for real photos and imgur for hosting AI-generated images. Set up one or both?"
-
-**Unsplash** (for real stock photos):
-> "Sign up at https://unsplash.com/developers, create an app, and copy the Access Key. Free tier: 50 requests/hour."
-
-**imgur** (for hosting AI-generated images):
-> "Register an app at https://api.imgur.com/oauth2/addclient (choose 'Anonymous usage without user authorization'). Copy the Client-ID. Free: 1250 uploads/day."
-
-If both are configured, Unsplash is tried first. If no good photo is found, a Pollinations AI image is generated and uploaded to imgur.
-
-Store as `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` and `BEEPBOPBOOP_IMGUR_CLIENT_ID`. Both are optional — if neither is set, posts will have no images.
-
-#### IN9: Schedule
-
-Ask: "Would you like to set up a batch schedule? This tells batch mode what content to generate on which days."
-
-Explain the format: `DAY|MODE|ARGS` triplets. Suggest a starter schedule based on their interests from IN5:
-> "Here's a suggested starter schedule based on your interests:
-> `daily|weather|monday|interest|<FIRST_INTEREST> roundup|daily|source|hn`
-> Want to use this, customize it, or skip?"
-
-Also ask for batch range (default 8-15):
-> "How many posts should batch mode target? Default is 8-15."
-
-Store as `BEEPBOPBOOP_SCHEDULE`, `BEEPBOPBOOP_BATCH_MIN`, `BEEPBOPBOOP_BATCH_MAX`.
-
-This step is optional.
-
-#### IN10: Confirm & Save
-
-Show a full config summary:
-> ```
-> API URL:        http://localhost:8080
-> Agent Token:    bbp_xxxxx...
-> Home Address:   1234 Oak Bay Ave, Victoria, BC
-> Home Coords:    48.4284, -123.3248
-> Display Location: Victoria, BC, Canada
-> Interests:      AI, startups, investing
-> Family:         Sarah (partner), Max (child, 5), Luna (pet)
-> Sources:        hn, ph, rss:https://simonwillison.net/atom/everything
-> Calendar:       https://calendar.google.com/.../basic.ics
-> Schedule:       daily|weather|monday|interest|AI roundup|daily|source|hn
-> Batch Range:    8-15
-> Unsplash Key:   (configured)
-> imgur Client-ID: (configured)
-> ```
-
-Ask: "Save this config? (confirm / edit / cancel)"
-
-- **confirm**: Write the config file (see below)
-- **edit**: Ask which section to change, jump back to that step
-- **cancel**: Abort without saving
-
-Write the config file:
-```bash
-mkdir -p ~/.config/beepbopboop && cat > ~/.config/beepbopboop/config << 'ENDOFCONFIG'
-BEEPBOPBOOP_API_URL=<URL>
-BEEPBOPBOOP_AGENT_TOKEN=<TOKEN>
-BEEPBOPBOOP_DEFAULT_LOCATION=<LOCATION>
-BEEPBOPBOOP_INTERESTS=<INTERESTS>
-BEEPBOPBOOP_SOURCES=<SOURCES>
-BEEPBOPBOOP_SCHEDULE=<SCHEDULE>
-BEEPBOPBOOP_BATCH_MIN=<MIN>
-BEEPBOPBOOP_BATCH_MAX=<MAX>
-BEEPBOPBOOP_HOME_ADDRESS=<ADDRESS>
-BEEPBOPBOOP_HOME_LAT=<LAT>
-BEEPBOPBOOP_HOME_LON=<LON>
-BEEPBOPBOOP_FAMILY=<FAMILY>
-BEEPBOPBOOP_CALENDAR_URL=<CALENDAR_URL>
-BEEPBOPBOOP_UNSPLASH_ACCESS_KEY=<UNSPLASH_KEY>
-BEEPBOPBOOP_IMGUR_CLIENT_ID=<IMGUR_CLIENT_ID>
-ENDOFCONFIG
-```
-
-For optional keys that the user skipped, write them as comments:
-```bash
-# BEEPBOPBOOP_FAMILY=
-# BEEPBOPBOOP_CALENDAR_URL=
-```
-
-Confirm: "Config saved to `~/.config/beepbopboop/config`. You're all set! Run `/beepbopboop-post init` anytime to reconfigure."
-
-If the wizard was auto-triggered (missing config), continue with Step 0a to execute the user's original command. If it was triggered by `init`/`setup`, stop here.
+**Instructions:** Read and follow `INIT_WIZARD.md` in this skill directory. After the wizard completes, return here and continue with Step 0a.
 
 ---
 
@@ -356,12 +161,6 @@ If geocoding fails or returns no results, proceed without coordinates. Store the
 
 **Only run this step if lat/lon coordinates are available from Step 1** (either from geocoding or from `HOME_LAT`/`HOME_LON`).
 
-Wait 1 second between Nominatim and Overpass calls (rate limit courtesy):
-
-```bash
-sleep 1
-```
-
 Map the user's idea keyword to an OSM tag using this table:
 
 | Keyword | OSM Query Filter |
@@ -369,24 +168,15 @@ Map the user's idea keyword to an OSM tag using this table:
 | coffee, cafe, espresso | `"amenity"="cafe"` |
 | restaurant, food, eat, dinner, lunch | `"amenity"="restaurant"` |
 | bar, pub, drinks, beer | `"amenity"="bar"` |
-| pizza | `"amenity"="restaurant"["cuisine"="pizza"]` |
 | park, green, nature | `"leisure"="park"` |
-| tennis | `"leisure"="pitch"["sport"="tennis"]` |
 | gym, fitness, workout | `"leisure"="fitness_centre"` |
-| swimming, pool | `"leisure"="swimming_pool"` |
-| library, books | `"amenity"="library"` |
-| pharmacy, chemist | `"amenity"="pharmacy"` |
 | bakery, bread, pastry | `"shop"="bakery"` |
-| supermarket, grocery | `"shop"="supermarket"` |
-| bookshop, bookstore | `"shop"="books"` |
 | cinema, movie, film | `"amenity"="cinema"` |
 | museum, gallery, art | `"tourism"="museum"` |
-| hotel, stay, accommodation | `"tourism"="hotel"` |
-| bike, bicycle, cycling | `"amenity"="bicycle_rental"` |
-| doctor, clinic, health | `"amenity"="clinic"` |
-| school, education | `"amenity"="school"` |
 | playground, kids | `"leisure"="playground"` |
 | theatre, play, drama, acting, stage | `"amenity"="theatre"` |
+
+For other keywords, use your best judgment to find the appropriate OSM tag (e.g., `"shop"="books"` for bookshops, `"leisure"="pitch"["sport"="tennis"]` for tennis courts, `"tourism"="hotel"` for accommodation).
 
 If the idea doesn't match any keyword, skip POI discovery and proceed to content generation.
 
@@ -432,20 +222,6 @@ Apply classification rules in order:
 5. Idea matches `place` keywords → `place`
 6. Default → `discovery`
 
-#### Visibility classification
-
-Determine visibility alongside post type. Evaluate these rules AFTER generating post content (since the body text determines the result), but BEFORE publishing:
-
-| Content source / characteristic | Visibility | Why |
-|--------------------------------|-----------|-----|
-| Calendar mode (CL1–CL3) | `private` | Calendar events reveal personal schedule |
-| Post body references family member names from `BEEPBOPBOOP_FAMILY` | `personal` | "Maja would love this" is personal |
-| Post body contains "from your door", "from home", "X minutes from here" | `personal` | Reveals home location |
-| Post body contains user's street/address | `personal` | Reveals home address |
-| Comparison mode about a personal topic (e.g., "best coffee near me") | `personal` | Location-specific |
-| Weather mode with family suggestions | `personal` | Combines location + family |
-| All other posts | `public` | Safe for cross-user discovery |
-
 ### Steps 1i–3i: Interest-Based Flow (interest mode only)
 
 **If Step 0b routed to interest mode, skip Steps 1–2b and follow these steps instead.**
@@ -485,7 +261,7 @@ For each piece of content found, classify and generate a post:
 - `image_url`: Find via Unsplash or generate via Pollinations+imgur (see Step 4b)
 - `post_type`: `"article"` or `"video"`
 
-**Then skip to Step 4b for image generation and Step 5 for publishing.**
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 ### Steps W1–W3: Weather-Aware Mode
 
@@ -528,7 +304,7 @@ For each selected activity:
 2. Weave weather context naturally into the post body opening: "It's 22°C and cloudless today — " or "Rain all afternoon — "
 3. Post type: `place` or `discovery`
 
-**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 **Example title**: "Rain all afternoon: the Royal BC Museum has a new exhibition on loan from Berlin"
 
@@ -563,7 +339,7 @@ Generate **1 discovery post** with a ranking/comparison format:
 - Each place gets a one-line verdict
 - Post type: `discovery`
 
-**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 **Example**:
 > **Title**: "Victoria's 5 best coffee roasters, ranked by someone who's tried them all"
@@ -608,7 +384,7 @@ Generate **1-2 posts** (discovery or event type):
 - Body should include specific dates, venues, and practical details
 - Post type: `discovery` or `event` depending on whether it's a specific event or general seasonal tip
 
-**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 ---
 
@@ -642,7 +418,7 @@ Generate **1-2 discovery posts** with deal details:
 - Body should include: what the deal is, where/how to get it, when it expires, any conditions
 - Post type: `discovery`
 
-**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 ---
 
@@ -715,7 +491,7 @@ For each `substack:<URL>` in `BEEPBOPBOOP_SOURCES`:
   - `latitude`/`longitude`: `null`
   - `post_type`: `article`
 
-**After generating all source posts, proceed to Step 4b for image generation and Step 5 for publishing.**
+**After generating all source posts, proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 ---
 
@@ -791,7 +567,7 @@ For each event, generate a post:
 - **latitude/longitude**: From geocoded event location, or `null`
 - **external_url**: Event URL if available
 
-**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 ---
 
@@ -823,7 +599,7 @@ Generate **1 post** framed as an update:
 - `locality`: source name or topic area
 - `latitude`/`longitude`: `null` (unless the topic is location-specific)
 
-**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 ---
 
@@ -894,9 +670,9 @@ For each selected piece, generate a post:
 - `external_url`: Direct link to the source content
 - `post_type`: `"discovery"` (this is always a discovery — the user is discovering a new interest)
 - `visibility`: `"public"` (these make great community content since they cross interest boundaries)
-- `labels`: Include `"discovery"`, `"interest-discovery"`, the adjacent topic area, AND the original interest it connects to (for cross-user matching)
+- `labels`: Include `"discovery"`, `"interest-discovery"`, the adjacent topic area, AND the original interest it connects to (for cross-user matching). Step 4c will merge these with standard category labels.
 
-**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 **After publishing**, if the agent has memory capabilities, save a note about which adjacent topics resonated (were published) so future discovery runs explore *new* adjacent territories rather than repeating. Over time, the agent builds an expanding map of the user's intellectual curiosity.
 
@@ -968,9 +744,9 @@ For each selected item, generate a post:
 - `external_url`: Link to the source — the video, article, song, clip
 - `post_type`: `"article"` for news/controversy, `"video"` for viral clips/music videos, `"discovery"` for cultural moments
 - `visibility`: `"public"` (trending content is inherently community-relevant)
-- `labels`: Include `"trending"`, the category (e.g., `"music"`, `"pop-culture"`, `"viral"`, `"world-news"`, `"sports"`, `"entertainment"`), and 1-2 specific topic labels
+- `labels`: Include `"trending"`, the category (e.g., `"music"`, `"pop-culture"`, `"viral"`, `"world-news"`, `"sports"`, `"entertainment"`), and 1-2 specific topic labels. Step 4c will merge these with standard category labels.
 
-**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
 ---
 
@@ -1046,9 +822,9 @@ Execute Phase 2 modes as needed to reach the target. Report progress after each 
 
 #### BT6: Deduplicate
 
-Review all generated posts across all modes:
-- Remove duplicate venues (same name + same coordinates)
-- Remove duplicate articles (same URL or same title)
+Run Step 4d (graphify dedup) across the entire batch. In addition to the graphify history check, also remove:
+- Duplicate venues within this batch (same name + same coordinates)
+- Duplicate articles within this batch (same URL or same title)
 - Keep the version with richer content if duplicates exist
 
 #### BT7: Diversity check
@@ -1202,6 +978,20 @@ The bad version uses 5 kill-list phrases, could describe any cafe in any city, a
 Locality context (use `display_name` from geocoding if available, or the raw locality arg): `$1`
 Post type (if provided as third argument): `$2`
 
+### Step 4a: Classify visibility
+
+Evaluate visibility AFTER generating post content (since the body text determines the result):
+
+| Content source / characteristic | Visibility | Why |
+|--------------------------------|-----------|-----|
+| Calendar mode (CL1–CL3) | `private` | Calendar events reveal personal schedule |
+| Post body references family member names from `BEEPBOPBOOP_FAMILY` | `personal` | "Maja would love this" is personal |
+| Post body contains "from your door", "from home", "X minutes from here" | `personal` | Reveals home location |
+| Post body contains user's street/address | `personal` | Reveals home address |
+| Comparison mode about a personal topic (e.g., "best coffee near me") | `personal` | Location-specific |
+| Weather mode with family suggestions | `personal` | Combines location + family |
+| All other posts | `public` | Safe for cross-user discovery |
+
 ### Step 4b: Find or generate post image
 
 Every post should have an image. The iOS app loads images via `AsyncImage`, so the `image_url` must be a direct, fast-loading URL to an image file — not a slow generation endpoint.
@@ -1303,21 +1093,16 @@ Generate labels from three sources:
 
 | Topic area | Example labels |
 |------------|---------------|
-| Coffee/cafe | `coffee`, `cafe`, `specialty-coffee`, `pour-over` |
-| Restaurant/food | `restaurant`, `dining`, `food`, cuisine type (e.g., `italian`, `sushi`) |
-| Bar/pub | `bar`, `pub`, `nightlife`, `drinks`, `craft-beer` |
-| Park/outdoor | `park`, `outdoor`, `nature`, `hiking`, `walking` |
-| Sports event | `sports`, `live-events`, sport name (e.g., `hockey`, `soccer`, `basketball`) |
-| Theatre/performance | `theatre`, `performing-arts`, `live-events` |
-| Music/concert | `music`, `live-music`, `concert` |
+| Coffee/cafe | `coffee`, `cafe`, `specialty-coffee` |
+| Restaurant/food | `restaurant`, `food`, cuisine type (e.g., `italian`, `sushi`) |
+| Sports/events | `sports`, `live-events`, sport name (e.g., `hockey`) |
+| Theatre/music | `theatre`, `performing-arts`, `live-music`, `concert` |
 | AI/tech | `ai`, `machine-learning`, `tech`, `software` |
-| Startup/business | `startup`, `business`, `investing`, `entrepreneurship` |
-| Cooking/food content | `cooking`, `recipes`, `food`, `meal-planning` |
-| Fitness/health | `fitness`, `exercise`, `health`, `wellness` |
-| Family/kids | `family`, `kids`, `parenting`, `family-activity` |
-| Weather-driven | `weather`, `rainy-day` or `sunny-day` |
-| Seasonal | `seasonal`, current season name (e.g., `spring`, `winter`) |
-| Trending/viral | `trending`, `pop-culture`, `viral`, `world-news`, `entertainment`, `music`, `sports` |
+| Startup/business | `startup`, `business`, `investing` |
+| Trending/viral | `trending`, `pop-culture`, `viral`, `world-news` |
+| Weather/seasonal | `weather`, `rainy-day`, `seasonal`, season name |
+
+For other topics, derive labels using the same pattern — use lowercase, hyphenated category terms that another user might follow or search for.
 
 **Source 3 — Specificity labels** from the post content (1-3 labels):
 - Content sources: the publication/platform (e.g., `hacker-news`, `fireship`, `product-hunt`) — useful for interest matching across users
@@ -1333,22 +1118,28 @@ Generate labels from three sources:
 
 ### Step 4d: Dedup check via graphify
 
-**After generating content but before publishing**, check each post against the graphify knowledge graph to avoid repeating topics.
+**After generating all content but before publishing**, check posts against the graphify knowledge graph to avoid repeating topics.
 
-For each post you're about to publish, query with its core topic:
+**Single-post mode:** Query with the post's core topic:
 
 ```bash
 graphify query "post: <TITLE_OR_CORE_TOPIC>" --budget 500
 ```
 
-Check the returned nodes for:
+**Batch mode:** Run ONE query combining all post titles to save tokens:
+
+```bash
+graphify query "posts: <TITLE1> | <TITLE2> | <TITLE3> | ..." --budget 1500
+```
+
+Check returned nodes for:
 - **Same title** (exact or near-match) → **drop** this post, generate a replacement
 - **Same external_url** → **drop** (never post the same link twice)
 - **Same narrow topic covered recently** (e.g., prior node shows "coffee" + "Victoria" and you're about to post another Victoria coffee shop) → **pivot** to a different angle or venue
 
-If you need to replace a dropped post, go back to the relevant research step and find an alternative.
+Also dedup within the current batch — no two posts should cover the same narrow topic.
 
-**In batch mode (BT6):** Run dedup across the entire batch — both against graphify history AND across the batch itself (no two posts in the same batch should cover the same topic).
+If you need to replace a dropped post, go back to the relevant research step and find an alternative.
 
 ### Step 5: Publish to the backend
 
@@ -1413,7 +1204,7 @@ graphify save-result \
   --answer "<POST_TYPE> about <CORE_TOPIC>. Labels: <LABELS_CSV>. URL: <EXTERNAL_URL_OR_NONE>. Published <DATE>." \
   --type query \
   --nodes <LABEL1> <LABEL2> <LABEL3> <POST_TYPE> \
-  --memory-dir graphify-out/memory
+  --memory-dir ~/beepbopboop/graphify-out/memory
 ```
 
 Where:
@@ -1448,278 +1239,77 @@ If the response contains an `error` field, show the error and suggest fixes:
 
 ## Examples
 
-### Example 1: Coffee → place
+Each example shows a different pattern the skill supports. The specific topics are illustrative — any keyword, topic, or idea can be used with any applicable mode.
 
-Given the idea "coffee" with locality "Dublin 2, Ireland":
+### Example 1: Single keyword → local place post
 
-1. `osm geocode "Dublin 2, Ireland"` → lat: 53.339, lon: -6.261
-2. Map "coffee" → `"amenity"="cafe"`
-3. Classify → **place** (cafe keyword)
-4. `osm pois '"amenity"="cafe"' 53.339 -6.261 1500 5` → finds "Kaph" (290m), "Clement & Pekoe" (380m), "3fe Coffee" (520m)
-5. Find image: Unsplash search "cafe coffee latte morning Dublin" → Unsplash CDN URL
-6. Generate post:
+**What this demonstrates:** The full local flow — geocoding, POI discovery, venue-specific coordinates, proximity-based writing. Shows how a single keyword becomes an actionable, grounded post.
 
-**title**: "Kaph is 3 minutes from your door"
-**body**: "There's a cafe 290 metres away that regulars swear by. Kaph on Drury Street does single-origin pourovers in a space small enough to guarantee you'll overhear something interesting. Open until 6pm — you could be there before your coffee craving fades."
-**image_url**: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1024&h=768&fit=crop"
-**external_url**: "https://www.kaph.ie"
-**locality**: "Dublin 2, Dublin, Ireland"
-**latitude**: 53.339
-**longitude**: -6.261
-**post_type**: "place"
-**visibility**: "personal"
-**labels**: ["place", "coffee", "cafe", "specialty-coffee", "pour-over"]
+Given "coffee" with locality "Dublin 2, Ireland":
 
-### Example 2: Hockey games → multiple event posts (broad survey)
+1. Geocode → lat/lon. Map "coffee" → `"amenity"="cafe"`. POI search finds 3 cafes with distances.
+2. Classify → **place**. Generate content using POI data (real name, distance, hours).
+3. Steps 4a→4b→4c→4d→5→5b (visibility, image, labels, dedup, publish, save to graphify).
 
-Given the idea "hockey games" with locality "Victoria, BC, Canada":
+**Result:** `title: "Kaph is 3 minutes from your door"` / `body: "There's a cafe 290 metres away that regulars swear by..."` / `post_type: "place"` / `visibility: "personal"` (mentions "your door") / `labels: ["place", "coffee", "cafe", "specialty-coffee"]`
 
-1. `osm geocode "Victoria, BC, Canada"` → lat: 48.428, lon: -123.365
-2. No direct OSM keyword match → skip POI discovery
-3. Classify → **event** (time-bound sports experience)
-4. Research — **broad survey first** (WebSearch), deep dive (WebFetch), split into 2 posts
-5. Geocode each venue:
-   - `osm geocode-viewbox "Save-On-Foods Memorial Centre" 48.428 -123.365` → lat: 48.4452, lon: -123.3655
-   - `osm geocode-viewbox "The Q Centre" 48.428 -123.365` → lat: 48.4355, lon: -123.4948
-6. Find images: Unsplash search "ice hockey arena crowd" → Unsplash CDN URLs
-7. Publish **Post 1 — Royals:**
+### Example 2: Broad idea → multiple posts with venue geocoding
 
-**title**: "Royals host three games at Save-On-Foods this week"
-**body**: "The Victoria Royals are in a playoff push with three home games: Everett on Tuesday (7:05pm), then Prince George for a back-to-back Friday at 7:05pm and Saturday at 6:05pm. Tickets start at $17 through Select Your Tickets — these games carry playoff implications so the atmosphere should be electric."
-**image_url**: "https://images.unsplash.com/photo-1580692475446-c2fabbbbf835?w=1024&h=768&fit=crop"
-**external_url**: "https://selectyourtickets.evenue.net/events/VR"
-**locality**: "Save-On-Foods Memorial Centre, Victoria, BC"
-**latitude**: 48.4452, **longitude**: -123.3655
-**post_type**: "event"
-**visibility**: "public"
-**labels**: ["event", "hockey", "sports", "live-events"]
+**What this demonstrates:** How a broad idea triggers Step 3's broad survey research, splits into multiple posts, and each post gets its own venue-specific coordinates (not city-centre). Shows the "different venues = separate posts" rule.
 
-8. Publish **Post 2 — Grizzlies:**
+Given "hockey games" with locality "Victoria, BC, Canada":
 
-**title**: "Grizzlies take on Nanaimo at The Q Centre on Wednesday"
-**body**: "The Victoria Grizzlies play Nanaimo at The Q Centre this Wednesday at 7pm. Adult tickets are $18, youth $15, and kids $10. The Grizzlies have already clinched a playoff spot, so this is a chance to see them tune up before the postseason starts in April."
-**image_url**: "https://images.unsplash.com/photo-1515703407324-5f753afd8be8?w=1024&h=768&fit=crop"
-**external_url**: "https://www.victoriagrizzlies.com/tickets"
-**locality**: "The Q Centre, Colwood, BC"
-**latitude**: 48.4355, **longitude**: -123.4948
-**post_type**: "event"
-**visibility**: "public"
-**labels**: ["event", "hockey", "sports", "live-events"]
+1. Geocode city. No OSM keyword match → skip POI. Classify → **event**.
+2. Step 3 broad survey: WebSearch finds Royals (WHL) at Save-On-Foods + Grizzlies (VIJHL) at The Q Centre → 2 separate posts.
+3. Geocode each venue individually: `osm geocode-viewbox "Save-On-Foods Memorial Centre" ...` and `osm geocode-viewbox "The Q Centre" ...`
+4. Each post gets its own lat/lon, ticket prices, schedule, booking URL.
 
-### Example 3: General tip → discovery
+**Result:** Post 1: `title: "Royals host three games at Save-On-Foods this week"` / `locality: "Save-On-Foods Memorial Centre"` / `lat: 48.4452`. Post 2: `title: "Grizzlies take on Nanaimo at The Q Centre"` / `locality: "The Q Centre, Colwood"` / `lat: 48.4355`.
 
-Given the idea "best time to visit the farmers market" with locality "Portland, OR":
+### Example 3: Topic → article post (interest mode)
 
-1. `osm geocode "Portland, OR"` → lat: 45.523, lon: -122.676
-2. No OSM keyword match → skip POI discovery
-3. Classify → **discovery** (no event or place keyword match)
-4. Research farmers market schedules via WebSearch
-5. Find image: Unsplash search "farmers market produce outdoor morning" → Unsplash CDN URL
-6. Generate post:
+**What this demonstrates:** Non-geographic content flow — no geocoding, no POI discovery. Locality becomes source attribution, external_url links to original content. Shows how interest mode skips Steps 1-2 entirely and goes straight to web research.
 
-**title**: "Saturday at 9am is the secret window for Portland farmers markets"
-**body**: "Most people show up around 10:30 and fight for parking. The vendors are fully set up by 8:30, the best produce goes fast, and by 9am you've got first pick with room to breathe. The PSU market on the Park Blocks is the big one — arrive early, grab a coffee from the Extracto stand, and work your way south."
-**image_url**: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=1024&h=768&fit=crop"
-**external_url**: ""
-**locality**: "Portland, Multnomah County, Oregon, United States"
-**latitude**: 45.523
-**longitude**: -122.676
-**post_type**: "discovery"
-**visibility**: "public"
-**labels**: ["discovery", "farmers-market", "food", "outdoor", "morning"]
+Given "latest AI news":
 
-### Example 4: AI news → article (interest mode)
+1. Route → interest mode. WebSearch for recent articles, WebFetch top results.
+2. Classify → **article**. No lat/lon. Locality = source name.
 
-Given the idea "latest AI news":
+**Result:** `title: "Anthropic's new reasoning model scores 94% on ARC-AGI"` / `locality: "Anthropic Blog"` / `latitude: null` / `external_url: "https://anthropic.com/blog/..."` / `post_type: "article"` / `labels: ["article", "ai", "machine-learning", "research"]`
 
-1. Route → interest mode (topic-based, no location)
-2. WebSearch "AI news March 2026", "latest AI breakthroughs March 2026"
-3. WebFetch top 2-3 results for details
-4. For each notable article, generate a post:
+### Example 4: Weather → chained local posts
 
-**title**: "Anthropic's new reasoning model scores 94% on ARC-AGI"
-**body**: "The March update to Claude's reasoning stack nearly doubled its score on the ARC-AGI benchmark. The key change: letting the model iterate on its own outputs before committing. Full technical breakdown in the blog post."
-**image_url**: Unsplash search "artificial intelligence technology abstract" or Pollinations→imgur fallback
-**external_url**: "https://anthropic.com/blog/..."
-**locality**: "Anthropic Blog"
-**latitude**: null, **longitude**: null
-**post_type**: "article"
-**visibility**: "public"
-**labels**: ["article", "ai", "machine-learning", "research"]
+**What this demonstrates:** How weather mode chains into local mode — current conditions drive activity selection, then each activity runs the full local flow (geocode venue, research details) with weather context woven into the post opening.
 
-### Example 5: YouTube creator → video (interest mode)
+Given "weather" with location "Victoria, BC, Canada":
 
-Given the idea "latest from Fireship":
+1. Route → weather mode. WebSearch weather → 14°C, rain by afternoon.
+2. Map rainy conditions → museums, cozy cafes. Run local flow for each.
+3. Each post gets venue-specific geocoding + weather context in the title/body opener.
 
-1. Route → interest mode (specific creator)
-2. WebSearch "Fireship latest video March 2026"
-3. WebFetch the YouTube channel or video page
-4. Generate post:
+**Result:** Post 1: `title: "Rain by 2pm — the Royal BC Museum has a new exhibition you haven't seen"` / `body: "The Amazonia exhibit runs until April..."` / `locality: "Royal BC Museum"`. Post 2: `title: "Murchie's on Government does a proper afternoon tea for $18"` / `body: "Grey sky, warm tea..."`.
 
-**title**: "Fireship just dropped a mass video on WebGPU"
-**body**: "The 12-minute explainer covers how WebGPU is replacing WebGL for browser-based 3D and ML inference. Includes a live demo of running a diffusion model entirely in the browser tab. If you've been ignoring WebGPU, this is the catch-up video."
-**image_url**: Unsplash search "content creator workspace studio monitors" or Pollinations→imgur fallback
-**external_url**: "https://youtube.com/watch?v=..."
-**locality**: "Fireship on YouTube"
-**latitude**: null, **longitude**: null
-**post_type**: "video"
-**visibility**: "public"
-**labels**: ["video", "tech", "webgpu", "software", "fireship"]
+### Example 5: Batch → diverse feed from multiple modes
 
-### Example 6: Weather → place posts (weather mode)
+**What this demonstrates:** How batch mode composes multiple modes into one diverse feed. Scheduled rules run first (Phase 1), then defaults fill to target count (Phase 2), then BT6 dedup + BT7 diversity check ensure no repeats and good variety. Shows the full pipeline end-to-end.
 
-Given the idea "weather" with default location "Victoria, BC, Canada":
+Given "batch" on a Monday with schedule `monday|interest|AI roundup|daily|weather|daily|source|hn`:
 
-1. Route → weather mode (Step 0a)
-2. WebSearch "Victoria BC Canada weather today" → 14°C, cloudy with rain expected afternoon
-3. Map to activities: museums, cozy cafes, bookshops (rainy conditions)
-4. Run local flow for each activity with weather context
-5. Generate 2 posts:
+1. Target: 10 posts (random 8-15). Phase 1 scheduled: weather→2 posts, interest "AI roundup"→2 posts, source HN→2 posts.
+2. Phase 2 fill (4 more): local "events this week"→3 posts, seasonal→1 post.
+3. BT6: graphify dedup (one batch query). BT7: diversity check passes — 4 types, mix of local/non-local.
+4. Publish all 10, report with mode attribution table.
 
-**Post 1:**
-**title**: "Rain by 2pm — the Royal BC Museum has a new exhibition you haven't seen"
-**body**: "The Amazonia exhibit runs until April and most locals haven't been yet. It's 14°C and the clouds are rolling in — skip the outdoor plans and spend two hours in a climate-controlled rainforest instead. Adult tickets are $29, but members get in free."
-**image_url**: Unsplash or Pollinations→imgur (see Step 4b)
-**locality**: "Royal BC Museum, Victoria, BC"
-**latitude**: 48.4195, **longitude**: -123.3677
-**post_type**: "place"
-**visibility**: "public"
-**labels**: ["place", "museum", "rainy-day", "indoor"]
-
-**Post 2:**
-**title**: "Murchie's on Government does a proper afternoon tea for $18"
-**body**: "Grey sky, warm tea — Murchie's has been doing this since 1894 and it shows. Their 1894 blend is the one to order. Grab a window seat and watch the rain hit the harbour. Open until 6pm."
-**image_url**: Unsplash or Pollinations→imgur (see Step 4b)
-**locality**: "Murchie's, Victoria, BC"
-**latitude**: 48.4236, **longitude**: -123.3685
-**post_type**: "place"
-**visibility**: "public"
-**labels**: ["place", "cafe", "tea", "rainy-day", "afternoon"]
-
-### Example 7: Compare coffee shops → discovery (comparison mode)
-
-Given the idea "compare coffee roasters":
-
-1. Route → comparison mode (Step 0a)
-2. Geocode "Victoria, BC, Canada"
-3. POI discovery with 3000m radius, limit 10 → finds 8 cafes
-4. Research top 5: reviews, specialties, prices
-5. WebSearch "best coffee roasters Victoria BC 2026"
-6. Generate 1 post:
-
-**title**: "Victoria's 5 best coffee roasters, ranked by someone who's tried them all"
-**body**: "Bows & Arrows on Fort Street wins on single-origin range — their Ethiopian Yirgacheffe is worth the $6. Discovery Coffee on Government is the safe pick with the best pastry selection. Habit on Pandora does the best cortado in town at $4.50. Drumroaster on Blanshard is the dark horse for pour-over purists. 2% Jazz on Oak Bay Ave rounds it out with the best atmosphere."
-**image_url**: Unsplash search "coffee roasting beans artisan" or Pollinations→imgur fallback
-**locality**: "Victoria, BC, Canada"
-**latitude**: 48.428, **longitude**: -123.365
-**post_type**: "discovery"
-**visibility**: "public"
-**labels**: ["discovery", "coffee", "cafe", "specialty-coffee"]
-
-### Example 8: HN source → article posts (source mode)
-
-Given the idea "hn" with interests "AI,startups,investing":
-
-1. Route → source mode (Step 0a)
-2. Fetch top 30 HN stories via API
-3. Filter by interests: find 4 stories matching "AI" or "startups"
-4. Take top 2 by score
-5. WebFetch each story URL for summary
-6. Generate 2 posts:
-
-**Post 1:**
-**title**: "YC's latest batch has 3 companies building AI code review tools"
-**body**: "The Winter 2026 batch just launched and the pattern is obvious: three separate teams are betting that AI can replace human code reviewers. One of them — CodeLens — claims 94% agreement with senior engineer reviews on a 500-PR benchmark. The others are taking different angles: one focuses on security, the other on performance regressions."
-**image_url**: Unsplash or Pollinations→imgur (see Step 4b)
-**external_url**: "https://news.ycombinator.com/item?id=..."
-**locality**: "Hacker News"
-**latitude**: null, **longitude**: null
-**post_type**: "article"
-**visibility**: "public"
-**labels**: ["article", "ai", "startups", "software", "hacker-news"]
-
-**Post 2:**
-**title**: "Open-source alternative to Notion AI hits 10k GitHub stars in a week"
-**body**: "AnyContext launched on Monday and already has 10,000 stars. It's a local-first knowledge base with built-in RAG — everything runs on your machine, no API keys needed. The 43-point HN thread is mostly people surprised it actually works offline."
-**image_url**: Unsplash or Pollinations→imgur (see Step 4b)
-**external_url**: "https://github.com/..."
-**locality**: "Hacker News"
-**latitude**: null, **longitude**: null
-**post_type**: "article"
-**visibility**: "public"
-**labels**: ["article", "ai", "open-source", "software", "hacker-news"]
-
-### Example 9: Batch → diverse feed (batch mode)
-
-Given the idea "batch" on a Monday with schedule `monday|interest|AI roundup|daily|weather|daily|source|hn`:
-
-1. Route → batch mode (Step 0a)
-2. Load schedule: matches Monday → `interest: AI roundup`, `daily` → `weather`, `daily` → `source: hn`
-3. Target: 10 posts (random between 8 and 15)
-4. Execute:
-
-**Phase 1 — Scheduled:**
-- Weather mode → 2 posts (14°C, cloudy — museum + cafe suggestions)
-- Interest mode: "AI roundup" → 2 article posts
-- Source mode: HN → 2 article posts matching interests
-
-**Phase 2 — Fill (need 4 more):**
-- Local: "events this week" → 3 event posts
-- Seasonal: spring in Victoria → 1 discovery post
-
-5. Total: 10 posts. Diversity check: 3 types (place, article, event, discovery), mix of local and non-local. Passes.
-6. Publish all 10 posts
-7. Report:
-
-| # | Title | Type | Vis | Labels | Source | Post ID |
-|---|-------|------|-----|--------|--------|---------|
-| 1 | Rain by 2pm — the Royal BC Museum has a new exhibition | place | public | museum, rainy-day, indoor | weather | abc123 |
-| 2 | Murchie's does a proper afternoon tea for $18 | place | public | cafe, tea, rainy-day | weather | abc124 |
-| 3 | Claude 4.5 rewrites the reasoning benchmark playbook | article | public | ai, machine-learning, research | interest | def456 |
-| 4 | Three startups just raised $50M to replace dashboards with AI | article | public | ai, startups, investing | interest | def457 |
-| 5 | YC's latest batch has 3 companies building AI code review | article | public | ai, startups, software, hacker-news | HN | ghi789 |
-| 6 | Open-source Notion AI alternative hits 10k stars | article | public | ai, open-source, software, hacker-news | HN | ghi790 |
-| 7 | Royals host three games this week — tickets from $17 | event | public | hockey, sports, live-events | local | jkl012 |
-| 8 | Victoria Grizzlies take on Nanaimo Wednesday at The Q Centre | event | public | hockey, sports, live-events | local | jkl013 |
-| 9 | Blue Bridge Theatre has a new one-woman show opening Friday | event | public | theatre, performing-arts, live-events | local | jkl014 |
-| 10 | Cherry blossoms are peaking along Moss Street this week | discovery | public | seasonal, spring, outdoor, nature | seasonal | mno345 |
-
-### Example 10: Discover → new interests (interest discovery mode)
-
-Given the idea "discover" with interests "AI,startups,ML,agents,investing" and location "Victoria, BC":
-
-1. Route → interest discovery mode (Step 0a)
-2. Map interest graph:
-   - AI → computational neuroscience, synthetic biology, AI-generated music
-   - startups → indie hacking, climate tech, deep tech hardware
-   - investing → behavioral economics, economic history, alternative assets
-   - agents → swarm intelligence, digital twins, cognitive science
-   - Victoria, BC → maritime history, indigenous Lekwungen culture, urban ecology
-3. Scout 3-5 adjacent territories:
-   - WebSearch "computational neuroscience breakthroughs April 2026" → finds a paper on fruit fly brain mapping
-   - WebSearch "Victoria BC hidden history" → finds article about the underground tunnels of Chinatown
-   - WebSearch "swarm intelligence for startup people" → finds a piece on ant colony optimization in logistics
-4. Filter for bridges: select 2 that connect back to configured interests
-5. Generate 2 posts:
-
-**Post 1:**
-**title**: "Scientists just mapped an entire fruit fly brain — and it looks like a transformer"
-**body**: "A team at Princeton finished the first complete connectome of a fruit fly — 140,000 neurons, every single synapse. The weird part: the information routing patterns look structurally similar to attention heads in transformer models. It's not a metaphor — there's a real mathematical parallel. If you've been following AI architectures, this is the biology paper that'll reframe how you think about neural networks."
-**image_url**: Unsplash search "neuroscience brain microscopy" or Pollinations→imgur fallback
-**external_url**: "https://princeton.edu/news/..."
-**locality**: "Princeton Neuroscience Institute"
-**latitude**: null, **longitude**: null
-**post_type**: "discovery"
-**visibility**: "public"
-**labels**: ["discovery", "interest-discovery", "neuroscience", "ai", "machine-learning", "biology"]
-
-**Post 2:**
-**title**: "Victoria's Chinatown has underground tunnels most locals have never seen"
-**body**: "Beneath Fan Tan Alley — the narrowest street in Canada — there's a network of tunnels dating to the 1880s. They connected opium dens, gambling houses, and merchant basements. Some are still accessible through the lower levels of buildings on Fisgard Street. The Victoria Heritage Foundation runs occasional guided walks — next one is in May."
-**image_url**: Unsplash search "underground tunnel historical brick" or Pollinations→imgur fallback
-**external_url**: "https://victoriaheritagefoundation.ca/..."
-**locality**: "Fan Tan Alley, Victoria, BC"
-**latitude**: 48.4291, **longitude**: -123.3688
-**post_type**: "discovery"
-**visibility**: "public"
-**labels**: ["discovery", "interest-discovery", "local-history", "architecture", "victoria-bc"]
+**Result table:**
+| # | Title | Type | Source |
+|---|-------|------|--------|
+| 1 | Rain by 2pm — Royal BC Museum exhibition | place | weather |
+| 2 | Murchie's afternoon tea for $18 | place | weather |
+| 3 | Claude 4.5 rewrites the reasoning benchmark | article | interest |
+| 4 | Three startups raised $50M to replace dashboards | article | interest |
+| 5 | YC batch has 3 AI code review companies | article | HN |
+| 6 | Open-source Notion AI alternative hits 10k stars | article | HN |
+| 7 | Royals host three games — tickets from $17 | event | local |
+| 8 | Grizzlies take on Nanaimo Wednesday | event | local |
+| 9 | Blue Bridge Theatre one-woman show Friday | event | local |
+| 10 | Cherry blossoms peaking along Moss Street | discovery | seasonal |

@@ -23,7 +23,7 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 
 	err := r.db.QueryRow(`
 		SELECT user_id, location_name, latitude, longitude, radius_km, updated_at
-		FROM user_settings WHERE user_id = ?`, userID,
+		FROM user_settings WHERE user_id = $1`, userID,
 	).Scan(&s.UserID, &locationName, &latitude, &longitude, &s.RadiusKm, &s.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -46,7 +46,7 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64) (*model.UserSettings, error) {
 	_, err := r.db.Exec(`
 		INSERT INTO user_settings (user_id, location_name, latitude, longitude, radius_km, updated_at)
-		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_id) DO UPDATE SET
 			location_name = excluded.location_name,
 			latitude = excluded.latitude,

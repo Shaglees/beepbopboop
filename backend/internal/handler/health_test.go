@@ -31,8 +31,7 @@ func TestHealthHandler(t *testing.T) {
 }
 
 func TestMeHandler(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	h := handler.NewMeHandler(userRepo)

@@ -11,8 +11,7 @@ import (
 )
 
 func TestAgentAuth_ValidToken(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	user, _ := userRepo.FindOrCreateByFirebaseUID("fb-123")
@@ -42,8 +41,7 @@ func TestAgentAuth_ValidToken(t *testing.T) {
 }
 
 func TestAgentAuth_MissingToken(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	tokenRepo := repository.NewTokenRepo(db)
 
@@ -61,8 +59,7 @@ func TestAgentAuth_MissingToken(t *testing.T) {
 }
 
 func TestAgentAuth_InvalidToken(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	tokenRepo := repository.NewTokenRepo(db)
 

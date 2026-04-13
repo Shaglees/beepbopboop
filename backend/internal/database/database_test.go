@@ -7,11 +7,7 @@ import (
 )
 
 func TestOpenAndMigrate(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	tables := []string{"users", "agents", "agent_tokens", "posts"}
 	for _, table := range tables {

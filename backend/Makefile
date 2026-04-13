@@ -1,4 +1,4 @@
-.PHONY: run test migrate beepbopgraph install-beepbopgraph
+.PHONY: run test migrate beepbopgraph install-beepbopgraph docker-build docker-up docker-down docker-logs
 
 run:
 	go run ./cmd/server
@@ -14,3 +14,15 @@ beepbopgraph:
 
 install-beepbopgraph: beepbopgraph
 	cp beepbopgraph /usr/local/bin/
+
+docker-build:
+	docker compose build
+
+docker-up:
+	docker compose up -d
+
+docker-down:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f server

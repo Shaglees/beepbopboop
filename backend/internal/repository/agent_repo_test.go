@@ -8,11 +8,7 @@ import (
 )
 
 func TestAgentRepo_Create(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	user, err := userRepo.FindOrCreateByFirebaseUID("firebase-abc")
@@ -37,11 +33,7 @@ func TestAgentRepo_Create(t *testing.T) {
 }
 
 func TestAgentRepo_GetByID(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-abc")
@@ -59,11 +51,7 @@ func TestAgentRepo_GetByID(t *testing.T) {
 }
 
 func TestAgentRepo_ListByUserID(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-abc")

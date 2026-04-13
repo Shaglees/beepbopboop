@@ -14,8 +14,7 @@ import (
 )
 
 func TestFeedHandler_EmptyFeed(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	postRepo := repository.NewPostRepo(db)
@@ -39,8 +38,7 @@ func TestFeedHandler_EmptyFeed(t *testing.T) {
 }
 
 func TestFeedHandler_WithPosts(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)

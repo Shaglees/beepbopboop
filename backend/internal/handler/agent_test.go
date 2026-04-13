@@ -17,11 +17,7 @@ import (
 
 func setupAgentTest(t *testing.T) (*handler.AgentHandler, *repository.UserRepo, *repository.AgentRepo, *repository.TokenRepo) {
 	t.Helper()
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)

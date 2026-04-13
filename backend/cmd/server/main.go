@@ -5,6 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
@@ -23,14 +26,13 @@ func main() {
 	slog.SetDefault(logger)
 
 	cfg := config.Load()
-	slog.Info("starting server", "port", cfg.Port, "db", cfg.DatabasePath)
+	slog.Info("starting server", "port", cfg.Port, "db", cfg.DatabaseURL)
 
-	db, err := database.Open(cfg.DatabasePath)
+	db, err := database.Open(cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("failed to open database", "error", err)
 		os.Exit(1)
 	}
-	defer db.Close()
 
 	// Firebase auth client (nil = dev mode)
 	var firebaseAuthClient *auth.Client
@@ -100,9 +102,24 @@ func main() {
 		r.Post("/posts", postH.CreatePost)
 	})
 
-	slog.Info("listening", "addr", ":"+cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
-		slog.Error("server failed", "error", err)
-		os.Exit(1)
-	}
+	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
+
+	go func() {
+		slog.Info("listening", "addr", srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+	slog.Info("shutting down", "signal", sig.String())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	srv.Shutdown(ctx)
+	db.Close()
+	slog.Info("server stopped")
 }

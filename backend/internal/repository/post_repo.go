@@ -34,22 +34,22 @@ func NewPostRepo(db *sql.DB) *PostRepo {
 	return &PostRepo{db: db}
 }
 
-// postColumns is the shared SELECT column list. rowid is last for cursor pagination.
+// postColumns is the shared SELECT column list. seq is last for cursor pagination.
 const postColumns = `p.id, p.agent_id, a.name, p.user_id, p.title, p.body,
 	p.image_url, p.external_url, p.locality, p.latitude, p.longitude,
-	p.post_type, p.visibility, p.labels, p.created_at, p.rowid`
+	p.post_type, p.visibility, p.labels, p.created_at, p.seq`
 
-// scanPost scans a row into a model.Post and returns the rowid.
+// scanPost scans a row into a model.Post and returns the seq.
 func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, error) {
 	var p model.Post
 	var imageURL, externalURL, locality, postType, labelsJSON sql.NullString
 	var latitude, longitude sql.NullFloat64
-	var rowid int64
+	var seq int64
 
 	err := scanner.Scan(&p.ID, &p.AgentID, &p.AgentName, &p.UserID,
 		&p.Title, &p.Body,
 		&imageURL, &externalURL, &locality, &latitude, &longitude,
-		&postType, &p.Visibility, &labelsJSON, &p.CreatedAt, &rowid)
+		&postType, &p.Visibility, &labelsJSON, &p.CreatedAt, &seq)
 	if err != nil {
 		return p, 0, err
 	}
@@ -66,7 +66,7 @@ func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, 
 	if labelsJSON.Valid {
 		json.Unmarshal([]byte(labelsJSON.String), &p.Labels)
 	}
-	return p, rowid, nil
+	return p, seq, nil
 }
 
 func (r *PostRepo) Create(p CreatePostParams) (*model.Post, error) {
@@ -91,7 +91,7 @@ func (r *PostRepo) Create(p CreatePostParams) (*model.Post, error) {
 
 	_, err = r.db.Exec(`
 		INSERT INTO posts (id, agent_id, user_id, title, body, image_url, external_url, locality, latitude, longitude, post_type, visibility, labels)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 		id, p.AgentID, p.UserID, p.Title, p.Body,
 		nullString(p.ImageURL), nullString(p.ExternalURL),
 		nullString(p.Locality), nullFloat64(p.Latitude), nullFloat64(p.Longitude),
@@ -109,7 +109,7 @@ func (r *PostRepo) GetByID(id string) (*model.Post, error) {
 		SELECT `+postColumns+`
 		FROM posts p
 		JOIN agents a ON a.id = p.agent_id
-		WHERE p.id = ?`, id)
+		WHERE p.id = $1`, id)
 	p, _, err := scanPost(row)
 	if err != nil {
 		return nil, fmt.Errorf("query post: %w", err)
@@ -122,9 +122,9 @@ func (r *PostRepo) ListByUserID(userID string, limit int) ([]model.Post, error) 
 		SELECT `+postColumns+`
 		FROM posts p
 		JOIN agents a ON a.id = p.agent_id
-		WHERE p.user_id = ?
-		ORDER BY p.created_at DESC, p.rowid DESC
-		LIMIT ?`, userID, limit,
+		WHERE p.user_id = $1
+		ORDER BY p.created_at DESC, p.seq DESC
+		LIMIT $2`, userID, limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query posts: %w", err)
@@ -157,15 +157,15 @@ func parseCursorString(raw string) (time.Time, int64, error) {
 	if err != nil {
 		return time.Time{}, 0, fmt.Errorf("invalid cursor time: %w", err)
 	}
-	var rowid int64
-	if _, err := fmt.Sscanf(parts[1], "%d", &rowid); err != nil {
-		return time.Time{}, 0, fmt.Errorf("invalid cursor rowid: %w", err)
+	var seq int64
+	if _, err := fmt.Sscanf(parts[1], "%d", &seq); err != nil {
+		return time.Time{}, 0, fmt.Errorf("invalid cursor seq: %w", err)
 	}
-	return t, rowid, nil
+	return t, seq, nil
 }
 
-func formatCursor(t time.Time, rowid int64) string {
-	return fmt.Sprintf("%s|%d", t.UTC().Format(time.RFC3339), rowid)
+func formatCursor(t time.Time, seq int64) string {
+	return fmt.Sprintf("%s|%d", t.UTC().Format(time.RFC3339), seq)
 }
 
 // --- Multi-feed list methods ---
@@ -174,14 +174,16 @@ func formatCursor(t time.Time, rowid int64) string {
 func (r *PostRepo) ListPersonal(userID, cursor string, limit int) ([]model.Post, *string, error) {
 	args := []any{userID}
 	cursorClause := ""
+	argIdx := 2
 
 	if cursor != "" {
-		t, rowid, err := parseCursorString(cursor)
+		t, seq, err := parseCursorString(cursor)
 		if err != nil {
 			return nil, nil, err
 		}
-		cursorClause = " AND (p.created_at < ? OR (p.created_at = ? AND p.rowid < ?))"
-		args = append(args, t, t, rowid)
+		cursorClause = fmt.Sprintf(" AND (p.created_at < $%d OR (p.created_at = $%d AND p.seq < $%d))", argIdx, argIdx+1, argIdx+2)
+		args = append(args, t, t, seq)
+		argIdx += 3
 	}
 	args = append(args, limit)
 
@@ -189,9 +191,9 @@ func (r *PostRepo) ListPersonal(userID, cursor string, limit int) ([]model.Post,
 		SELECT `+postColumns+`
 		FROM posts p
 		JOIN agents a ON a.id = p.agent_id
-		WHERE p.user_id = ?`+cursorClause+`
-		ORDER BY p.created_at DESC, p.rowid DESC
-		LIMIT ?`, args...,
+		WHERE p.user_id = $1`+cursorClause+fmt.Sprintf(`
+		ORDER BY p.created_at DESC, p.seq DESC
+		LIMIT $%d`, argIdx), args...,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query personal feed: %w", err)
@@ -200,15 +202,15 @@ func (r *PostRepo) ListPersonal(userID, cursor string, limit int) ([]model.Post,
 
 	posts := make([]model.Post, 0)
 	var lastCreatedAt time.Time
-	var lastRowid int64
+	var lastSeq int64
 	for rows.Next() {
-		p, rowid, err := scanPost(rows)
+		p, seq, err := scanPost(rows)
 		if err != nil {
 			return nil, nil, fmt.Errorf("scan post: %w", err)
 		}
 		posts = append(posts, p)
 		lastCreatedAt = p.CreatedAt
-		lastRowid = rowid
+		lastSeq = seq
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, fmt.Errorf("iterate posts: %w", err)
@@ -216,7 +218,7 @@ func (r *PostRepo) ListPersonal(userID, cursor string, limit int) ([]model.Post,
 
 	var nextCursor *string
 	if len(posts) >= limit {
-		c := formatCursor(lastCreatedAt, lastRowid)
+		c := formatCursor(lastCreatedAt, lastSeq)
 		nextCursor = &c
 	}
 	return posts, nextCursor, nil
@@ -229,14 +231,16 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 
 	args := []any{minLat, maxLat, minLon, maxLon}
 	cursorClause := ""
+	argIdx := 5
 
 	if cursor != "" {
-		t, rowid, err := parseCursorString(cursor)
+		t, seq, err := parseCursorString(cursor)
 		if err != nil {
 			return nil, nil, err
 		}
-		cursorClause = " AND (p.created_at < ? OR (p.created_at = ? AND p.rowid < ?))"
-		args = append(args, t, t, rowid)
+		cursorClause = fmt.Sprintf(" AND (p.created_at < $%d OR (p.created_at = $%d AND p.seq < $%d))", argIdx, argIdx+1, argIdx+2)
+		args = append(args, t, t, seq)
+		argIdx += 3
 	}
 
 	sqlLimit := limit * 3
@@ -248,10 +252,10 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 		JOIN agents a ON a.id = p.agent_id
 		WHERE p.visibility IN ('public', 'personal')
 		  AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
-		  AND p.latitude BETWEEN ? AND ?
-		  AND p.longitude BETWEEN ? AND ?`+cursorClause+`
-		ORDER BY p.created_at DESC, p.rowid DESC
-		LIMIT ?`, args...,
+		  AND p.latitude BETWEEN $1 AND $2
+		  AND p.longitude BETWEEN $3 AND $4`+cursorClause+fmt.Sprintf(`
+		ORDER BY p.created_at DESC, p.seq DESC
+		LIMIT $%d`, argIdx), args...,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query community feed: %w", err)
@@ -260,16 +264,16 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 
 	posts := make([]model.Post, 0, limit)
 	var lastCreatedAt time.Time
-	var lastRowid int64
+	var lastSeq int64
 	rowsProcessed := 0
 
 	for rows.Next() {
-		p, rowid, err := scanPost(rows)
+		p, seq, err := scanPost(rows)
 		if err != nil {
 			return nil, nil, fmt.Errorf("scan post: %w", err)
 		}
 		lastCreatedAt = p.CreatedAt
-		lastRowid = rowid
+		lastSeq = seq
 		rowsProcessed++
 
 		// Haversine check
@@ -288,7 +292,7 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 
 	var nextCursor *string
 	if rowsProcessed >= limit && len(posts) > 0 {
-		c := formatCursor(lastCreatedAt, lastRowid)
+		c := formatCursor(lastCreatedAt, lastSeq)
 		nextCursor = &c
 	}
 	return posts, nextCursor, nil
@@ -300,14 +304,16 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 
 	args := []any{minLat, maxLat, minLon, maxLon, userID}
 	cursorClause := ""
+	argIdx := 6
 
 	if cursor != "" {
-		t, rowid, err := parseCursorString(cursor)
+		t, seq, err := parseCursorString(cursor)
 		if err != nil {
 			return nil, nil, err
 		}
-		cursorClause = " AND (p.created_at < ? OR (p.created_at = ? AND p.rowid < ?))"
-		args = append(args, t, t, rowid)
+		cursorClause = fmt.Sprintf(" AND (p.created_at < $%d OR (p.created_at = $%d AND p.seq < $%d))", argIdx, argIdx+1, argIdx+2)
+		args = append(args, t, t, seq)
+		argIdx += 3
 	}
 
 	sqlLimit := limit * 3
@@ -320,12 +326,12 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		WHERE p.visibility IN ('public', 'personal')
 		  AND (
 			(p.latitude IS NOT NULL AND p.longitude IS NOT NULL
-			 AND p.latitude BETWEEN ? AND ?
-			 AND p.longitude BETWEEN ? AND ?)
-			OR p.user_id = ?
-		  )`+cursorClause+`
-		ORDER BY p.created_at DESC, p.rowid DESC
-		LIMIT ?`, args...,
+			 AND p.latitude BETWEEN $1 AND $2
+			 AND p.longitude BETWEEN $3 AND $4)
+			OR p.user_id = $5
+		  )`+cursorClause+fmt.Sprintf(`
+		ORDER BY p.created_at DESC, p.seq DESC
+		LIMIT $%d`, argIdx), args...,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query foryou feed: %w", err)
@@ -334,16 +340,16 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 
 	posts := make([]model.Post, 0, limit)
 	var lastCreatedAt time.Time
-	var lastRowid int64
+	var lastSeq int64
 	rowsProcessed := 0
 
 	for rows.Next() {
-		p, rowid, err := scanPost(rows)
+		p, seq, err := scanPost(rows)
 		if err != nil {
 			return nil, nil, fmt.Errorf("scan post: %w", err)
 		}
 		lastCreatedAt = p.CreatedAt
-		lastRowid = rowid
+		lastSeq = seq
 		rowsProcessed++
 
 		// User's own posts always pass; community posts need Haversine check
@@ -364,7 +370,7 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 
 	var nextCursor *string
 	if rowsProcessed >= limit && len(posts) > 0 {
-		c := formatCursor(lastCreatedAt, lastRowid)
+		c := formatCursor(lastCreatedAt, lastSeq)
 		nextCursor = &c
 	}
 	return posts, nextCursor, nil

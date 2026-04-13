@@ -22,7 +22,7 @@ func (r *AgentRepo) Create(userID, name string) (*model.Agent, error) {
 	}
 
 	_, err = r.db.Exec(
-		"INSERT INTO agents (id, user_id, name) VALUES (?, ?, ?)",
+		"INSERT INTO agents (id, user_id, name) VALUES ($1, $2, $3)",
 		id, userID, name,
 	)
 	if err != nil {
@@ -35,7 +35,7 @@ func (r *AgentRepo) Create(userID, name string) (*model.Agent, error) {
 func (r *AgentRepo) GetByID(id string) (*model.Agent, error) {
 	var agent model.Agent
 	err := r.db.QueryRow(
-		"SELECT id, user_id, name, status, created_at FROM agents WHERE id = ?",
+		"SELECT id, user_id, name, status, created_at FROM agents WHERE id = $1",
 		id,
 	).Scan(&agent.ID, &agent.UserID, &agent.Name, &agent.Status, &agent.CreatedAt)
 	if err != nil {
@@ -46,7 +46,7 @@ func (r *AgentRepo) GetByID(id string) (*model.Agent, error) {
 
 func (r *AgentRepo) ListByUserID(userID string) ([]model.Agent, error) {
 	rows, err := r.db.Query(
-		"SELECT id, user_id, name, status, created_at FROM agents WHERE user_id = ?",
+		"SELECT id, user_id, name, status, created_at FROM agents WHERE user_id = $1",
 		userID,
 	)
 	if err != nil {

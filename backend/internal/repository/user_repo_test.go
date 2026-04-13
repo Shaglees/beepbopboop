@@ -8,11 +8,7 @@ import (
 )
 
 func TestUserRepo_FindOrCreateByFirebaseUID(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	repo := repository.NewUserRepo(db)
 

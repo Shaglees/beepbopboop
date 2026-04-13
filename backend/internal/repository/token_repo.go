@@ -33,7 +33,7 @@ func (r *TokenRepo) Create(agentID string) (string, error) {
 	}
 
 	_, err = r.db.Exec(
-		"INSERT INTO agent_tokens (id, agent_id, token_hash) VALUES (?, ?, ?)",
+		"INSERT INTO agent_tokens (id, agent_id, token_hash) VALUES ($1, $2, $3)",
 		id, agentID, hash,
 	)
 	if err != nil {
@@ -48,7 +48,7 @@ func (r *TokenRepo) ValidateToken(rawToken string) (string, error) {
 
 	var agentID string
 	err := r.db.QueryRow(
-		"SELECT agent_id FROM agent_tokens WHERE token_hash = ? AND revoked = 0",
+		"SELECT agent_id FROM agent_tokens WHERE token_hash = $1 AND revoked = FALSE",
 		hash,
 	).Scan(&agentID)
 
@@ -63,7 +63,7 @@ func (r *TokenRepo) ValidateToken(rawToken string) (string, error) {
 
 func (r *TokenRepo) Revoke(agentID string) error {
 	_, err := r.db.Exec(
-		"UPDATE agent_tokens SET revoked = 1 WHERE agent_id = ?",
+		"UPDATE agent_tokens SET revoked = TRUE WHERE agent_id = $1",
 		agentID,
 	)
 	if err != nil {

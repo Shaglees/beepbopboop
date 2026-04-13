@@ -8,11 +8,7 @@ import (
 )
 
 func TestTokenRepo_CreateAndValidate(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-abc")
@@ -40,11 +36,7 @@ func TestTokenRepo_CreateAndValidate(t *testing.T) {
 }
 
 func TestTokenRepo_RevokedTokenFails(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-abc")
@@ -55,7 +47,7 @@ func TestTokenRepo_RevokedTokenFails(t *testing.T) {
 	tokenRepo := repository.NewTokenRepo(db)
 	rawToken, _ := tokenRepo.Create(agent.ID)
 
-	err = tokenRepo.Revoke(agent.ID)
+	err := tokenRepo.Revoke(agent.ID)
 	if err != nil {
 		t.Fatalf("revoke failed: %v", err)
 	}

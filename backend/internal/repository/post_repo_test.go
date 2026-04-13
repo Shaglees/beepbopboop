@@ -9,11 +9,7 @@ import (
 )
 
 func TestPostRepo_CreateAndListByUser(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-abc")
@@ -49,11 +45,7 @@ func TestPostRepo_CreateAndListByUser(t *testing.T) {
 }
 
 func TestPostRepo_ListByUserID_NewestFirst(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-abc")
@@ -80,11 +72,7 @@ func TestPostRepo_ListByUserID_NewestFirst(t *testing.T) {
 }
 
 func TestPostRepo_EmptyFeed(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	postRepo := repository.NewPostRepo(db)
 	posts, err := postRepo.ListByUserID("nonexistent", 20)
@@ -100,11 +88,7 @@ func TestPostRepo_EmptyFeed(t *testing.T) {
 }
 
 func TestPostRepo_OptionalFields(t *testing.T) {
-	db, err := database.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-abc")

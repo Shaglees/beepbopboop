@@ -1,0 +1,7 @@
+*.db
+*.db-shm
+*.db-wal
+.env
+.git
+firebase-credentials.json
+beepbopgraph

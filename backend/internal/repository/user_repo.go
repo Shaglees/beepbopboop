@@ -20,7 +20,7 @@ func NewUserRepo(db *sql.DB) *UserRepo {
 func (r *UserRepo) FindOrCreateByFirebaseUID(firebaseUID string) (*model.User, error) {
 	var user model.User
 	err := r.db.QueryRow(
-		"SELECT id, firebase_uid, created_at FROM users WHERE firebase_uid = ?",
+		"SELECT id, firebase_uid, created_at FROM users WHERE firebase_uid = $1",
 		firebaseUID,
 	).Scan(&user.ID, &user.FirebaseUID, &user.CreatedAt)
 
@@ -30,7 +30,7 @@ func (r *UserRepo) FindOrCreateByFirebaseUID(firebaseUID string) (*model.User, e
 			return nil, fmt.Errorf("generate id: %w", err)
 		}
 		_, err = r.db.Exec(
-			"INSERT INTO users (id, firebase_uid) VALUES (?, ?)",
+			"INSERT INTO users (id, firebase_uid) VALUES ($1, $2)",
 			id, firebaseUID,
 		)
 		if err != nil {

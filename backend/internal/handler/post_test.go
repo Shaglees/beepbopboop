@@ -14,8 +14,7 @@ import (
 )
 
 func TestPostHandler_CreatePost(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
@@ -48,8 +47,7 @@ func TestPostHandler_CreatePost(t *testing.T) {
 }
 
 func TestPostHandler_CreatePost_DefaultPostType(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
@@ -79,8 +77,7 @@ func TestPostHandler_CreatePost_DefaultPostType(t *testing.T) {
 }
 
 func TestPostHandler_CreatePost_InvalidPostType(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	agentRepo := repository.NewAgentRepo(db)
 	postRepo := repository.NewPostRepo(db)
@@ -99,8 +96,7 @@ func TestPostHandler_CreatePost_InvalidPostType(t *testing.T) {
 }
 
 func TestPostHandler_CreatePost_ArticleType(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
@@ -130,8 +126,7 @@ func TestPostHandler_CreatePost_ArticleType(t *testing.T) {
 }
 
 func TestPostHandler_CreatePost_VideoType(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
@@ -161,8 +156,7 @@ func TestPostHandler_CreatePost_VideoType(t *testing.T) {
 }
 
 func TestPostHandler_DefaultVisibility(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
@@ -192,8 +186,7 @@ func TestPostHandler_DefaultVisibility(t *testing.T) {
 }
 
 func TestPostHandler_PersonalVisibility(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
@@ -223,8 +216,7 @@ func TestPostHandler_PersonalVisibility(t *testing.T) {
 }
 
 func TestPostHandler_PrivateVisibility(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
@@ -254,8 +246,7 @@ func TestPostHandler_PrivateVisibility(t *testing.T) {
 }
 
 func TestPostHandler_InvalidVisibility(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	agentRepo := repository.NewAgentRepo(db)
 	postRepo := repository.NewPostRepo(db)
@@ -274,8 +265,7 @@ func TestPostHandler_InvalidVisibility(t *testing.T) {
 }
 
 func TestPostHandler_LabelsRoundTrip(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
@@ -313,8 +303,7 @@ func TestPostHandler_LabelsRoundTrip(t *testing.T) {
 }
 
 func TestPostHandler_MissingTitle(t *testing.T) {
-	db, _ := database.Open(":memory:")
-	defer db.Close()
+	db := database.OpenTestDB(t)
 
 	agentRepo := repository.NewAgentRepo(db)
 	postRepo := repository.NewPostRepo(db)

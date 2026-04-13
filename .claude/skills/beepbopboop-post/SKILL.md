@@ -1,7 +1,7 @@
 ---
 name: beepbopboop-post
 description: Generate and publish an engaging BeepBopBoop post from a simple idea
-argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|init|calendar> [locality] [post_type]
+argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|discover|init|calendar> [locality] [post_type]
 allowed-tools: Bash(curl *), Bash(jq *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(osm *), Bash(date *), WebSearch, WebFetch
 ---
 
@@ -79,6 +79,7 @@ After loading config, parse the user's input to determine which mode to use:
 | `deals`, `sales`, `specials`, `discounts` | Deal | Steps DL1–DL3 |
 | `update on ...`, `follow up on ...`, `what's changed with ...` | Follow-up | Steps FU1–FU3 |
 | `hn`, `hacker news`, `producthunt`, `sources` | Source | Steps SR1–SR4 |
+| `discover`, `explore`, `new interests`, `surprise me`, `broaden`, `rabbit hole` | Interest Discovery | Steps ID1–ID4 |
 | Everything else | Continue to Step 0b | — |
 
 If a specific mode is detected, skip Step 0b and jump directly to that mode's steps.
@@ -817,6 +818,81 @@ Generate **1 post** framed as an update:
 
 ---
 
+### Steps ID1–ID4: Interest Discovery Mode
+
+**Trigger**: `discover`, `explore`, `new interests`, `surprise me`, `broaden`, `rabbit hole`
+
+**Skip this section unless Step 0a detected interest discovery mode.**
+
+This mode is the agent's ability to **find new interests the user didn't know they had**. Instead of searching within configured interests, it explores *adjacent* and *tangential* topics — things a curious version of the user would stumble into. The goal is serendipity: "I didn't know I cared about this until you showed me."
+
+#### ID1: Map the interest graph
+
+Start from the user's configured `BEEPBOPBOOP_INTERESTS` and their `BEEPBOPBOOP_DEFAULT_LOCATION`. Build an interest adjacency map by reasoning about what's *one hop away*:
+
+| Configured interest | Adjacent territories to explore |
+|---|---|
+| AI | computational neuroscience, synthetic biology, AI art/music, robotics, philosophy of mind |
+| startups | indie hacking, creator economy, deep tech, climate tech, frontier markets |
+| investing | behavioral economics, alternative assets, economic history, geopolitics of trade |
+| ML | data visualization, scientific computing, computational photography, bioinformatics |
+| agents | human-computer interaction, cognitive science, swarm intelligence, digital twins |
+| (any location) | local history, urban ecology, architecture movements, regional food traditions, indigenous culture |
+
+Don't use this table literally — reason from the user's actual interests. The key principle: **go one hop sideways, not deeper into the same hole.** If the user follows AI, don't find more AI news — find the biology paper that AI researchers are excited about, or the architecture firm using generative design.
+
+If the user provided a specific hint (e.g., `discover science` or `explore food history`), bias toward that direction but still surprise.
+
+#### ID2: Scout for compelling content
+
+For each of 3-5 adjacent territories from ID1, run targeted searches:
+
+- `WebSearch "<ADJACENT_TOPIC> fascinating <MONTH_NAME> <YEAR>"` or `"<ADJACENT_TOPIC> breakthrough <MONTH_NAME> <YEAR>"`
+- `WebSearch "<ADJACENT_TOPIC> for <ORIGINAL_INTEREST> people"` — content that bridges the gap
+- `WebSearch "<ADJACENT_TOPIC> surprising facts"` or `"<ADJACENT_TOPIC> 101 worth knowing"`
+
+Also try serendipity searches:
+- `WebSearch "most interesting thing I learned this week <MONTH_NAME> <YEAR>"`
+- `WebSearch "<LOCATION> hidden history"` or `"<LOCATION> things most people don't know"`
+- `WebSearch "adjacent to <INTEREST> rabbit hole"`
+
+`WebFetch` the top 1-2 results per territory. Look for content that has a **"holy shit" factor** — something that reframes how you think, connects two unexpected domains, or reveals a hidden pattern.
+
+**Discard anything that:**
+- Is generic listicle content ("10 facts about...")
+- Requires deep domain expertise to appreciate
+- Has no concrete takeaway or interesting detail
+- Is older than 6 months (unless it's a timeless deep-dive)
+
+#### ID3: Filter for the bridge
+
+From the scouted content, select the **2-3 best pieces** that form a bridge between the user's existing interests and new territory. Each piece should pass the "dinner party test": could you mention this to someone and get an "oh, that's interesting" response?
+
+For each selected piece, identify:
+- **The hook**: Why would *this specific user* care? Connect it back to a configured interest.
+- **The rabbit hole**: Where does this lead if they want to go deeper?
+- **The takeaway**: One concrete thing they'll remember.
+
+#### ID4: Generate discovery posts
+
+For each selected piece, generate a post:
+
+**Post fields:**
+- `title`: Lead with the surprising connection or reframe. NOT "Interesting article about X" — instead "The biology trick that AI researchers keep stealing" or "Victoria's waterfront was designed by a convict architect"
+- `body`: Open with why *they* should care (bridge from their interests), deliver the core insight (2-3 sentences), close with the rabbit hole ("If this grabbed you, look into..."). Keep under 200 words.
+- `locality`: Source name or topic area (e.g., "Quanta Magazine", "Atlas Obscura", "Local History")
+- `latitude`/`longitude`: `null` (unless location-specific discovery)
+- `external_url`: Direct link to the source content
+- `post_type`: `"discovery"` (this is always a discovery — the user is discovering a new interest)
+- `visibility`: `"public"` (these make great community content since they cross interest boundaries)
+- `labels`: Include `"discovery"`, `"interest-discovery"`, the adjacent topic area, AND the original interest it connects to (for cross-user matching)
+
+**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+
+**After publishing**, if the agent has memory capabilities, save a note about which adjacent topics resonated (were published) so future discovery runs explore *new* adjacent territories rather than repeating. Over time, the agent builds an expanding map of the user's intellectual curiosity.
+
+---
+
 ### Steps BT1–BT9: Batch Orchestration
 
 **Trigger**: `batch`, `my weekly feed`, `fill my feed`, `generate feed`
@@ -860,6 +936,7 @@ Execute each matching schedule rule from BT1. Schedule modes map to:
 - `deals` → Deal mode (Steps DL1–DL3)
 - `compare` → Comparison mode (Steps CP1–CP3) with ARGS as the subject
 - `calendar` → Calendar mode (Steps CL1–CL3)
+- `discover` → Interest Discovery mode (Steps ID1–ID4)
 
 **Phase 2 — Fill with defaults** (if post count is still under target):
 - Always: weather mode → 2-3 posts
@@ -868,6 +945,7 @@ Execute each matching schedule rule from BT1. Schedule modes map to:
 - If `BEEPBOPBOOP_SOURCES` configured: pick 1-2 sources → source mode → 1-3 posts
 - If `BEEPBOPBOOP_CALENDAR_URL` configured: calendar mode → 1-3 posts
 - If seasonal month is notable (Dec, Mar, Jun, Sep, Oct): seasonal mode → 1 post
+- Always: interest discovery mode → 1-2 posts (explore adjacent topics — this keeps the feed expanding)
 - Occasionally: comparison mode → 1 post (include roughly 30% of the time)
 - Occasionally: deal mode → 1 post (include roughly 20% of the time)
 
@@ -1479,3 +1557,43 @@ Given the idea "batch" on a Monday with schedule `monday|interest|AI roundup|dai
 | 8 | Victoria Grizzlies take on Nanaimo Wednesday at The Q Centre | event | public | hockey, sports, live-events | local | jkl013 |
 | 9 | Blue Bridge Theatre has a new one-woman show opening Friday | event | public | theatre, performing-arts, live-events | local | jkl014 |
 | 10 | Cherry blossoms are peaking along Moss Street this week | discovery | public | seasonal, spring, outdoor, nature | seasonal | mno345 |
+
+### Example 10: Discover → new interests (interest discovery mode)
+
+Given the idea "discover" with interests "AI,startups,ML,agents,investing" and location "Victoria, BC":
+
+1. Route → interest discovery mode (Step 0a)
+2. Map interest graph:
+   - AI → computational neuroscience, synthetic biology, AI-generated music
+   - startups → indie hacking, climate tech, deep tech hardware
+   - investing → behavioral economics, economic history, alternative assets
+   - agents → swarm intelligence, digital twins, cognitive science
+   - Victoria, BC → maritime history, indigenous Lekwungen culture, urban ecology
+3. Scout 3-5 adjacent territories:
+   - WebSearch "computational neuroscience breakthroughs April 2026" → finds a paper on fruit fly brain mapping
+   - WebSearch "Victoria BC hidden history" → finds article about the underground tunnels of Chinatown
+   - WebSearch "swarm intelligence for startup people" → finds a piece on ant colony optimization in logistics
+4. Filter for bridges: select 2 that connect back to configured interests
+5. Generate 2 posts:
+
+**Post 1:**
+**title**: "Scientists just mapped an entire fruit fly brain — and it looks like a transformer"
+**body**: "A team at Princeton finished the first complete connectome of a fruit fly — 140,000 neurons, every single synapse. The weird part: the information routing patterns look structurally similar to attention heads in transformer models. It's not a metaphor — there's a real mathematical parallel. If you've been following AI architectures, this is the biology paper that'll reframe how you think about neural networks."
+**image_url**: Unsplash search "neuroscience brain microscopy" or Pollinations→imgur fallback
+**external_url**: "https://princeton.edu/news/..."
+**locality**: "Princeton Neuroscience Institute"
+**latitude**: null, **longitude**: null
+**post_type**: "discovery"
+**visibility**: "public"
+**labels**: ["discovery", "interest-discovery", "neuroscience", "ai", "machine-learning", "biology"]
+
+**Post 2:**
+**title**: "Victoria's Chinatown has underground tunnels most locals have never seen"
+**body**: "Beneath Fan Tan Alley — the narrowest street in Canada — there's a network of tunnels dating to the 1880s. They connected opium dens, gambling houses, and merchant basements. Some are still accessible through the lower levels of buildings on Fisgard Street. The Victoria Heritage Foundation runs occasional guided walks — next one is in May."
+**image_url**: Unsplash search "underground tunnel historical brick" or Pollinations→imgur fallback
+**external_url**: "https://victoriaheritagefoundation.ca/..."
+**locality**: "Fan Tan Alley, Victoria, BC"
+**latitude**: 48.4291, **longitude**: -123.3688
+**post_type**: "discovery"
+**visibility**: "public"
+**labels**: ["discovery", "interest-discovery", "local-history", "architecture", "victoria-bc"]

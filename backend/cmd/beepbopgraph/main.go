@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,8 +27,14 @@ func main() {
 
 	args := flag.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: beepbopgraph [--db PATH] [--ttl DAYS] <check|save|history|prune> [flags]")
+		fmt.Fprintln(os.Stderr, "usage: beepbopgraph [--db PATH] [--ttl DAYS] <check|save|history|prune|stats> [flags]")
 		os.Exit(1)
+	}
+
+	// stats doesn't need the local SQLite DB
+	if args[0] == "stats" {
+		runStats(args[1:])
+		return
 	}
 
 	db, err := dedup.Open(dbPath)
@@ -203,6 +212,84 @@ func hasLabel(labels []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func runStats(args []string) {
+	fs := flag.NewFlagSet("stats", flag.ExitOnError)
+	showWeights := fs.Bool("weights", false, "also show current user weights")
+	fs.Parse(args)
+
+	apiURL, token := loadConfig()
+
+	// Fetch engagement summary
+	summary := apiGet(apiURL+"/events/summary", token)
+
+	output := map[string]any{"engagement": summary}
+
+	if *showWeights {
+		weights := apiGet(apiURL+"/user/weights", token)
+		output["weights"] = weights
+	}
+
+	jsonOut(output)
+}
+
+func loadConfig() (apiURL, token string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fatal("home dir: %v", err)
+	}
+	configPath := filepath.Join(home, ".config", "beepbopboop", "config")
+	f, err := os.Open(configPath)
+	if err != nil {
+		fatal("open config: %v", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if k, v, ok := strings.Cut(line, "="); ok {
+			switch k {
+			case "BEEPBOPBOOP_API_URL":
+				apiURL = v
+			case "BEEPBOPBOOP_AGENT_TOKEN":
+				token = v
+			}
+		}
+	}
+	if apiURL == "" || token == "" {
+		fatal("config missing BEEPBOPBOOP_API_URL or BEEPBOPBOOP_AGENT_TOKEN")
+	}
+	return apiURL, token
+}
+
+func apiGet(url, token string) any {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fatal("build request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fatal("request %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fatal("read response: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		fatal("GET %s: %d %s", url, resp.StatusCode, string(body))
+	}
+
+	var result any
+	if err := json.Unmarshal(body, &result); err != nil {
+		fatal("parse response: %v", err)
+	}
+	return result
 }
 
 func defaultDBPath() string {

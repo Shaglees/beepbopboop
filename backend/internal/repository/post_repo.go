@@ -4,12 +4,22 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/geo"
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 )
+
+// FeedWeights holds parsed preference weights for scored ranking.
+type FeedWeights struct {
+	LabelWeights  map[string]float64 `json:"label_weights"`
+	TypeWeights   map[string]float64 `json:"type_weights"`
+	FreshnessBias float64            `json:"freshness_bias"`
+	GeoBias       float64            `json:"geo_bias"`
+}
 
 type CreatePostParams struct {
 	AgentID     string
@@ -299,8 +309,15 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 }
 
 // ListForYou returns community + user's own posts with cursor-based pagination.
-func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor string, limit int) ([]model.Post, *string, error) {
+// If weights is non-nil, posts are scored and ranked instead of pure recency.
+func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor string, limit int, weights *FeedWeights) ([]model.Post, *string, error) {
 	minLat, maxLat, minLon, maxLon := geo.BoundingBox(lat, lon, radiusKm)
+
+	// When scoring, fetch more candidates so we have enough to rank.
+	fetchLimit := limit * 3
+	if weights != nil {
+		fetchLimit = limit * 5
+	}
 
 	args := []any{minLat, maxLat, minLon, maxLon, userID}
 	cursorClause := ""
@@ -316,8 +333,7 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		argIdx += 3
 	}
 
-	sqlLimit := limit * 3
-	args = append(args, sqlLimit)
+	args = append(args, fetchLimit)
 
 	rows, err := r.db.Query(`
 		SELECT `+postColumns+`
@@ -338,7 +354,8 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 	}
 	defer rows.Close()
 
-	posts := make([]model.Post, 0, limit)
+	// Collect all candidates that pass geo filter.
+	candidates := make([]model.Post, 0, fetchLimit)
 	var lastCreatedAt time.Time
 	var lastSeq int64
 	rowsProcessed := 0
@@ -354,18 +371,48 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 
 		// User's own posts always pass; community posts need Haversine check
 		if p.UserID == userID {
-			posts = append(posts, p)
+			candidates = append(candidates, p)
 		} else if p.Latitude != nil && p.Longitude != nil {
 			if geo.HaversineKm(lat, lon, *p.Latitude, *p.Longitude) <= radiusKm {
-				posts = append(posts, p)
+				candidates = append(candidates, p)
 			}
-		}
-		if len(posts) >= limit {
-			break
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, fmt.Errorf("iterate posts: %w", err)
+	}
+
+	// Apply weighted scoring if weights are available.
+	if weights != nil && len(candidates) > 0 {
+		type scored struct {
+			post  model.Post
+			score float64
+		}
+		scoredPosts := make([]scored, len(candidates))
+		for i, p := range candidates {
+			scoredPosts[i] = scored{post: p, score: scorePost(p, lat, lon, radiusKm, weights)}
+		}
+		sort.Slice(scoredPosts, func(i, j int) bool {
+			return scoredPosts[i].score > scoredPosts[j].score
+		})
+
+		posts := make([]model.Post, 0, limit)
+		for i := 0; i < len(scoredPosts) && i < limit; i++ {
+			posts = append(posts, scoredPosts[i].post)
+		}
+
+		var nextCursor *string
+		if rowsProcessed >= limit && len(posts) > 0 {
+			c := formatCursor(lastCreatedAt, lastSeq)
+			nextCursor = &c
+		}
+		return posts, nextCursor, nil
+	}
+
+	// No weights: return in recency order (original behavior).
+	posts := candidates
+	if len(posts) > limit {
+		posts = posts[:limit]
 	}
 
 	var nextCursor *string
@@ -374,6 +421,48 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		nextCursor = &c
 	}
 	return posts, nextCursor, nil
+}
+
+// scorePost computes a weighted relevance score for a post.
+func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights) float64 {
+	var score float64
+
+	// Freshness: exponential decay with 14-day half-life.
+	ageDays := time.Since(p.CreatedAt).Hours() / 24
+	freshness := math.Exp(-0.0495 * ageDays) // ln(2)/14 ≈ 0.0495
+	score += w.FreshnessBias * freshness
+
+	// Geo proximity: 1.0 at center, 0.0 at radius edge.
+	if p.Latitude != nil && p.Longitude != nil {
+		dist := geo.HaversineKm(userLat, userLon, *p.Latitude, *p.Longitude)
+		geoScore := 1.0 - (dist / radiusKm)
+		if geoScore < 0 {
+			geoScore = 0
+		}
+		score += w.GeoBias * geoScore
+	}
+
+	// Label affinity: average of matching label weights.
+	if len(p.Labels) > 0 && len(w.LabelWeights) > 0 {
+		var labelSum float64
+		var labelCount int
+		for _, label := range p.Labels {
+			if wt, ok := w.LabelWeights[label]; ok {
+				labelSum += wt
+				labelCount++
+			}
+		}
+		if labelCount > 0 {
+			score += labelSum / float64(labelCount)
+		}
+	}
+
+	// Type affinity.
+	if wt, ok := w.TypeWeights[p.PostType]; ok {
+		score += wt
+	}
+
+	return score
 }
 
 func nullString(s string) sql.NullString {

@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type User struct {
 	ID          string    `json:"id"`
@@ -54,4 +57,54 @@ type Post struct {
 	Visibility  string    `json:"visibility"`
 	Labels      []string  `json:"labels,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+	ViewCount   int       `json:"view_count"`
+	SaveCount   int       `json:"save_count"`
+}
+
+type PostEvent struct {
+	ID        int64     `json:"id"`
+	PostID    string    `json:"post_id"`
+	UserID    string    `json:"user_id"`
+	EventType string    `json:"event_type"`
+	DwellMs   *int      `json:"dwell_ms,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type EventBatchRequest struct {
+	Events []EventInput `json:"events"`
+}
+
+type EventInput struct {
+	PostID    string `json:"post_id"`
+	EventType string `json:"event_type"`
+	DwellMs   *int   `json:"dwell_ms,omitempty"`
+}
+
+type LabelEngagement struct {
+	Label     string  `json:"label"`
+	Views     int     `json:"views"`
+	Saves     int     `json:"saves"`
+	Clicks    int     `json:"clicks"`
+	AvgDwell  float64 `json:"avg_dwell_ms"`
+}
+
+type TypeEngagement struct {
+	PostType string  `json:"type"`
+	Views    int     `json:"views"`
+	Saves    int     `json:"saves"`
+	Clicks   int     `json:"clicks"`
+	AvgDwell float64 `json:"avg_dwell_ms"`
+}
+
+type EventSummary struct {
+	LabelEngagement []LabelEngagement `json:"label_engagement"`
+	TypeEngagement  []TypeEngagement  `json:"type_engagement"`
+	TotalEvents     int               `json:"total_events"`
+	PeriodDays      int               `json:"period_days"`
+}
+
+type UserWeights struct {
+	UserID    string          `json:"user_id"`
+	Weights   json.RawMessage `json:"weights"`
+	UpdatedAt time.Time       `json:"updated_at"`
 }

@@ -45,5 +45,24 @@ func Open(url string) (*sql.DB, error) {
 	// Geo index for community feed queries
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_geo ON posts(visibility, latitude, longitude, created_at DESC)")
 
+	// Engagement events table
+	db.Exec(`CREATE TABLE IF NOT EXISTS post_events (
+		id         BIGSERIAL PRIMARY KEY,
+		post_id    TEXT NOT NULL REFERENCES posts(id),
+		user_id    TEXT NOT NULL REFERENCES users(id),
+		event_type TEXT NOT NULL,
+		dwell_ms   INTEGER,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_events_post ON post_events(post_id, event_type)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_events_user ON post_events(user_id, created_at DESC)")
+
+	// User preference weights (pushed by agent, applied in ForYou feed)
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_weights (
+		user_id    TEXT NOT NULL REFERENCES users(id) PRIMARY KEY,
+		weights    JSONB NOT NULL,
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+
 	return db, nil
 }

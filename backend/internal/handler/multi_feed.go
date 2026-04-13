@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
@@ -13,13 +14,15 @@ type MultiFeedHandler struct {
 	userRepo         *repository.UserRepo
 	postRepo         *repository.PostRepo
 	userSettingsRepo *repository.UserSettingsRepo
+	weightsRepo      *repository.WeightsRepo
 }
 
-func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo) *MultiFeedHandler {
+func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo) *MultiFeedHandler {
 	return &MultiFeedHandler{
 		userRepo:         userRepo,
 		postRepo:         postRepo,
 		userSettingsRepo: userSettingsRepo,
+		weightsRepo:      weightsRepo,
 	}
 }
 
@@ -108,7 +111,20 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	posts, nextCursor, err := h.postRepo.ListForYou(user.ID, *settings.Latitude, *settings.Longitude, settings.RadiusKm, cursor, limit)
+	// Load user preference weights (nil = no weights, falls back to recency).
+	var feedWeights *repository.FeedWeights
+	if uw, err := h.weightsRepo.Get(user.ID); err != nil {
+		slog.Warn("failed to load user weights, falling back to recency", "error", err)
+	} else if uw != nil {
+		var fw repository.FeedWeights
+		if err := json.Unmarshal(uw.Weights, &fw); err != nil {
+			slog.Warn("failed to parse user weights, falling back to recency", "error", err)
+		} else {
+			feedWeights = &fw
+		}
+	}
+
+	posts, nextCursor, err := h.postRepo.ListForYou(user.ID, *settings.Latitude, *settings.Longitude, settings.RadiusKm, cursor, limit, feedWeights)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load feed"})
 		return

@@ -774,6 +774,22 @@ Match today against schedule rules:
 
 Collect all matching rules into "today's agenda."
 
+#### BT1b: Check engagement stats
+
+Fetch engagement data to inform content mix:
+
+```bash
+curl -s -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" "$BEEPBOPBOOP_API_URL/events/summary" | jq .
+```
+
+If the endpoint returns data (total_events > 0), use it as **soft guidance** for your content plan:
+- **High save-rate labels** (saves/views > 0.3): generate more content with these labels
+- **High dwell-time types**: favor these post types in your mix
+- **Low-engagement labels**: reduce unless you have a genuinely fresh angle
+- This is guidance, not a hard constraint — still maintain variety and surprise
+
+If the endpoint returns empty data or errors, skip this step silently and proceed.
+
 #### BT2: Set target post count
 
 Pick a target post count: a random integer between `BATCH_MIN` and `BATCH_MAX` (defaults: 8 and 15).

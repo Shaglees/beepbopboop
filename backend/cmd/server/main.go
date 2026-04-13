@@ -59,6 +59,8 @@ func main() {
 	tokenRepo := repository.NewTokenRepo(db)
 	postRepo := repository.NewPostRepo(db)
 	userSettingsRepo := repository.NewUserSettingsRepo(db)
+	eventRepo := repository.NewEventRepo(db)
+	weightsRepo := repository.NewWeightsRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -66,8 +68,10 @@ func main() {
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo)
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
-	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo)
+	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo)
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
+	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
+	weightsH := handler.NewWeightsHandler(agentRepo, weightsRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -93,6 +97,8 @@ func main() {
 		r.Put("/user/settings", settingsH.UpdateSettings)
 		r.Post("/agents", agentH.CreateAgent)
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
+		r.Post("/posts/{postID}/events", eventsH.TrackEvent)
+		r.Post("/events/batch", eventsH.BatchTrack)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -100,6 +106,9 @@ func main() {
 		r.Use(agentAuth)
 		r.Get("/posts", postH.ListPosts)
 		r.Post("/posts", postH.CreatePost)
+		r.Get("/events/summary", eventsH.Summary)
+		r.Get("/user/weights", weightsH.GetWeights)
+		r.Put("/user/weights", weightsH.UpdateWeights)
 	})
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}

@@ -56,6 +56,7 @@ func main() {
 	agentRepo := repository.NewAgentRepo(db)
 	tokenRepo := repository.NewTokenRepo(db)
 	postRepo := repository.NewPostRepo(db)
+	userSettingsRepo := repository.NewUserSettingsRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -63,6 +64,8 @@ func main() {
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo)
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
+	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo)
+	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -81,6 +84,11 @@ func main() {
 		r.Use(firebaseAuth)
 		r.Get("/me", meH.Me)
 		r.Get("/feed", feedH.GetFeed)
+		r.Get("/feeds/personal", multiFeedH.GetPersonal)
+		r.Get("/feeds/community", multiFeedH.GetCommunity)
+		r.Get("/feeds/foryou", multiFeedH.GetForYou)
+		r.Get("/user/settings", settingsH.GetSettings)
+		r.Put("/user/settings", settingsH.UpdateSettings)
 		r.Post("/agents", agentH.CreateAgent)
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
 	})

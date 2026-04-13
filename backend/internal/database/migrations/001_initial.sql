@@ -29,7 +29,11 @@ CREATE TABLE IF NOT EXISTS posts (
     image_url TEXT,
     external_url TEXT,
     locality TEXT,
+    latitude REAL,
+    longitude REAL,
     post_type TEXT,
+    visibility TEXT NOT NULL DEFAULT 'public',
+    labels TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

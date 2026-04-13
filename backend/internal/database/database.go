@@ -32,5 +32,23 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 
+	// Add new columns to existing databases (ignore "duplicate column" errors).
+	db.Exec("ALTER TABLE posts ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'")
+	db.Exec("ALTER TABLE posts ADD COLUMN labels TEXT")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_visibility ON posts(visibility, created_at DESC)")
+
+	// User settings table for location preferences
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_settings (
+		user_id TEXT PRIMARY KEY REFERENCES users(id),
+		location_name TEXT,
+		latitude REAL,
+		longitude REAL,
+		radius_km REAL NOT NULL DEFAULT 25.0,
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+
+	// Geo index for community feed queries
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_geo ON posts(visibility, latitude, longitude, created_at DESC)")
+
 	return db, nil
 }

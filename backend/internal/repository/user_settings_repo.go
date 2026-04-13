@@ -1,0 +1,62 @@
+package repository
+
+import (
+	"database/sql"
+	"fmt"
+
+	"github.com/shanegleeson/beepbopboop/backend/internal/model"
+)
+
+type UserSettingsRepo struct {
+	db *sql.DB
+}
+
+func NewUserSettingsRepo(db *sql.DB) *UserSettingsRepo {
+	return &UserSettingsRepo{db: db}
+}
+
+// Get returns the user's settings, or nil (not error) when none exist.
+func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
+	var s model.UserSettings
+	var locationName sql.NullString
+	var latitude, longitude sql.NullFloat64
+
+	err := r.db.QueryRow(`
+		SELECT user_id, location_name, latitude, longitude, radius_km, updated_at
+		FROM user_settings WHERE user_id = ?`, userID,
+	).Scan(&s.UserID, &locationName, &latitude, &longitude, &s.RadiusKm, &s.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query user_settings: %w", err)
+	}
+	s.LocationName = locationName.String
+	if latitude.Valid {
+		s.Latitude = &latitude.Float64
+	}
+	if longitude.Valid {
+		s.Longitude = &longitude.Float64
+	}
+	return &s, nil
+}
+
+// Upsert inserts or updates the user's settings.
+func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64) (*model.UserSettings, error) {
+	_, err := r.db.Exec(`
+		INSERT INTO user_settings (user_id, location_name, latitude, longitude, radius_km, updated_at)
+		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(user_id) DO UPDATE SET
+			location_name = excluded.location_name,
+			latitude = excluded.latitude,
+			longitude = excluded.longitude,
+			radius_km = excluded.radius_km,
+			updated_at = CURRENT_TIMESTAMP`,
+		userID, nullString(locationName), nullFloat64(lat), nullFloat64(lon), radiusKm,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("upsert user_settings: %w", err)
+	}
+	return r.Get(userID)
+}

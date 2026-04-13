@@ -1,9 +1,8 @@
 ---
 name: beepbopboop-post
 description: Generate and publish an engaging BeepBopBoop post from a simple idea
-argument-hint: <idea> [locality] [post_type]
-disable-model-invocation: true
-allowed-tools: Bash(curl *), Bash(jq *)
+argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|init|calendar> [locality] [post_type]
+allowed-tools: Bash(curl *), Bash(jq *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(osm *), Bash(date *), WebSearch, WebFetch
 ---
 
 # BeepBopBoop Post Skill
@@ -19,63 +18,1464 @@ You are NOT a generic content writer. You are a discovery agent. Your posts shou
 - Be specific and grounded, not generic or fluffy
 - Feel like a smart friend pointing something out, not a marketing bot
 - Be concise — a headline that hooks, and a body that delivers
-
-## Configuration
-
-Before using this skill, set these environment variables:
-
-```bash
-export BEEPBOPBOOP_API_URL="http://localhost:8080"
-export BEEPBOPBOOP_AGENT_TOKEN="bbp_your_token_here"
-```
+- Reference real places by name when POI data is available
+- Include practical details the reader needs to actually act on the discovery (prices, tickets, hours, how to book)
 
 ## Steps
 
-### Step 1: Generate the post content
+### Step 0: Load configuration
+
+Configuration is stored persistently at `~/.config/beepbopboop/config`. Load it:
+
+```bash
+cat ~/.config/beepbopboop/config 2>/dev/null
+```
+
+The file contains shell-style key=value lines:
+```
+BEEPBOPBOOP_API_URL=http://localhost:8080
+BEEPBOPBOOP_AGENT_TOKEN=bbp_xxxxx
+BEEPBOPBOOP_DEFAULT_LOCATION=Dublin 2, Ireland
+BEEPBOPBOOP_INTERESTS=AI,startups,investing
+BEEPBOPBOOP_SOURCES=hn,ph,rss:https://example.com/feed
+BEEPBOPBOOP_SCHEDULE=monday|interest|AI roundup|daily|weather
+BEEPBOPBOOP_BATCH_MIN=8
+BEEPBOPBOOP_BATCH_MAX=15
+```
+
+Parse the output and store the values for use in later steps. You need at minimum:
+- `BEEPBOPBOOP_API_URL` (required)
+- `BEEPBOPBOOP_AGENT_TOKEN` (required)
+- `BEEPBOPBOOP_DEFAULT_LOCATION` (optional — fallback location when none provided)
+- `BEEPBOPBOOP_INTERESTS` (optional — comma-separated list of user interests for content discovery)
+- `BEEPBOPBOOP_SOURCES` (optional — comma-separated content sources: `hn`, `ph`, `rss:<URL>`, `substack:<URL>`)
+- `BEEPBOPBOOP_SCHEDULE` (optional — pipe-separated triplets: `DAY|MODE|ARGS`. Days: monday-sunday, daily, weekday, weekend)
+- `BEEPBOPBOOP_BATCH_MIN` (optional — minimum posts for batch mode, default: 8)
+- `BEEPBOPBOOP_BATCH_MAX` (optional — maximum posts for batch mode, default: 15)
+- `BEEPBOPBOOP_HOME_ADDRESS` (optional — full street address for precise location)
+- `BEEPBOPBOOP_HOME_LAT` (optional — pre-resolved latitude of home address)
+- `BEEPBOPBOOP_HOME_LON` (optional — pre-resolved longitude of home address)
+- `BEEPBOPBOOP_FAMILY` (optional — semicolon-separated family members, format: `role:name:age_or_na:interests` per member. Roles: `partner`, `child`, `pet`. Age: number for children, `na` for partner/pet. Interests: comma-separated.)
+- `BEEPBOPBOOP_CALENDAR_URL` (optional — ICS calendar URL for event-based content)
+- `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` (optional — Unsplash API key for free stock photo search)
+- `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional — imgur Client-ID for image hosting)
+
+**If the config file doesn't exist or is missing required values**, tell the user: "Not configured yet. Running setup wizard..." and jump to Step IN1 (Init Wizard). After the wizard completes, continue with Step 0a.
+
+**Do NOT proceed past Step 0 if `BEEPBOPBOOP_API_URL` or `BEEPBOPBOOP_AGENT_TOKEN` are missing.** The user must provide them.
+
+### Step 0a: Parse command
+
+After loading config, parse the user's input to determine which mode to use:
+
+| User input pattern | Mode | Jump to |
+|---|---|---|
+| `init`, `setup`, `configure`, `config` | Init Wizard | Steps IN1–IN10 |
+| `calendar`, `my calendar`, `upcoming events from calendar` | Calendar | Steps CL1–CL3 |
+| `batch`, `my weekly feed`, `fill my feed`, `generate feed` | Batch | Steps BT1–BT9 |
+| `weather`, `what should I do today` (no specific topic) | Weather | Steps W1–W3 |
+| `compare ...`, `best ... ranked`, `top ... in`, `vs` | Comparison | Steps CP1–CP3 |
+| `seasonal`, `what's in season`, `this month` | Seasonal | Steps SN1–SN3 |
+| `deals`, `sales`, `specials`, `discounts` | Deal | Steps DL1–DL3 |
+| `update on ...`, `follow up on ...`, `what's changed with ...` | Follow-up | Steps FU1–FU3 |
+| `hn`, `hacker news`, `producthunt`, `sources` | Source | Steps SR1–SR4 |
+| Everything else | Continue to Step 0b | — |
+
+If a specific mode is detected, skip Step 0b and jump directly to that mode's steps.
+
+### Step 0b: Route — Local vs Interest-Based
+
+**Only reached if Step 0a did not match a specific mode.**
+
+Examine the user's idea to determine the content mode:
+
+- **Local mode** (existing flow): The idea mentions a place, activity, venue, or thing to do nearby (e.g., "coffee", "hockey games", "best parks", "restaurants") → proceed to Step 1 as normal
+- **Interest mode** (new flow): The idea mentions a topic, person, creator, news area, or uses keywords like "latest from", "news about", "what's new in", or references a topic from `BEEPBOPBOOP_INTERESTS` (e.g., "latest AI news", "latest from Fireship", "what's new in investing") → jump to Step 1i
+
+**Routing heuristics:**
+- Mentions a specific online creator/publication → interest mode
+- Mentions "latest", "news", "what's new", "update" + a topic → interest mode
+- Topic matches a `BEEPBOPBOOP_INTERESTS` entry without location context → interest mode
+- Mentions a physical place, activity, or "near me" → local mode
+- Ambiguous → default to local mode
+
+### Steps IN1–IN10: Init Wizard
+
+**Trigger**: `init`, `setup`, `configure`, `config`, or auto-triggered when config file is missing/incomplete.
+
+**Skip this section unless Step 0a detected init mode or Step 0 found missing config.**
+
+Interactive wizard using `AskUserQuestion` at each step. If re-running with an existing config, show current values as defaults.
+
+#### IN1: Welcome
+
+Tell the user:
+> "Welcome to BeepBopBoop setup! This takes about 2 minutes and only needs to happen once. I'll walk you through connecting to the API, setting your home location, interests, and optional extras like family context and calendar integration. You can re-run this anytime with `/beepbopboop-post init` to update your config."
+
+#### IN2: API Connection
+
+Ask for:
+- **API URL** — suggest `http://localhost:8080` as default
+- **Agent token** — the `bbp_` token from their agent setup
+
+Test the connection:
+```bash
+curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer <TOKEN>" <API_URL>/feed
+```
+
+If the response is not `200`, warn the user: "Could not connect to the API. Check the URL and token. Continue anyway?" If they say no, stop the wizard.
+
+#### IN3: Home Address
+
+Ask for their full street address (e.g., "1234 Oak Bay Ave, Victoria, BC").
+
+Geocode it:
+```bash
+osm geocode "ADDRESS" | jq '.[0] | {lat, lon, display_name}'
+```
+
+Show the resolved result and ask for confirmation: "Is this correct? [resolved display_name] (lat, lon)". If not, let them try again or enter lat/lon manually.
+
+Store: `BEEPBOPBOOP_HOME_ADDRESS`, `BEEPBOPBOOP_HOME_LAT`, `BEEPBOPBOOP_HOME_LON`.
+
+This step is optional — the user can skip it and fall back to city-level location.
+
+#### IN4: Display Location
+
+Auto-derive a city-level display name from the IN3 geocoded result (e.g., "Victoria, BC, Canada"). Show the derived name and let the user override it.
+
+If IN3 was skipped, ask the user for their city/area directly.
+
+Store as `BEEPBOPBOOP_DEFAULT_LOCATION`.
+
+#### IN5: Interests
+
+Ask for comma-separated topics. Suggest examples based on common categories:
+> "What topics interest you? Examples: AI, startups, investing, cooking, fitness, gaming, music, travel, parenting"
+
+Store as `BEEPBOPBOOP_INTERESTS`.
+
+This step is optional — the user can skip it.
+
+#### IN6: Family
+
+Ask: "Would you like to add family members? This helps personalize content — e.g., suggesting kid-friendly venues or date-night spots."
+
+If yes, loop for each member:
+1. **Relationship**: partner, child, or pet
+2. **Name**: first name
+3. **Age**: number (children only — skip for partner/pet, store as `na`)
+4. **Interests**: comma-separated (optional)
+
+Continue asking "Add another family member?" until they say no.
+
+Format into `BEEPBOPBOOP_FAMILY` string: `role:name:age_or_na:interests` per member, separated by `;`.
+
+Example: `partner:Sarah:na:hiking,wine;child:Max:5:dinosaurs,lego;pet:Luna:na:walks`
+
+This step is optional — the user can skip it entirely.
+
+#### IN7: Content Sources
+
+Explain source types:
+> "You can add content sources that batch mode pulls from automatically:
+> - `hn` — Hacker News top stories filtered by your interests
+> - `ph` — Product Hunt daily launches
+> - `rss:<URL>` — any RSS/Atom feed (e.g., `rss:https://simonwillison.net/atom/everything`)
+> - `substack:<URL>` — a Substack newsletter"
+
+Ask for a comma-separated list. This step is optional.
+
+Store as `BEEPBOPBOOP_SOURCES`.
+
+#### IN8: Calendar
+
+Ask: "Do you have a calendar URL (ICS format) you'd like to connect? This lets BeepBopBoop turn your upcoming events into posts with travel time, weather, and practical details."
+
+Explain how to get it:
+> - **Google Calendar**: Settings → calendar → "Secret address in iCal format"
+> - **Apple Calendar**: Share calendar → copy the webcal:// URL
+> - **Outlook**: Settings → Shared calendars → Publish a calendar → ICS link
+
+If they provide a URL, test-fetch it:
+```bash
+curl -s -o /dev/null -w "%{http_code}" "<CALENDAR_URL>"
+```
+
+If the fetch fails, warn and let them skip or retry.
+
+Store as `BEEPBOPBOOP_CALENDAR_URL`. This step is optional.
+
+#### IN8b: Image Services
+
+Ask: "Posts look much better with images. Two free services are supported — Unsplash for real photos and imgur for hosting AI-generated images. Set up one or both?"
+
+**Unsplash** (for real stock photos):
+> "Sign up at https://unsplash.com/developers, create an app, and copy the Access Key. Free tier: 50 requests/hour."
+
+**imgur** (for hosting AI-generated images):
+> "Register an app at https://api.imgur.com/oauth2/addclient (choose 'Anonymous usage without user authorization'). Copy the Client-ID. Free: 1250 uploads/day."
+
+If both are configured, Unsplash is tried first. If no good photo is found, a Pollinations AI image is generated and uploaded to imgur.
+
+Store as `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` and `BEEPBOPBOOP_IMGUR_CLIENT_ID`. Both are optional — if neither is set, posts will have no images.
+
+#### IN9: Schedule
+
+Ask: "Would you like to set up a batch schedule? This tells batch mode what content to generate on which days."
+
+Explain the format: `DAY|MODE|ARGS` triplets. Suggest a starter schedule based on their interests from IN5:
+> "Here's a suggested starter schedule based on your interests:
+> `daily|weather|monday|interest|<FIRST_INTEREST> roundup|daily|source|hn`
+> Want to use this, customize it, or skip?"
+
+Also ask for batch range (default 8-15):
+> "How many posts should batch mode target? Default is 8-15."
+
+Store as `BEEPBOPBOOP_SCHEDULE`, `BEEPBOPBOOP_BATCH_MIN`, `BEEPBOPBOOP_BATCH_MAX`.
+
+This step is optional.
+
+#### IN10: Confirm & Save
+
+Show a full config summary:
+> ```
+> API URL:        http://localhost:8080
+> Agent Token:    bbp_xxxxx...
+> Home Address:   1234 Oak Bay Ave, Victoria, BC
+> Home Coords:    48.4284, -123.3248
+> Display Location: Victoria, BC, Canada
+> Interests:      AI, startups, investing
+> Family:         Sarah (partner), Max (child, 5), Luna (pet)
+> Sources:        hn, ph, rss:https://simonwillison.net/atom/everything
+> Calendar:       https://calendar.google.com/.../basic.ics
+> Schedule:       daily|weather|monday|interest|AI roundup|daily|source|hn
+> Batch Range:    8-15
+> Unsplash Key:   (configured)
+> imgur Client-ID: (configured)
+> ```
+
+Ask: "Save this config? (confirm / edit / cancel)"
+
+- **confirm**: Write the config file (see below)
+- **edit**: Ask which section to change, jump back to that step
+- **cancel**: Abort without saving
+
+Write the config file:
+```bash
+mkdir -p ~/.config/beepbopboop && cat > ~/.config/beepbopboop/config << 'ENDOFCONFIG'
+BEEPBOPBOOP_API_URL=<URL>
+BEEPBOPBOOP_AGENT_TOKEN=<TOKEN>
+BEEPBOPBOOP_DEFAULT_LOCATION=<LOCATION>
+BEEPBOPBOOP_INTERESTS=<INTERESTS>
+BEEPBOPBOOP_SOURCES=<SOURCES>
+BEEPBOPBOOP_SCHEDULE=<SCHEDULE>
+BEEPBOPBOOP_BATCH_MIN=<MIN>
+BEEPBOPBOOP_BATCH_MAX=<MAX>
+BEEPBOPBOOP_HOME_ADDRESS=<ADDRESS>
+BEEPBOPBOOP_HOME_LAT=<LAT>
+BEEPBOPBOOP_HOME_LON=<LON>
+BEEPBOPBOOP_FAMILY=<FAMILY>
+BEEPBOPBOOP_CALENDAR_URL=<CALENDAR_URL>
+BEEPBOPBOOP_UNSPLASH_ACCESS_KEY=<UNSPLASH_KEY>
+BEEPBOPBOOP_IMGUR_CLIENT_ID=<IMGUR_CLIENT_ID>
+ENDOFCONFIG
+```
+
+For optional keys that the user skipped, write them as comments:
+```bash
+# BEEPBOPBOOP_FAMILY=
+# BEEPBOPBOOP_CALENDAR_URL=
+```
+
+Confirm: "Config saved to `~/.config/beepbopboop/config`. You're all set! Run `/beepbopboop-post init` anytime to reconfigure."
+
+If the wizard was auto-triggered (missing config), continue with Step 0a to execute the user's original command. If it was triggered by `init`/`setup`, stop here.
+
+---
+
+### Family Context Rules
+
+**Parse once after Step 0 loads config.** Only applies when `BEEPBOPBOOP_FAMILY` is set.
+
+Parse the family string and derive these flags:
+- `has_children` — at least one member with role `child`
+- `has_young_children` — at least one child with age ≤ 6
+- `has_school_age_children` — at least one child with age 7–17
+- `has_partner` — at least one member with role `partner`
+- `has_pets` — at least one member with role `pet`
+- `children_interests` — combined interests from all children
+- `partner_interests` — interests from partner
+
+**How family flags modify existing modes:**
+
+- **Weather (W2)**: When `has_children`, include kid-friendly activities in the suggestions (playgrounds, family-friendly venues). When `has_pets`, include dog-friendly venues/walks. When `has_partner`, frame ~20% of suggestions as date-night options.
+- **Local (Step 2)**: When the idea is "activities"/"things to do" and `has_children`, include playgrounds and kid-friendly venues in POI discovery.
+- **Batch (BT3 Phase 2)**: When `has_children`, add 1-2 family-relevant posts (kid-friendly events, activities matching `children_interests`). When `has_partner`, occasionally include a date-spot suggestion.
+- **Post body texture**: Naturally mention family where relevant — e.g., "bring the kids — playground next to the patio", or use children's names and interests sparingly: "Max would love this — dinosaur exhibit until April". Never forced, never the primary angle.
+
+**Key rule**: Family context is **never** the primary driver of a post. It adds texture to already-relevant content. An AI news article never mentions family. A coffee shop post might mention "kid-friendly" if it has a play area, but the coffee is still the lead.
+
+---
+
+### Step 1: Resolve location
+
+Determine the location to use with this priority:
+
+1. **Explicit locality argument** → geocode it (the user is asking about a different place)
+2. **No argument + `HOME_LAT`/`HOME_LON` set** → use those directly as lat/lon, set `display_name` to `BEEPBOPBOOP_DEFAULT_LOCATION`, **skip geocoding entirely**
+3. **No argument + no HOME coords** → geocode `BEEPBOPBOOP_DEFAULT_LOCATION` (existing fallback)
+4. **None available** → proceed without coordinates
+
+Geocode the location using the `osm` CLI:
+
+```bash
+osm geocode "LOCATION_STRING" | jq '.[0] | {lat, lon, display_name}'
+```
+
+For addresses that fail free-form geocoding, use structured mode:
+```bash
+osm geocode --street "STREET" --city "CITY" --country "COUNTRY" | jq '.[0] | {lat, lon, display_name}'
+```
+
+Extract from the result: `lat`, `lon`, `display_name`.
+
+If geocoding fails or returns no results, proceed without coordinates. Store the resolved lat, lon, and display_name for later steps.
+
+### Step 2: Discover nearby POIs
+
+**Only run this step if lat/lon coordinates are available from Step 1** (either from geocoding or from `HOME_LAT`/`HOME_LON`).
+
+Wait 1 second between Nominatim and Overpass calls (rate limit courtesy):
+
+```bash
+sleep 1
+```
+
+Map the user's idea keyword to an OSM tag using this table:
+
+| Keyword | OSM Query Filter |
+|---------|-----------------|
+| coffee, cafe, espresso | `"amenity"="cafe"` |
+| restaurant, food, eat, dinner, lunch | `"amenity"="restaurant"` |
+| bar, pub, drinks, beer | `"amenity"="bar"` |
+| pizza | `"amenity"="restaurant"["cuisine"="pizza"]` |
+| park, green, nature | `"leisure"="park"` |
+| tennis | `"leisure"="pitch"["sport"="tennis"]` |
+| gym, fitness, workout | `"leisure"="fitness_centre"` |
+| swimming, pool | `"leisure"="swimming_pool"` |
+| library, books | `"amenity"="library"` |
+| pharmacy, chemist | `"amenity"="pharmacy"` |
+| bakery, bread, pastry | `"shop"="bakery"` |
+| supermarket, grocery | `"shop"="supermarket"` |
+| bookshop, bookstore | `"shop"="books"` |
+| cinema, movie, film | `"amenity"="cinema"` |
+| museum, gallery, art | `"tourism"="museum"` |
+| hotel, stay, accommodation | `"tourism"="hotel"` |
+| bike, bicycle, cycling | `"amenity"="bicycle_rental"` |
+| doctor, clinic, health | `"amenity"="clinic"` |
+| school, education | `"amenity"="school"` |
+| playground, kids | `"leisure"="playground"` |
+| theatre, play, drama, acting, stage | `"amenity"="theatre"` |
+
+If the idea doesn't match any keyword, skip POI discovery and proceed to content generation.
+
+Query Overpass for nearby POIs (1500m radius, max 5 results):
+
+```bash
+osm pois '"amenity"="cafe"' LAT LON 1500 5
+```
+
+From the results, extract for each POI:
+- `name` (from `tags.name`)
+- amenity/leisure/shop type (from relevant tag)
+- `opening_hours` (from `tags.opening_hours`, if present)
+- `website` (from `tags.website`, if present)
+
+Calculate approximate distance from user coordinates for each POI using:
+- `distance_km ≈ sqrt((lat2-lat1)² + (lon2-lon1)² × cos(lat1)²) × 111`
+- Express as meters if < 1km, otherwise km
+
+If Overpass fails or returns no results, proceed without POI data — it's optional enrichment.
+
+### Step 2b: Classify post type
+
+Determine the post type based on the idea and any explicit argument:
+
+**If the user provided a post_type as `$2`, use that value directly** (must be one of: `event`, `place`, `discovery`, `article`, `video`).
+
+Otherwise, auto-classify:
+
+| Type | Trigger Keywords |
+|------|-----------------|
+| `event` | theatre, theater, play, musical, concert, gig, show, cinema, film screening, exhibition, festival, performance, recital, opera, ballet, comedy show, improv, standup, open mic, launch, premiere, opening night — OR the idea is about a specific date/time-bound experience |
+| `place` | cafe, coffee, restaurant, bar, pub, park, gym, bakery, bookshop, library, museum, gallery, hotel, shop, supermarket, pharmacy, clinic, playground, pool, beach, market — OR the idea is fundamentally about a venue/location to visit |
+| `article` | Blog post, news article, essay, written content from a specific source — used in interest mode for written content |
+| `video` | YouTube video, video essay, podcast episode with video — used in interest mode for video content |
+| `discovery` | Everything else — general tips, observations, recommendations, insights |
+
+Apply classification rules in order:
+1. Explicit `$2` argument → use as-is
+2. Interest mode + video content (YouTube, video essay) → `video`
+3. Interest mode + written content (blog, article, news) → `article`
+4. Idea matches `event` keywords → `event`
+5. Idea matches `place` keywords → `place`
+6. Default → `discovery`
+
+#### Visibility classification
+
+Determine visibility alongside post type. Evaluate these rules AFTER generating post content (since the body text determines the result), but BEFORE publishing:
+
+| Content source / characteristic | Visibility | Why |
+|--------------------------------|-----------|-----|
+| Calendar mode (CL1–CL3) | `private` | Calendar events reveal personal schedule |
+| Post body references family member names from `BEEPBOPBOOP_FAMILY` | `personal` | "Maja would love this" is personal |
+| Post body contains "from your door", "from home", "X minutes from here" | `personal` | Reveals home location |
+| Post body contains user's street/address | `personal` | Reveals home address |
+| Comparison mode about a personal topic (e.g., "best coffee near me") | `personal` | Location-specific |
+| Weather mode with family suggestions | `personal` | Combines location + family |
+| All other posts | `public` | Safe for cross-user discovery |
+
+### Steps 1i–3i: Interest-Based Flow (interest mode only)
+
+**If Step 0b routed to interest mode, skip Steps 1–2b and follow these steps instead.**
+
+#### Step 1i: Resolve interest context
+
+- Parse the idea for: topic area, specific creators/sources, timeframe
+- Cross-reference with `BEEPBOPBOOP_INTERESTS` from config for additional context
+- No geocoding needed — interest-based content has no geographic location
+
+#### Step 2i: Research content
+
+Search for recent content matching the interest:
+
+- **For topics**: WebSearch `"<TOPIC> latest news <MONTH> <YEAR>"`, `"<TOPIC> breakthroughs <MONTH> <YEAR>"`
+- **For creators**: WebSearch `"<CREATOR> latest blog post"`, `"<CREATOR> latest YouTube video <MONTH> <YEAR>"`
+- **For YouTube**: WebSearch `"<CHANNEL> latest video <MONTH> <YEAR>"`
+
+WebFetch on the top 2-3 results to extract:
+- Title, author/source, publication date, key points, URL
+- For YouTube: video title, channel name, publish date, description summary
+- For blogs/articles: headline, author, publication, date, key takeaway
+
+#### Step 3i: Classify and generate
+
+For each piece of content found, classify and generate a post:
+
+**Classification:**
+- YouTube video, video essay, podcast episode with video → `video`
+- Blog post, news article, essay, newsletter → `article`
+
+**Post fields:**
+- `title` and `body`: Follow the same Writing Quality Standards as local posts
+- `locality`: Set to the source/creator name (e.g., "Simon Willison's Blog", "Fireship on YouTube") — this is the source attribution displayed with a "link" icon in the iOS app
+- `latitude` / `longitude`: Set to `null` (no geographic location)
+- `external_url`: Direct link to the content (article URL, YouTube video URL)
+- `image_url`: Find via Unsplash or generate via Pollinations+imgur (see Step 4b)
+- `post_type`: `"article"` or `"video"`
+
+**Then skip to Step 4b for image generation and Step 5 for publishing.**
+
+### Steps W1–W3: Weather-Aware Mode
+
+**Trigger**: `weather`, `what should I do today`
+
+**Skip this section unless Step 0a detected weather mode, or batch mode is generating weather posts.**
+
+#### W1: Fetch weather
+
+Use the location from `BEEPBOPBOOP_DEFAULT_LOCATION` (or a provided locality argument):
+
+```
+WebSearch "<LOCATION> weather today"
+```
+
+Extract from results:
+- Current temperature (in Celsius)
+- Conditions: sunny, cloudy, rainy, snowy, overcast, etc.
+- Any notable weather events (storm warning, heat wave, etc.)
+
+#### W2: Map conditions to activities
+
+Use the weather to guide activity suggestions:
+
+| Condition | Activity suggestions |
+|---|---|
+| Sunny + warm (>18°C) | Patios, parks, outdoor markets, beaches, cycling routes, rooftop bars |
+| Sunny + cool (8–18°C) | Walking tours, outdoor cafes, scenic viewpoints, hiking trails |
+| Rainy | Museums, cinemas, cozy cafes, bookshops, indoor markets, art galleries |
+| Cold (<8°C) | Hot chocolate spots, indoor activities, warm restaurants, heated patios |
+| Snowy | Ski hills, snowshoeing trails, warm pubs, fireside dining |
+
+Pick 2-3 activities from the matching condition row that suit the location.
+
+#### W3: Generate weather posts
+
+For each selected activity:
+
+1. Run the existing local flow (Steps 1 → 2 → 3 → 4) with the activity as the idea
+2. Weave weather context naturally into the post body opening: "It's 22°C and cloudless today — " or "Rain all afternoon — "
+3. Post type: `place` or `discovery`
+
+**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+
+**Example title**: "Rain all afternoon: the Royal BC Museum has a new exhibition on loan from Berlin"
+
+---
+
+### Steps CP1–CP3: Comparison Mode
+
+**Trigger**: `compare ...`, `best ... ranked`, `top N ... in`, `vs`
+
+**Skip this section unless Step 0a detected comparison mode, or batch mode is generating a comparison post.**
+
+#### CP1: Parse comparison subject
+
+Extract from the user's input:
+- **Subject**: what to compare (e.g., "coffee roasters", "pizza places", "coworking spaces")
+- **Location**: optional location override (default: `BEEPBOPBOOP_DEFAULT_LOCATION`)
+
+Geocode the location using Step 1's process.
+
+#### CP2: Research options
+
+1. Run POI discovery (Step 2) with a larger radius (3000m) and limit (10)
+2. Research the top 5 POIs: reviews, specialties, prices, hours via WebSearch and WebFetch
+3. Cross-reference with `WebSearch "best <SUBJECT> <LOCATION> <YEAR>"` for local rankings and reviews
+
+#### CP3: Generate comparison post
+
+Generate **1 discovery post** with a ranking/comparison format:
+
+- Title should signal a curated ranking: "<LOCATION>'s 5 best <SUBJECT>, ranked by someone who's tried them all"
+- Body should name specific places, what they're best at, and include prices where available
+- Each place gets a one-line verdict
+- Post type: `discovery`
+
+**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+
+**Example**:
+> **Title**: "Victoria's 5 best coffee roasters, ranked by someone who's tried them all"
+> **Body**: "Bows & Arrows on Fort Street wins on single-origin range — their Ethiopian Yirgacheffe is worth the $6. Discovery Coffee on Government is the safe pick with the best pastry selection. Habit on Pandora does the best cortado in town at $4.50."
+
+---
+
+### Steps SN1–SN3: Seasonal Mode
+
+**Trigger**: `seasonal`, `what's in season`, `this month`, or auto-included in batch mode
+
+**Skip this section unless Step 0a detected seasonal mode, or batch mode is generating seasonal posts.**
+
+#### SN1: Determine season
+
+Get the current month:
+
+```bash
+date +%m
+```
+
+Map month to seasonal themes (Northern Hemisphere default):
+
+| Months | Season | Themes |
+|---|---|---|
+| Dec–Feb | Winter | Winter markets, skating rinks, ski/snowboard, cozy restaurants, holiday events |
+| Mar–May | Spring | Cherry blossoms, farmers markets reopening, patios opening, spring hikes, garden tours |
+| Jun–Aug | Summer | Outdoor concerts, festivals, beaches, night markets, kayaking, outdoor cinema |
+| Sep–Nov | Autumn | Harvest festivals, fall foliage hikes, Halloween events, cozy season, Thanksgiving |
+
+#### SN2: Research seasonal activities
+
+1. `WebSearch "<LOCATION> things to do <MONTH_NAME> <YEAR>"`
+2. `WebFetch` top 2-3 results for specific events, dates, and details
+3. Look for seasonal-specific activities: what's blooming, what festivals are running, what's opening/closing for the season
+
+#### SN3: Generate seasonal posts
+
+Generate **1-2 posts** (discovery or event type):
+
+- Title should reference the season or time of year naturally
+- Body should include specific dates, venues, and practical details
+- Post type: `discovery` or `event` depending on whether it's a specific event or general seasonal tip
+
+**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+
+---
+
+### Steps DL1–DL3: Deal Mode
+
+**Trigger**: `deals`, `sales`, `specials`, `discounts`
+
+**Skip this section unless Step 0a detected deal mode, or batch mode is generating deal posts.**
+
+#### DL1: Parse deal context
+
+Determine the deal type:
+- **Local deals**: restaurants, shops, services near `BEEPBOPBOOP_DEFAULT_LOCATION` (default if no specifics given)
+- **Interest deals**: tech subscriptions, software sales, courses — matched against `BEEPBOPBOOP_INTERESTS`
+
+#### DL2: Research deals
+
+For local deals:
+- `WebSearch "<LOCATION> deals this week"`, `"<LOCATION> happy hour specials"`, `"<LOCATION> restaurant specials"`
+- `WebFetch` top results for specifics (prices, dates, conditions)
+
+For interest deals:
+- `WebSearch "<INTEREST> deals <MONTH_NAME> <YEAR>"`, `"<INTEREST> discounts"`
+- `WebFetch` top results
+
+#### DL3: Generate deal posts
+
+Generate **1-2 discovery posts** with deal details:
+
+- Title should lead with the value proposition: specific prices, percentage off, or "free"
+- Body should include: what the deal is, where/how to get it, when it expires, any conditions
+- Post type: `discovery`
+
+**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+
+---
+
+### Steps SR1–SR4: Source Ingestion
+
+**Trigger**: `hn`, `hacker news`, `producthunt`, `sources`, or auto-included in batch mode
+
+**Skip this section unless Step 0a detected source mode, or batch mode is generating source posts.**
+
+The source to use is determined by:
+1. Explicit user input: `hn` → HackerNews, `producthunt` → ProductHunt, `sources` → all configured sources
+2. Batch mode: picks from `BEEPBOPBOOP_SOURCES` config
+3. If no sources configured and user says `sources`, default to `hn`
+
+#### SR1: HackerNews
+
+Fetch top stories:
+
+```bash
+curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" | jq '.[0:30]'
+```
+
+For each of the top 30 story IDs:
+
+```bash
+curl -s "https://hacker-news.firebaseio.com/v0/item/<ID>.json" | jq '{title, url, score, by}'
+```
+
+- Filter stories by matching title against `BEEPBOPBOOP_INTERESTS` (case-insensitive substring match)
+- If no interests configured, take the top 3 by score
+- Otherwise take the top 2-3 interest-matching stories by score
+- `WebFetch` each story URL for a summary of the content
+- Generate **article** posts for each:
+  - `locality`: "Hacker News"
+  - `latitude`/`longitude`: `null`
+  - `external_url`: the story URL
+  - `post_type`: `article`
+
+#### SR2: ProductHunt
+
+- `WebFetch "https://www.producthunt.com"` with prompt: "Extract today's top 5 product launches: name, tagline, URL, vote count"
+- Filter by `BEEPBOPBOOP_INTERESTS` if configured
+- Take the top 1-2 matching launches
+- `WebFetch` each product page for more details
+- Generate **article** posts:
+  - `locality`: "Product Hunt"
+  - `latitude`/`longitude`: `null`
+  - `post_type`: `article`
+
+#### SR3: RSS feeds
+
+For each `rss:<URL>` in `BEEPBOPBOOP_SOURCES`:
+
+- `WebFetch "<RSS_URL>"` with prompt: "Extract the 5 most recent items from this RSS/Atom feed: title, link, date, description"
+- Take the 2-3 most recent items
+- `WebFetch` each item URL for full content summary
+- Generate **article** posts:
+  - `locality`: feed name (extracted from the RSS `<title>` element, or the domain name as fallback)
+  - `latitude`/`longitude`: `null`
+  - `post_type`: `article`
+
+#### SR4: Substack/newsletters
+
+For each `substack:<URL>` in `BEEPBOPBOOP_SOURCES`:
+
+- `WebFetch "<SUBSTACK_URL>"` with prompt: "Extract the most recent article: title, date, URL, summary"
+- Only generate a post if the article was published within the last 7 days
+- Generate **article** post:
+  - `locality`: newsletter name (from the page title)
+  - `latitude`/`longitude`: `null`
+  - `post_type`: `article`
+
+**After generating all source posts, proceed to Step 4b for image generation and Step 5 for publishing.**
+
+---
+
+### Steps CL1–CL3: Calendar Mode
+
+**Trigger**: `calendar`, `my calendar`, `upcoming events from calendar`, or auto-included in batch mode.
+
+**Skip this section unless Step 0a detected calendar mode, or batch mode is generating calendar posts.**
+
+**Requires** `BEEPBOPBOOP_CALENDAR_URL` to be configured. If not set, tell the user: "No calendar URL configured. Run `/beepbopboop-post init` to add one."
+
+#### CL1: Fetch and parse ICS
+
+Fetch the calendar:
+```bash
+curl -s "<CALENDAR_URL>"
+```
+
+Parse `VEVENT` blocks from the ICS data. For each event, extract:
+- `SUMMARY` — event title
+- `DTSTART` — start date/time
+- `DTEND` — end date/time (if present)
+- `LOCATION` — venue (if present)
+- `DESCRIPTION` — details (if present)
+- `URL` — link (if present)
+
+**Date format handling** — ICS uses several formats:
+- `DTSTART;TZID=America/Los_Angeles:20260318T183000` → date with timezone
+- `DTSTART:20260318T183000Z` → UTC
+- `DTSTART;VALUE=DATE:20260318` → all-day event
+
+Filter to events in the **next 7 days**:
+```bash
+date +%Y%m%d
+```
+Compare each event's `DTSTART` date portion against today through today+7.
+
+Take a maximum of **5 events**. Skip events with complex recurrence rules (`RRULE`) for now — only process single-instance and simple recurring events.
+
+#### CL2: Research and enrich
+
+For each upcoming event:
+
+1. **If the event has a `LOCATION`**:
+   - Geocode the location: `osm geocode "<LOCATION>" | jq '.[0] | {lat, lon, display_name}'`
+   - Calculate distance from `HOME_LAT`/`HOME_LON` if available
+   - `WebSearch "<VENUE_NAME> <LOCATION>"` for venue details (parking, what to bring)
+
+2. **Research the event**:
+   - `WebSearch "<EVENT_NAME> <LOCATION> <DATE>"` for additional context — what to expect, dress code, parking tips
+   - If the event has a `URL`, `WebFetch` it for more details
+
+3. **Weather check** for the event day:
+   - `WebSearch "<DISPLAY_LOCATION> weather <EVENT_DATE>"` for conditions on that day
+
+#### CL3: Generate calendar posts
+
+For each event, generate a post:
+
+- **Post type**: `event`
+- **Title**: Timing + actionable framing. Lead with when, not what. Examples:
+  - "Team dinner at Il Terrazzo is Thursday at 6:30pm"
+  - "Max's soccer practice moved to the indoor field Saturday morning"
+  - "Victoria Tech Meetup is tomorrow at 6pm — there's still parking on Fisgard after 5"
+- **Body**: Practical context a calendar alert wouldn't give you:
+  - Travel time from home (using distance from `HOME_LAT`/`HOME_LON`)
+  - Weather for that day
+  - What to bring or prepare
+  - Parking or transit tips if researched
+  - For family events: relevant family context (e.g., "Max will need his cleats")
+- **Tone**: Helpful friend reminder, not a notification. "You've got the tech meetup tomorrow" not "Upcoming event: Victoria Tech Meetup"
+- **locality**: Event location or venue name
+- **latitude/longitude**: From geocoded event location, or `null`
+- **external_url**: Event URL if available
+
+**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+
+---
+
+### Steps FU1–FU3: Follow-up Mode
+
+**Trigger**: `update on ...`, `follow up on ...`, `what's changed with ...`
+
+**Skip this section unless Step 0a detected follow-up mode.**
+
+#### FU1: Extract topic
+
+Strip the trigger prefix (`update on`, `follow up on`, `what's changed with`) and extract the core topic.
+
+#### FU2: Research updates
+
+- `WebSearch "<TOPIC> latest news <MONTH_NAME> <YEAR>"`
+- `WebSearch "<TOPIC> update <MONTH_NAME> <YEAR>"`
+- `WebFetch` top 2-3 results for details
+
+Focus on: what changed recently, new developments, announcements, releases.
+
+#### FU3: Generate follow-up post
+
+Generate **1 post** framed as an update:
+
+- Title should signal update nature: "Three months later: ...", "<TOPIC> just shipped ...", "What changed with <TOPIC> since ..."
+- Body focuses on what's new — don't rehash the original story
+- Post type: `article` or `discovery`
+- `locality`: source name or topic area
+- `latitude`/`longitude`: `null` (unless the topic is location-specific)
+
+**Then proceed to Step 4b for image generation and Step 5 for publishing.**
+
+---
+
+### Steps BT1–BT9: Batch Orchestration
+
+**Trigger**: `batch`, `my weekly feed`, `fill my feed`, `generate feed`
+
+**Skip this section unless Step 0a detected batch mode.**
+
+#### BT1: Load schedule
+
+Get today's day of the week:
+
+```bash
+date +%A | tr '[:upper:]' '[:lower:]'
+```
+
+If `BEEPBOPBOOP_SCHEDULE` is configured, parse it into rules. The format is pipe-separated triplets: `DAY|MODE|ARGS`.
+
+Match today against schedule rules:
+- Exact day name match (e.g., `monday` matches on Mondays)
+- `daily` matches every day
+- `weekday` matches Monday–Friday
+- `weekend` matches Saturday–Sunday
+
+Collect all matching rules into "today's agenda."
+
+#### BT2: Set target post count
+
+Pick a target post count: a random integer between `BATCH_MIN` and `BATCH_MAX` (defaults: 8 and 15).
+
+#### BT3: Build content plan
+
+Assemble the content plan in this order:
+
+**Phase 1 — Scheduled content:**
+
+Execute each matching schedule rule from BT1. Schedule modes map to:
+- `interest` → Interest mode (Steps 1i–3i) with the ARGS as the idea
+- `local` → Local mode (Steps 1–3) with the ARGS as the idea
+- `weather` → Weather mode (Steps W1–W3)
+- `source` → Source mode (Steps SR1–SR4) with ARGS specifying the source (e.g., `hn`)
+- `seasonal` → Seasonal mode (Steps SN1–SN3)
+- `deals` → Deal mode (Steps DL1–DL3)
+- `compare` → Comparison mode (Steps CP1–CP3) with ARGS as the subject
+- `calendar` → Calendar mode (Steps CL1–CL3)
+
+**Phase 2 — Fill with defaults** (if post count is still under target):
+- Always: weather mode → 2-3 posts
+- Always: local mode with idea "events this week" → 2-4 posts
+- If `BEEPBOPBOOP_INTERESTS` configured: pick 1-2 interests → interest mode → 2-4 posts
+- If `BEEPBOPBOOP_SOURCES` configured: pick 1-2 sources → source mode → 1-3 posts
+- If `BEEPBOPBOOP_CALENDAR_URL` configured: calendar mode → 1-3 posts
+- If seasonal month is notable (Dec, Mar, Jun, Sep, Oct): seasonal mode → 1 post
+- Occasionally: comparison mode → 1 post (include roughly 30% of the time)
+- Occasionally: deal mode → 1 post (include roughly 20% of the time)
+
+**Phase 3 — Trim** if total exceeds `BATCH_MAX`, drop the least essential posts (deals and seasonal first).
+
+#### BT4: Execute scheduled content
+
+Execute each Phase 1 scheduled rule, running the appropriate mode steps. After each mode completes, report progress:
+
+"Generated N posts from [mode] (running_total/target)"
+
+#### BT5: Execute default fill
+
+Execute Phase 2 modes as needed to reach the target. Report progress after each mode.
+
+#### BT6: Deduplicate
+
+Review all generated posts across all modes:
+- Remove duplicate venues (same name + same coordinates)
+- Remove duplicate articles (same URL or same title)
+- Keep the version with richer content if duplicates exist
+
+#### BT7: Diversity check
+
+Verify the final post set meets these criteria:
+- At least 2 different `post_type` values
+- At least 1 local post (with coordinates) and 1 non-local post (without coordinates)
+- No more than 3 consecutive same-type posts — reorder if needed
+
+If any check fails, reorder or swap posts to fix it.
+
+#### BT8: Publish all posts
+
+Run Step 5 (publish) for each post. Publish in parallel where possible.
+
+#### BT9: Report with mode attribution
+
+Run Step 6 (report) with extra "Vis", "Labels", and "Source" columns showing metadata for each post:
+
+| # | Title | Type | Vis | Labels | Source | Post ID |
+|---|-------|------|-----|--------|--------|---------|
+| 1 | It's 19°C and clear — three patios open today | place | public | place, patio, outdoor, sunny-day | weather | abc123 |
+| 2 | Claude 4 scores 94% on ARC-AGI | article | public | article, ai, machine-learning, research | HN | def456 |
+| 3 | Royals host three games this week | event | public | event, hockey, sports, live-events | local | ghi789 |
+
+---
+
+### Step 3: Research practical details + poster image
+
+**Run this step when the idea involves events, venues, or anything time-sensitive** (theatre, cinema, concerts, exhibitions, markets, festivals, classes, etc.) **or when POIs were found in Step 2 and deeper details would make the post actionable.**
+
+The goal is to answer the questions a reader would actually ask:
+- What's on right now / on the date mentioned?
+- How much does it cost?
+- How do I get tickets? Are they still available?
+- What time does it start?
+- Is there a direct booking link?
+
+#### How to research
+
+**Phase 1: Broad survey** — cast a wide net to discover ALL relevant options
+
+The idea may be broad (e.g., "hockey games", "live music", "things to do"). Don't latch onto the first result. Run 2-3 parallel WebSearch queries with different angles to surface the full landscape:
+
+- **General query**: `<TOPIC> <LOCALITY> <MONTH> <YEAR>` (e.g., "hockey games Victoria BC March 2026")
+- **Specific leagues/orgs**: If the topic has known categories, search each one. For sports: professional, junior, university, amateur, tournaments. For music: venues, festivals, genres. For theatre: professional, community, fringe.
+- **Aggregator query**: `<TOPIC> <LOCALITY> schedule this week` or `<TOPIC> near <LOCALITY> upcoming events`
+
+From the broad survey, build a list of **all distinct options** (teams, venues, events, organizations). Don't stop at the first hit.
+
+**Phase 2: Deep dive** — research the top 2-3 most relevant options
+
+1. **Fetch venue/org websites** for the most relevant options from Phase 1:
+   - Use WebFetch on their website or ticketing page
+   - Look for: event name, dates, showtimes, ticket prices, booking URL, sold-out status
+
+2. **Fill gaps** — if Phase 1 found an option but lacked details (e.g., found a team but no schedule), do a targeted WebSearch for that specific option.
+
+**Phase 3: Decide single vs. multiple posts**
+
+After the broad survey and deep dive, decide how to split the results:
+
+- **Different venues, teams, or organizations → separate posts.** A Royals game at Save-On-Foods and a Grizzlies game at The Q Centre are two posts. A play at the Belfry and a play at Langham Court are two posts.
+- **Same venue, same event series → single post.** Three Royals home games in one week are one post.
+- **Same venue, different events → separate posts.** A concert and a comedy show at the same venue are two posts.
+
+Build a list of distinct posts to create. Each post should stand alone — a reader should get everything they need from that one post without needing context from the others.
+
+#### Poster image search (event type only)
+
+**If the classified post type is `event`**, search for a poster or promotional image:
+
+1. Use WebSearch: `"<EVENT_NAME>" "<VENUE_NAME>" poster image` or `"<SHOW_NAME>" <YEAR> poster`
+2. Use WebFetch on the most promising results (venue website, ticketing page, event listing)
+3. Look for a direct image URL ending in `.jpg`, `.png`, or `.webp` — prefer:
+   - The venue's own domain (e.g., `belfry.bc.ca/shows/poster.jpg`)
+   - Official ticketing platform images
+   - High-resolution promotional images
+4. The image URL must be a direct link to an image file, not an HTML page
+5. If no suitable poster image is found, use an empty string — the iOS app shows a gradient placeholder with a theatermasks icon
+
+#### What to extract
+
+For each researched venue, collect as many of these as possible:
+- **Event/show name** currently running or on the requested date
+- **Dates and showtimes** (e.g., "March 12–29, 7:30pm nightly")
+- **Ticket price** or price range (e.g., "$25–$45", "free", "pay what you can")
+- **Booking URL** — direct link to buy tickets
+- **Availability** — sold out, limited seats, rush tickets, etc.
+- **Anything notable** — last night of a run, preview pricing, student discounts
+- **Poster image URL** (event type only) — direct link to .jpg/.png/.webp
+
+If research fails or returns nothing useful, proceed without it — the post should still work with just POI data.
+
+### Step 4: Generate post content
 
 Based on the idea provided: `$0`
 
-Generate:
-- **title**: A compelling, specific headline (max 80 chars). Not clickbait — genuinely interesting.
-- **body**: 2-4 sentences that expand on the title. Make it personal, actionable, or thought-provoking.
+**If Step 3 identified multiple distinct posts to create**, generate content for each one separately. Each post gets its own title, body, image_url, external_url, and post_type.
 
-Locality context (if provided as second argument): `$1`
+**If the idea is simple or research found only one result**, generate a single post.
+
+For each post, generate:
+- **title**: A compelling, specific headline (max 80 chars). Not clickbait — genuinely interesting.
+- **body**: 2-3 sentences that expand on the title. Make it personal, actionable, or thought-provoking.
+
+#### Writing Quality Standards
+
+Every post MUST pass these standards before publishing.
+
+**Headline Rules**
+- Be specific, not generic. Numbers, names, distances create curiosity.
+- Formulas that work: proximity + specificity ("Kaph is 3 minutes from your door"), urgency + detail ("Royals host three games this week — tickets from $17"), counterintuitive ("Saturday at 9am is the secret window"), insider knowledge ("The back room at Fallon & Byrne does a €12 lunch nobody talks about").
+- Max 80 chars. Every word earns its place.
+
+**Body Rules**
+- **First sentence rule**: must add NEW information not in the title. Never rephrase the headline.
+- 2-3 sentences max. Each does a different job: (1) specifics/details, (2) context/texture, (3) actionable close — what to do, when to arrive, how to book.
+- End with something actionable whenever possible.
+
+**Kill List — banned phrases**
+Never use any of these: "Check out", "hidden gem", "whether you're", "looking for", "if you're in the area", "don't miss", "perfect for", "nestled in", "boasts", "a must-visit", "vibrant", "bustling", "tucked away". Never start a sentence with "This [noun] is...". Never write a sentence that could describe any city on earth.
+
+**Tone Test**
+Read it aloud. Does it sound like a text from a friend who just discovered something, or a tourism brochure? It must be the friend.
+
+**Anti-Example**
+
+BAD:
+> **Title**: "Check Out This Hidden Gem Cafe in Dublin"
+> **Body**: "Whether you're looking for a great cup of coffee or a cozy spot to work, this vibrant cafe is a must-visit. Nestled in the heart of Dublin 2, it boasts an amazing selection of specialty drinks. Don't miss it if you're in the area!"
+
+FIXED:
+> **Title**: "Kaph is 3 minutes from your door"
+> **Body**: "There's a cafe 290 metres away that regulars swear by. Kaph on Drury Street does single-origin pourovers in a space small enough to guarantee you'll overhear something interesting. Open until 6pm — you could be there before your coffee craving fades."
+
+The bad version uses 5 kill-list phrases, could describe any cafe in any city, and tells you nothing actionable. The fixed version names the place, gives you a distance, tells you what they're known for, and gives you a reason to go right now.
+
+**When POI data and research details are available:**
+- Reference actual place names (e.g., "Clement & Pekoe is 400m from you")
+- Include real distances from the user's location
+- Mention opening hours if relevant (e.g., "open until 6pm today")
+- Include practical details: prices, showtimes, how to book
+- If something is sold out or nearly sold out, say so — that's useful info
+- Use the booking/ticketing URL as `external_url` (prefer this over a generic venue homepage)
+- Each post should stand alone — don't reference other posts
+
+**When POI data is NOT available:**
+- Write the post based on the idea alone
+
+Locality context (use `display_name` from geocoding if available, or the raw locality arg): `$1`
 Post type (if provided as third argument): `$2`
 
-### Step 2: Publish to the backend
+### Step 4b: Find or generate post image
 
-Use the Bash tool to POST the generated content:
+Every post should have an image. The iOS app loads images via `AsyncImage`, so the `image_url` must be a direct, fast-loading URL to an image file — not a slow generation endpoint.
+
+**Image pipeline** (try in order, use the first that succeeds):
+
+#### Priority 1: Real poster/promo image (events only)
+
+If Step 3 found a direct image URL (`.jpg`, `.png`, `.webp`) from a venue website or ticketing platform, use it. Real promotional images are always better than stock or AI-generated.
+
+#### Priority 2: Unsplash search (if `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` is configured)
+
+Search for a real, free-to-use photo:
 
 ```bash
-curl -s -X POST "${BEEPBOPBOOP_API_URL}/posts" \
-  -H "Authorization: Bearer ${BEEPBOPBOOP_AGENT_TOKEN}" \
+curl -s "https://api.unsplash.com/search/photos?query=SEARCH_KEYWORDS&per_page=1&orientation=landscape" \
+  -H "Authorization: Client-ID <UNSPLASH_ACCESS_KEY>" | jq -r '.results[0].urls.regular'
+```
+
+**Search keyword rules:**
+- Use 2-4 concrete, visual keywords from the post topic
+- Include the setting/locale when it improves relevance
+- Prefer specific nouns over abstract concepts
+
+**Keyword examples:**
+| Post topic | Search keywords |
+|------------|----------------|
+| Coffee/cafe | `cafe coffee latte morning` |
+| Cherry blossoms | `cherry blossom street spring pink` |
+| Hockey game | `ice hockey arena crowd` |
+| Museum visit | `museum exhibition gallery interior` |
+| AI article | `artificial intelligence technology abstract` |
+| Farmers market | `farmers market produce outdoor morning` |
+| Theatre show | `theatre stage performance spotlight` |
+| Park/hiking | `hiking trail nature forest` |
+| Restaurant | `restaurant dining table food` |
+| Beach/ocean | `beach ocean waves coast` |
+
+If the API returns a valid URL (not `null`), use it directly as `image_url`. Unsplash CDN URLs are fast and permanent.
+
+If the API returns `null` or the request fails, fall through to Priority 3.
+
+#### Priority 3: Pollinations AI → imgur (if `BEEPBOPBOOP_IMGUR_CLIENT_ID` is configured)
+
+Generate a custom AI image and upload it to imgur for reliable hosting:
+
+**Step 1 — Generate image via Pollinations:**
+
+Craft a short, vivid scene description (15-30 words):
+- Be concrete and visual: name the type of place, atmosphere, lighting, activity
+- Do NOT include text, logos, words, or UI elements
+- Style: editorial photography, natural light, candid feel
+- Include the locality/setting when relevant
+
+```bash
+curl -s -L -o /tmp/bbp_post_image.jpg "https://gen.pollinations.ai/image/URL_ENCODED_PROMPT?width=1024&height=768&model=flux&seed=-1&quality=medium&nologo=true"
+```
+
+**Step 2 — Upload to imgur:**
+
+```bash
+curl -s -X POST "https://api.imgur.com/3/image" \
+  -H "Authorization: Client-ID <IMGUR_CLIENT_ID>" \
+  -F "image=@/tmp/bbp_post_image.jpg" \
+  -F "type=file" | jq -r '.data.link'
+```
+
+Use the returned `https://i.imgur.com/xxxxx.jpg` URL as `image_url`. These are permanent, fast CDN URLs.
+
+Clean up: `rm -f /tmp/bbp_post_image.jpg`
+
+#### Priority 4: No image
+
+If none of the above services are configured or all fail, set `image_url` to an empty string. The iOS app shows a gradient placeholder — posts still look fine without images, but images make them significantly more engaging.
+
+**Prompt examples for Pollinations (Priority 3):**
+- Coffee post → `"Warm morning light through cafe window, single origin pour over coffee, wooden counter, Pacific Northwest"`
+- Market post → `"Outdoor farmers market stalls with colorful produce, morning crowd, spring sunshine"`
+- Event post → `"Theatre marquee at dusk, warm glow from lobby windows, people arriving for evening show"`
+- AI article → `"Abstract visualization of neural network connections, dark background, glowing nodes, futuristic"`
+- YouTube video → `"Content creator workspace, multiple monitors, camera setup, warm desk lamp, modern studio"`
+
+**When publishing multiple posts:** Run all image fetches/uploads in parallel before publishing to avoid serial delays.
+
+### Step 4c: Generate labels
+
+Generate 3-8 labels for each post. Labels exist for **cross-user interest matching** — they help surface posts from one user's agent to another user who shares similar interests. Think "would another person search for or follow this topic?" not "what specific thing is this post about?"
+
+Generate labels from three sources:
+
+**Source 1 — Post type label** (always included):
+- `event` → `["event"]`
+- `place` → `["place"]`
+- `discovery` → `["discovery"]`
+- `article` → `["article"]`
+- `video` → `["video"]`
+
+**Source 2 — Category labels** from the topic/idea (2-4 labels):
+
+| Topic area | Example labels |
+|------------|---------------|
+| Coffee/cafe | `coffee`, `cafe`, `specialty-coffee`, `pour-over` |
+| Restaurant/food | `restaurant`, `dining`, `food`, cuisine type (e.g., `italian`, `sushi`) |
+| Bar/pub | `bar`, `pub`, `nightlife`, `drinks`, `craft-beer` |
+| Park/outdoor | `park`, `outdoor`, `nature`, `hiking`, `walking` |
+| Sports event | `sports`, `live-events`, sport name (e.g., `hockey`, `soccer`, `basketball`) |
+| Theatre/performance | `theatre`, `performing-arts`, `live-events` |
+| Music/concert | `music`, `live-music`, `concert` |
+| AI/tech | `ai`, `machine-learning`, `tech`, `software` |
+| Startup/business | `startup`, `business`, `investing`, `entrepreneurship` |
+| Cooking/food content | `cooking`, `recipes`, `food`, `meal-planning` |
+| Fitness/health | `fitness`, `exercise`, `health`, `wellness` |
+| Family/kids | `family`, `kids`, `parenting`, `family-activity` |
+| Weather-driven | `weather`, `rainy-day` or `sunny-day` |
+| Seasonal | `seasonal`, current season name (e.g., `spring`, `winter`) |
+
+**Source 3 — Specificity labels** from the post content (1-3 labels):
+- Content sources: the publication/platform (e.g., `hacker-news`, `fireship`, `product-hunt`) — useful for interest matching across users
+- Audience/context: e.g., `kid-friendly`, `date-night`, `budget`, `free`, `outdoor-seating`
+- Activity details: e.g., `indoor`, `outdoor`, `morning`, `evening`, `weekend`
+- Do NOT use venue-specific names as labels (e.g., not `royal-bc-museum`) — venues are matched by GPS coordinates, not labels. Use the category instead (e.g., `museum`)
+
+**Label format rules:**
+- Lowercase, hyphenated (e.g., `live-music` not `Live Music`)
+- 3-8 labels per post total
+- No duplicates within a post
+- English only
+
+### Step 5: Publish to the backend
+
+Use the values loaded from config in Step 0. Substitute the API URL and token directly into the curl command (do NOT rely on shell env vars — use the literal values you parsed from the config file).
+
+**Publish each post separately** with its own curl call. If Step 4 generated 3 posts, make 3 curl calls.
+
+```bash
+curl -s -X POST "<API_URL>/posts" \
+  -H "Authorization: Bearer <AGENT_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "<GENERATED_TITLE>",
     "body": "<GENERATED_BODY>",
-    "image_url": "",
-    "external_url": "",
+    "image_url": "<POSTER_IMAGE_URL_OR_EMPTY>",
+    "external_url": "<BOOKING_URL_OR_POI_WEBSITE_OR_EMPTY>",
     "locality": "<LOCALITY_OR_EMPTY>",
-    "post_type": "<POST_TYPE_OR_DISCOVERY>"
+    "latitude": <LAT_OR_NULL>,
+    "longitude": <LON_OR_NULL>,
+    "post_type": "<CLASSIFIED_POST_TYPE>",
+    "visibility": "<VISIBILITY>",
+    "labels": ["label1", "label2", "label3"]
   }' | jq .
 ```
 
-### Step 3: Report the result
+Where `<API_URL>` and `<AGENT_TOKEN>` are the values you read from `~/.config/beepbopboop/config` in Step 0.
 
-If the response contains an `id` field, the post was created successfully. Show:
-- The post title
-- The post ID
-- Confirmation it's now in the user's feed
+Notes:
+- **Venue-specific coordinates:** When a post is about a specific venue, geocode it to get its actual lat/lon. Do NOT reuse the generic city-centre coordinates from Step 1.
+
+  **Strategy 1 — Viewbox-bounded amenity search (primary):**
+  ```bash
+  osm geocode-viewbox "VENUE NAME" LAT LON | jq '.[0] | {lat, lon, display_name}'
+  ```
+
+  **Strategy 2 — Free-form with city context (fallback):**
+  If Strategy 1 returns empty:
+  ```bash
+  osm geocode "VENUE NAME, CITY" | jq '.[0] | {lat, lon, display_name}'
+  ```
+
+  **Strategy 3 — Structured address (fallback):**
+  If you have a street address:
+  ```bash
+  osm geocode --street "STREET ADDRESS" --city "CITY" --country "COUNTRY" | jq '.[0] | {lat, lon, display_name}'
+  ```
+
+  Use the Step 1 city-centre coordinates only as a final fallback when all strategies return empty.
+- Use `null` (without quotes) for latitude/longitude if no coordinates are available
+- Prefer a direct booking/ticket URL as `external_url` over a generic website
+- Set `image_url` to the image URL from Step 4b (Unsplash, imgur-hosted, or real poster/promo image)
+- The `post_type` must be one of: `event`, `place`, `discovery`, `article`, `video`
+- When publishing multiple posts, geocode all venue addresses in parallel, then publish all posts in parallel
+
+### Step 6: Report the result
+
+For each published post, if the response contains an `id` field, the post was created successfully.
+
+**Show a summary table** of all posts created:
+
+| # | Title | Type | Post ID |
+|---|-------|------|---------|
+
+**For batch mode**, add a "Source" column showing which mode generated each post (see Step BT9).
+
+Then for each post show:
+- Key practical details (prices, booking links) so the user can verify accuracy
+- Whether a poster image was found (event type only)
 
 If the response contains an `error` field, show the error and suggest fixes:
 - If 401: "Token may be invalid or revoked. Check BEEPBOPBOOP_AGENT_TOKEN."
+- If 400 with "invalid post_type": "Post type must be event, place, discovery, article, or video."
 - If connection refused: "Backend may not be running. Start it with: cd backend && go run ./cmd/server"
 
-## Example
+## Examples
 
-Given the idea "park near my house has tennis courts":
+### Example 1: Coffee → place
 
-**title**: "Tennis courts 6 minutes away"
-**body**: "A park near your home has tennis courts. That is not just a place marker — it is a low-friction chance to move more, get outside, and invest in a habit that could help you live longer."
-**locality**: (from second argument or empty)
+Given the idea "coffee" with locality "Dublin 2, Ireland":
+
+1. `osm geocode "Dublin 2, Ireland"` → lat: 53.339, lon: -6.261
+2. Map "coffee" → `"amenity"="cafe"`
+3. Classify → **place** (cafe keyword)
+4. `osm pois '"amenity"="cafe"' 53.339 -6.261 1500 5` → finds "Kaph" (290m), "Clement & Pekoe" (380m), "3fe Coffee" (520m)
+5. Find image: Unsplash search "cafe coffee latte morning Dublin" → Unsplash CDN URL
+6. Generate post:
+
+**title**: "Kaph is 3 minutes from your door"
+**body**: "There's a cafe 290 metres away that regulars swear by. Kaph on Drury Street does single-origin pourovers in a space small enough to guarantee you'll overhear something interesting. Open until 6pm — you could be there before your coffee craving fades."
+**image_url**: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1024&h=768&fit=crop"
+**external_url**: "https://www.kaph.ie"
+**locality**: "Dublin 2, Dublin, Ireland"
+**latitude**: 53.339
+**longitude**: -6.261
+**post_type**: "place"
+**visibility**: "personal"
+**labels**: ["place", "coffee", "cafe", "specialty-coffee", "pour-over"]
+
+### Example 2: Hockey games → multiple event posts (broad survey)
+
+Given the idea "hockey games" with locality "Victoria, BC, Canada":
+
+1. `osm geocode "Victoria, BC, Canada"` → lat: 48.428, lon: -123.365
+2. No direct OSM keyword match → skip POI discovery
+3. Classify → **event** (time-bound sports experience)
+4. Research — **broad survey first** (WebSearch), deep dive (WebFetch), split into 2 posts
+5. Geocode each venue:
+   - `osm geocode-viewbox "Save-On-Foods Memorial Centre" 48.428 -123.365` → lat: 48.4452, lon: -123.3655
+   - `osm geocode-viewbox "The Q Centre" 48.428 -123.365` → lat: 48.4355, lon: -123.4948
+6. Find images: Unsplash search "ice hockey arena crowd" → Unsplash CDN URLs
+7. Publish **Post 1 — Royals:**
+
+**title**: "Royals host three games at Save-On-Foods this week"
+**body**: "The Victoria Royals are in a playoff push with three home games: Everett on Tuesday (7:05pm), then Prince George for a back-to-back Friday at 7:05pm and Saturday at 6:05pm. Tickets start at $17 through Select Your Tickets — these games carry playoff implications so the atmosphere should be electric."
+**image_url**: "https://images.unsplash.com/photo-1580692475446-c2fabbbbf835?w=1024&h=768&fit=crop"
+**external_url**: "https://selectyourtickets.evenue.net/events/VR"
+**locality**: "Save-On-Foods Memorial Centre, Victoria, BC"
+**latitude**: 48.4452, **longitude**: -123.3655
+**post_type**: "event"
+**visibility**: "public"
+**labels**: ["event", "hockey", "sports", "live-events"]
+
+8. Publish **Post 2 — Grizzlies:**
+
+**title**: "Grizzlies take on Nanaimo at The Q Centre on Wednesday"
+**body**: "The Victoria Grizzlies play Nanaimo at The Q Centre this Wednesday at 7pm. Adult tickets are $18, youth $15, and kids $10. The Grizzlies have already clinched a playoff spot, so this is a chance to see them tune up before the postseason starts in April."
+**image_url**: "https://images.unsplash.com/photo-1515703407324-5f753afd8be8?w=1024&h=768&fit=crop"
+**external_url**: "https://www.victoriagrizzlies.com/tickets"
+**locality**: "The Q Centre, Colwood, BC"
+**latitude**: 48.4355, **longitude**: -123.4948
+**post_type**: "event"
+**visibility**: "public"
+**labels**: ["event", "hockey", "sports", "live-events"]
+
+### Example 3: General tip → discovery
+
+Given the idea "best time to visit the farmers market" with locality "Portland, OR":
+
+1. `osm geocode "Portland, OR"` → lat: 45.523, lon: -122.676
+2. No OSM keyword match → skip POI discovery
+3. Classify → **discovery** (no event or place keyword match)
+4. Research farmers market schedules via WebSearch
+5. Find image: Unsplash search "farmers market produce outdoor morning" → Unsplash CDN URL
+6. Generate post:
+
+**title**: "Saturday at 9am is the secret window for Portland farmers markets"
+**body**: "Most people show up around 10:30 and fight for parking. The vendors are fully set up by 8:30, the best produce goes fast, and by 9am you've got first pick with room to breathe. The PSU market on the Park Blocks is the big one — arrive early, grab a coffee from the Extracto stand, and work your way south."
+**image_url**: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=1024&h=768&fit=crop"
+**external_url**: ""
+**locality**: "Portland, Multnomah County, Oregon, United States"
+**latitude**: 45.523
+**longitude**: -122.676
 **post_type**: "discovery"
+**visibility**: "public"
+**labels**: ["discovery", "farmers-market", "food", "outdoor", "morning"]
+
+### Example 4: AI news → article (interest mode)
+
+Given the idea "latest AI news":
+
+1. Route → interest mode (topic-based, no location)
+2. WebSearch "AI news March 2026", "latest AI breakthroughs March 2026"
+3. WebFetch top 2-3 results for details
+4. For each notable article, generate a post:
+
+**title**: "Anthropic's new reasoning model scores 94% on ARC-AGI"
+**body**: "The March update to Claude's reasoning stack nearly doubled its score on the ARC-AGI benchmark. The key change: letting the model iterate on its own outputs before committing. Full technical breakdown in the blog post."
+**image_url**: Unsplash search "artificial intelligence technology abstract" or Pollinations→imgur fallback
+**external_url**: "https://anthropic.com/blog/..."
+**locality**: "Anthropic Blog"
+**latitude**: null, **longitude**: null
+**post_type**: "article"
+**visibility**: "public"
+**labels**: ["article", "ai", "machine-learning", "research"]
+
+### Example 5: YouTube creator → video (interest mode)
+
+Given the idea "latest from Fireship":
+
+1. Route → interest mode (specific creator)
+2. WebSearch "Fireship latest video March 2026"
+3. WebFetch the YouTube channel or video page
+4. Generate post:
+
+**title**: "Fireship just dropped a mass video on WebGPU"
+**body**: "The 12-minute explainer covers how WebGPU is replacing WebGL for browser-based 3D and ML inference. Includes a live demo of running a diffusion model entirely in the browser tab. If you've been ignoring WebGPU, this is the catch-up video."
+**image_url**: Unsplash search "content creator workspace studio monitors" or Pollinations→imgur fallback
+**external_url**: "https://youtube.com/watch?v=..."
+**locality**: "Fireship on YouTube"
+**latitude**: null, **longitude**: null
+**post_type**: "video"
+**visibility**: "public"
+**labels**: ["video", "tech", "webgpu", "software", "fireship"]
+
+### Example 6: Weather → place posts (weather mode)
+
+Given the idea "weather" with default location "Victoria, BC, Canada":
+
+1. Route → weather mode (Step 0a)
+2. WebSearch "Victoria BC Canada weather today" → 14°C, cloudy with rain expected afternoon
+3. Map to activities: museums, cozy cafes, bookshops (rainy conditions)
+4. Run local flow for each activity with weather context
+5. Generate 2 posts:
+
+**Post 1:**
+**title**: "Rain by 2pm — the Royal BC Museum has a new exhibition you haven't seen"
+**body**: "The Amazonia exhibit runs until April and most locals haven't been yet. It's 14°C and the clouds are rolling in — skip the outdoor plans and spend two hours in a climate-controlled rainforest instead. Adult tickets are $29, but members get in free."
+**image_url**: Unsplash or Pollinations→imgur (see Step 4b)
+**locality**: "Royal BC Museum, Victoria, BC"
+**latitude**: 48.4195, **longitude**: -123.3677
+**post_type**: "place"
+**visibility**: "public"
+**labels**: ["place", "museum", "rainy-day", "indoor"]
+
+**Post 2:**
+**title**: "Murchie's on Government does a proper afternoon tea for $18"
+**body**: "Grey sky, warm tea — Murchie's has been doing this since 1894 and it shows. Their 1894 blend is the one to order. Grab a window seat and watch the rain hit the harbour. Open until 6pm."
+**image_url**: Unsplash or Pollinations→imgur (see Step 4b)
+**locality**: "Murchie's, Victoria, BC"
+**latitude**: 48.4236, **longitude**: -123.3685
+**post_type**: "place"
+**visibility**: "public"
+**labels**: ["place", "cafe", "tea", "rainy-day", "afternoon"]
+
+### Example 7: Compare coffee shops → discovery (comparison mode)
+
+Given the idea "compare coffee roasters":
+
+1. Route → comparison mode (Step 0a)
+2. Geocode "Victoria, BC, Canada"
+3. POI discovery with 3000m radius, limit 10 → finds 8 cafes
+4. Research top 5: reviews, specialties, prices
+5. WebSearch "best coffee roasters Victoria BC 2026"
+6. Generate 1 post:
+
+**title**: "Victoria's 5 best coffee roasters, ranked by someone who's tried them all"
+**body**: "Bows & Arrows on Fort Street wins on single-origin range — their Ethiopian Yirgacheffe is worth the $6. Discovery Coffee on Government is the safe pick with the best pastry selection. Habit on Pandora does the best cortado in town at $4.50. Drumroaster on Blanshard is the dark horse for pour-over purists. 2% Jazz on Oak Bay Ave rounds it out with the best atmosphere."
+**image_url**: Unsplash search "coffee roasting beans artisan" or Pollinations→imgur fallback
+**locality**: "Victoria, BC, Canada"
+**latitude**: 48.428, **longitude**: -123.365
+**post_type**: "discovery"
+**visibility**: "public"
+**labels**: ["discovery", "coffee", "cafe", "specialty-coffee"]
+
+### Example 8: HN source → article posts (source mode)
+
+Given the idea "hn" with interests "AI,startups,investing":
+
+1. Route → source mode (Step 0a)
+2. Fetch top 30 HN stories via API
+3. Filter by interests: find 4 stories matching "AI" or "startups"
+4. Take top 2 by score
+5. WebFetch each story URL for summary
+6. Generate 2 posts:
+
+**Post 1:**
+**title**: "YC's latest batch has 3 companies building AI code review tools"
+**body**: "The Winter 2026 batch just launched and the pattern is obvious: three separate teams are betting that AI can replace human code reviewers. One of them — CodeLens — claims 94% agreement with senior engineer reviews on a 500-PR benchmark. The others are taking different angles: one focuses on security, the other on performance regressions."
+**image_url**: Unsplash or Pollinations→imgur (see Step 4b)
+**external_url**: "https://news.ycombinator.com/item?id=..."
+**locality**: "Hacker News"
+**latitude**: null, **longitude**: null
+**post_type**: "article"
+**visibility**: "public"
+**labels**: ["article", "ai", "startups", "software", "hacker-news"]
+
+**Post 2:**
+**title**: "Open-source alternative to Notion AI hits 10k GitHub stars in a week"
+**body**: "AnyContext launched on Monday and already has 10,000 stars. It's a local-first knowledge base with built-in RAG — everything runs on your machine, no API keys needed. The 43-point HN thread is mostly people surprised it actually works offline."
+**image_url**: Unsplash or Pollinations→imgur (see Step 4b)
+**external_url**: "https://github.com/..."
+**locality**: "Hacker News"
+**latitude**: null, **longitude**: null
+**post_type**: "article"
+**visibility**: "public"
+**labels**: ["article", "ai", "open-source", "software", "hacker-news"]
+
+### Example 9: Batch → diverse feed (batch mode)
+
+Given the idea "batch" on a Monday with schedule `monday|interest|AI roundup|daily|weather|daily|source|hn`:
+
+1. Route → batch mode (Step 0a)
+2. Load schedule: matches Monday → `interest: AI roundup`, `daily` → `weather`, `daily` → `source: hn`
+3. Target: 10 posts (random between 8 and 15)
+4. Execute:
+
+**Phase 1 — Scheduled:**
+- Weather mode → 2 posts (14°C, cloudy — museum + cafe suggestions)
+- Interest mode: "AI roundup" → 2 article posts
+- Source mode: HN → 2 article posts matching interests
+
+**Phase 2 — Fill (need 4 more):**
+- Local: "events this week" → 3 event posts
+- Seasonal: spring in Victoria → 1 discovery post
+
+5. Total: 10 posts. Diversity check: 3 types (place, article, event, discovery), mix of local and non-local. Passes.
+6. Publish all 10 posts
+7. Report:
+
+| # | Title | Type | Vis | Labels | Source | Post ID |
+|---|-------|------|-----|--------|--------|---------|
+| 1 | Rain by 2pm — the Royal BC Museum has a new exhibition | place | public | museum, rainy-day, indoor | weather | abc123 |
+| 2 | Murchie's does a proper afternoon tea for $18 | place | public | cafe, tea, rainy-day | weather | abc124 |
+| 3 | Claude 4.5 rewrites the reasoning benchmark playbook | article | public | ai, machine-learning, research | interest | def456 |
+| 4 | Three startups just raised $50M to replace dashboards with AI | article | public | ai, startups, investing | interest | def457 |
+| 5 | YC's latest batch has 3 companies building AI code review | article | public | ai, startups, software, hacker-news | HN | ghi789 |
+| 6 | Open-source Notion AI alternative hits 10k stars | article | public | ai, open-source, software, hacker-news | HN | ghi790 |
+| 7 | Royals host three games this week — tickets from $17 | event | public | hockey, sports, live-events | local | jkl012 |
+| 8 | Victoria Grizzlies take on Nanaimo Wednesday at The Q Centre | event | public | hockey, sports, live-events | local | jkl013 |
+| 9 | Blue Bridge Theatre has a new one-woman show opening Friday | event | public | theatre, performing-arts, live-events | local | jkl014 |
+| 10 | Cherry blossoms are peaking along Moss Street this week | discovery | public | seasonal, spring, outdoor, nature | seasonal | mno345 |

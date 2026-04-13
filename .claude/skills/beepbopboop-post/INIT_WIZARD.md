@@ -28,13 +28,13 @@ If the response is not `200`, warn the user: "Could not connect to the API. Chec
 
 ## IN2b: Ensure dependencies
 
-Check that graphify is available (used for post deduplication):
+Check that beepbopgraph is available (used for post deduplication):
 
 ```bash
-which graphify >/dev/null 2>&1 && echo "OK" || pip install --user graphifyy 2>/dev/null
+which beepbopgraph >/dev/null 2>&1 && echo "OK" || echo "beepbopgraph not found — build with: cd ~/beepbopboop/backend && make beepbopgraph && make install-beepbopgraph"
 ```
 
-If graphify can't be installed, warn the user but continue — dedup will be skipped at runtime.
+If beepbopgraph is not installed, warn the user but continue — dedup will be skipped at runtime.
 
 ## IN3: Home Address
 

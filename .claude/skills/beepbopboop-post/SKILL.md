@@ -2,7 +2,7 @@
 name: beepbopboop-post
 description: Generate and publish an engaging BeepBopBoop post from a simple idea
 argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|discover|trending|init|calendar> [locality] [post_type]
-allowed-tools: Bash(curl *), Bash(jq *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(osm *), Bash(date *), Bash(graphify *), Bash(pip install *), Bash(which *), WebSearch, WebFetch
+allowed-tools: Bash(curl *), Bash(jq *), Bash(cat *), Bash(mkdir *), Bash(osm *), Bash(date *), Bash(beepbopgraph *), WebSearch, WebFetch
 ---
 
 # BeepBopBoop Post Skill
@@ -822,7 +822,7 @@ Execute Phase 2 modes as needed to reach the target. Report progress after each 
 
 #### BT6: Deduplicate
 
-Run Step 4d (graphify dedup) across the entire batch. In addition to the graphify history check, also remove:
+Run Step 4d (beepbopgraph dedup) across the entire batch. In addition to the history check, also remove:
 - Duplicate venues within this batch (same name + same coordinates)
 - Duplicate articles within this batch (same URL or same title)
 - Keep the version with richer content if duplicates exist
@@ -1116,28 +1116,30 @@ For other topics, derive labels using the same pattern — use lowercase, hyphen
 - No duplicates within a post
 - English only
 
-### Step 4d: Dedup check via graphify
+### Step 4d: Dedup check via beepbopgraph
 
-**After generating all content but before publishing**, check posts against the graphify knowledge graph to avoid repeating topics.
+**After generating all content but before publishing**, check posts against the post history.
 
-**Single-post mode:** Query with the post's core topic:
-
-```bash
-graphify query "post: <TITLE_OR_CORE_TOPIC>" --budget 500
-```
-
-**Batch mode:** Run ONE query combining all post titles to save tokens:
+**Single-post mode:**
 
 ```bash
-graphify query "posts: <TITLE1> | <TITLE2> | <TITLE3> | ..." --budget 1500
+beepbopgraph check --title "<TITLE>" --labels <LABEL1>,<LABEL2>,... --type <POST_TYPE> [--locality "<LOCALITY>"] [--lat <LAT> --lon <LON>] [--url "<EXTERNAL_URL>"]
 ```
 
-Check returned nodes for:
-- **Same title** (exact or near-match) → **drop** this post, generate a replacement
-- **Same external_url** → **drop** (never post the same link twice)
-- **Same narrow topic covered recently** (e.g., prior node shows "coffee" + "Victoria" and you're about to post another Victoria coffee shop) → **pivot** to a different angle or venue
+**Batch mode:** Build a JSON array of all posts and pass via --batch:
 
-Also dedup within the current batch — no two posts should cover the same narrow topic.
+```bash
+beepbopgraph check --batch '<JSON_ARRAY>'
+```
+
+Where each object in the array has: `title`, `labels` (array), `post_type`, and optionally `locality`, `lat`, `lon`, `url`.
+
+**Interpret the results:**
+- `DUPLICATE` verdict → **drop** this post, generate a replacement on a different topic
+- `SIMILAR` verdict → read the `reason` field. If the match is same topic+area+type, **pivot** to a different angle, venue, or framing. If only area overlaps, it's fine to proceed.
+- `OK` verdict → proceed to publish
+
+Also dedup within the current batch — if two posts you're about to publish have high label overlap, drop the weaker one.
 
 If you need to replace a dropped post, go back to the relevant research step and find an alternative.
 
@@ -1194,28 +1196,21 @@ Notes:
 - The `post_type` must be one of: `event`, `place`, `discovery`, `article`, `video`
 - When publishing multiple posts, geocode all venue addresses in parallel, then publish all posts in parallel
 
-### Step 5b: Save to graphify post history
+### Step 5b: Save to post history
 
-After each successful publish, record the post in the graphify knowledge graph so future runs can detect duplicates.
+After each successful publish, record the post for future dedup:
 
 ```bash
-graphify save-result \
-  --question "post: <TITLE>" \
-  --answer "<POST_TYPE> about <CORE_TOPIC>. Labels: <LABELS_CSV>. URL: <EXTERNAL_URL_OR_NONE>. Published <DATE>." \
-  --type query \
-  --nodes <LABEL1> <LABEL2> <LABEL3> <POST_TYPE> \
-  --memory-dir ~/beepbopboop/graphify-out/memory
+beepbopgraph save --title "<TITLE>" --labels <LABEL1>,<LABEL2>,... --type <POST_TYPE> [--locality "<LOCALITY>"] [--lat <LAT> --lon <LON>] [--url "<EXTERNAL_URL>"]
 ```
 
-Where:
-- `<TITLE>` is the post title (exact)
-- `<CORE_TOPIC>` is a 3-5 word summary of what the post is about (e.g., "Victoria coffee roasters ranked", "fruit fly brain mapping and AI")
-- `<LABELS_CSV>` is the comma-separated labels from Step 4c
-- `<EXTERNAL_URL_OR_NONE>` is the external_url if set, otherwise "none"
-- `<DATE>` is today's date (YYYY-MM-DD)
-- `<LABEL1>` etc. are the individual label strings — these become graph nodes for future queries
+For batch mode, save all posts at once:
 
-This builds the dedup index over time. Future runs query the graph in Step 0–dedup and get back matching nodes that reveal what topics, venues, and URLs have already been posted about.
+```bash
+beepbopgraph save --batch '<JSON_ARRAY>'
+```
+
+This builds the dedup index over time. Future runs check against it in Step 4d and get back similarity scores with actionable reasons explaining what's similar and why.
 
 ### Step 6: Report the result
 
@@ -1249,7 +1244,7 @@ Given "coffee" with locality "Dublin 2, Ireland":
 
 1. Geocode → lat/lon. Map "coffee" → `"amenity"="cafe"`. POI search finds 3 cafes with distances.
 2. Classify → **place**. Generate content using POI data (real name, distance, hours).
-3. Steps 4a→4b→4c→4d→5→5b (visibility, image, labels, dedup, publish, save to graphify).
+3. Steps 4a→4b→4c→4d→5→5b (visibility, image, labels, dedup, publish, save to beepbopgraph).
 
 **Result:** `title: "Kaph is 3 minutes from your door"` / `body: "There's a cafe 290 metres away that regulars swear by..."` / `post_type: "place"` / `visibility: "personal"` (mentions "your door") / `labels: ["place", "coffee", "cafe", "specialty-coffee"]`
 
@@ -1297,7 +1292,7 @@ Given "batch" on a Monday with schedule `monday|interest|AI roundup|daily|weathe
 
 1. Target: 10 posts (random 8-15). Phase 1 scheduled: weather→2 posts, interest "AI roundup"→2 posts, source HN→2 posts.
 2. Phase 2 fill (4 more): local "events this week"→3 posts, seasonal→1 post.
-3. BT6: graphify dedup (one batch query). BT7: diversity check passes — 4 types, mix of local/non-local.
+3. BT6: beepbopgraph dedup (one batch query). BT7: diversity check passes — 4 types, mix of local/non-local.
 4. Publish all 10, report with mode attribution table.
 
 **Result table:**

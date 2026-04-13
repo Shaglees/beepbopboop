@@ -2,7 +2,7 @@
 name: beepbopboop-post
 description: Generate and publish an engaging BeepBopBoop post from a simple idea
 argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|discover|trending|init|calendar> [locality] [post_type]
-allowed-tools: Bash(curl *), Bash(jq *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(osm *), Bash(date *), WebSearch, WebFetch
+allowed-tools: Bash(curl *), Bash(jq *), Bash(sleep *), Bash(cat *), Bash(mkdir *), Bash(osm *), Bash(date *), Bash(graphify *), Bash(pip install *), Bash(which *), WebSearch, WebFetch
 ---
 
 # BeepBopBoop Post Skill
@@ -63,6 +63,14 @@ Parse the output and store the values for use in later steps. You need at minimu
 **If the config file doesn't exist or is missing required values**, tell the user: "Not configured yet. Running setup wizard..." and jump to Step IN1 (Init Wizard). After the wizard completes, continue with Step 0a.
 
 **Do NOT proceed past Step 0 if `BEEPBOPBOOP_API_URL` or `BEEPBOPBOOP_AGENT_TOKEN` are missing.** The user must provide them.
+
+### Step 0–deps: Ensure graphify is available
+
+```bash
+which graphify >/dev/null 2>&1 && echo "OK" || pip install --user graphifyy 2>/dev/null
+```
+
+Graphify is used for post deduplication (Step 4d) and post history tracking (Step 5b).
 
 ### Step 0a: Parse command
 
@@ -1323,6 +1331,25 @@ Generate labels from three sources:
 - No duplicates within a post
 - English only
 
+### Step 4d: Dedup check via graphify
+
+**After generating content but before publishing**, check each post against the graphify knowledge graph to avoid repeating topics.
+
+For each post you're about to publish, query with its core topic:
+
+```bash
+graphify query "post: <TITLE_OR_CORE_TOPIC>" --budget 500
+```
+
+Check the returned nodes for:
+- **Same title** (exact or near-match) → **drop** this post, generate a replacement
+- **Same external_url** → **drop** (never post the same link twice)
+- **Same narrow topic covered recently** (e.g., prior node shows "coffee" + "Victoria" and you're about to post another Victoria coffee shop) → **pivot** to a different angle or venue
+
+If you need to replace a dropped post, go back to the relevant research step and find an alternative.
+
+**In batch mode (BT6):** Run dedup across the entire batch — both against graphify history AND across the batch itself (no two posts in the same batch should cover the same topic).
+
 ### Step 5: Publish to the backend
 
 Use the values loaded from config in Step 0. Substitute the API URL and token directly into the curl command (do NOT rely on shell env vars — use the literal values you parsed from the config file).
@@ -1375,6 +1402,29 @@ Notes:
 - Set `image_url` to the image URL from Step 4b (Unsplash, imgur-hosted, or real poster/promo image)
 - The `post_type` must be one of: `event`, `place`, `discovery`, `article`, `video`
 - When publishing multiple posts, geocode all venue addresses in parallel, then publish all posts in parallel
+
+### Step 5b: Save to graphify post history
+
+After each successful publish, record the post in the graphify knowledge graph so future runs can detect duplicates.
+
+```bash
+graphify save-result \
+  --question "post: <TITLE>" \
+  --answer "<POST_TYPE> about <CORE_TOPIC>. Labels: <LABELS_CSV>. URL: <EXTERNAL_URL_OR_NONE>. Published <DATE>." \
+  --type query \
+  --nodes <LABEL1> <LABEL2> <LABEL3> <POST_TYPE> \
+  --memory-dir graphify-out/memory
+```
+
+Where:
+- `<TITLE>` is the post title (exact)
+- `<CORE_TOPIC>` is a 3-5 word summary of what the post is about (e.g., "Victoria coffee roasters ranked", "fruit fly brain mapping and AI")
+- `<LABELS_CSV>` is the comma-separated labels from Step 4c
+- `<EXTERNAL_URL_OR_NONE>` is the external_url if set, otherwise "none"
+- `<DATE>` is today's date (YYYY-MM-DD)
+- `<LABEL1>` etc. are the individual label strings — these become graph nodes for future queries
+
+This builds the dedup index over time. Future runs query the graph in Step 0–dedup and get back matching nodes that reveal what topics, venues, and URLs have already been posted about.
 
 ### Step 6: Report the result
 

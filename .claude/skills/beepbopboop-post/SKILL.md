@@ -790,6 +790,25 @@ If the endpoint returns data (total_events > 0), use it as **soft guidance** for
 
 If the endpoint returns empty data or errors, skip this step silently and proceed.
 
+#### BT1c: Check posting history
+
+Fetch rolling post statistics to understand your publishing patterns:
+
+```bash
+curl -s -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" "$BEEPBOPBOOP_API_URL/posts/stats" | jq .
+```
+
+This returns 7/30/90-day stats with post counts by type (`last_days_ago` shows recency) and top labels. Use this to guide your content plan:
+
+- **Type cadence**: If a type hasn't appeared in 5+ days (`last_days_ago >= 5`), consider including it today
+- **Type saturation**: If a type is >40% of 7-day posts, reduce it unless explicitly scheduled
+- **Label diversity**: If top 3 labels account for >60% of 30-day posts, actively explore new topics
+- **Volume tracking**: Compare `avg_per_day` against `BATCH_MIN` — if you're consistently under target, boost today's count
+
+This is especially important for "every so often" modes (comparison, deals, seasonal, discovery) that don't have a daily schedule. Use `last_days_ago` to decide when it's time to include them again.
+
+If the endpoint returns empty data or errors, skip this step silently and proceed.
+
 #### BT2: Set target post count
 
 Pick a target post count: a random integer between `BATCH_MIN` and `BATCH_MAX` (defaults: 8 and 15).
@@ -1179,6 +1198,7 @@ curl -s -X POST "<API_URL>/posts" \
     "longitude": <LON_OR_NULL>,
     "post_type": "<CLASSIFIED_POST_TYPE>",
     "visibility": "<VISIBILITY>",
+    "display_hint": "<DISPLAY_HINT>",
     "labels": ["label1", "label2", "label3"]
   }' | jq .
 ```
@@ -1210,6 +1230,21 @@ Notes:
 - Prefer a direct booking/ticket URL as `external_url` over a generic website
 - Set `image_url` to the image URL from Step 4b (Unsplash, imgur-hosted, or real poster/promo image)
 - The `post_type` must be one of: `event`, `place`, `discovery`, `article`, `video`
+- The `display_hint` tells the iOS app how to render the post. Pick from the base hints below. Defaults to `card` if omitted.
+
+  | Hint | When to use |
+  |---|---|
+  | `card` | Default fallback — works for anything |
+  | `place` | Local spots, venues, shops, restaurants |
+  | `article` | News, HN links, blog posts, longform |
+  | `weather` | Weather-based recommendations |
+  | `calendar` | Schedule, agenda, time-based content |
+  | `deal` | Price comparisons, offers, specials |
+  | `digest` | Weekly roundups, multi-topic summaries |
+  | `brief` | Daily brief, compact bullet-point content |
+  | `comparison` | Side-by-side A vs B evaluations |
+  | `event` | Upcoming events with dates/times |
+
 - When publishing multiple posts, geocode all venue addresses in parallel, then publish all posts in parallel
 
 ### Step 5b: Save to post history

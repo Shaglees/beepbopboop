@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
+	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
 
@@ -45,6 +46,7 @@ type createPostRequest struct {
 	Longitude   *float64 `json:"longitude,omitempty"`
 	PostType    string   `json:"post_type,omitempty"`
 	Visibility  string   `json:"visibility,omitempty"`
+	DisplayHint string   `json:"display_hint,omitempty"`
 	Labels      []string `json:"labels,omitempty"`
 }
 
@@ -100,6 +102,7 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		Longitude:   req.Longitude,
 		PostType:    req.PostType,
 		Visibility:  req.Visibility,
+		DisplayHint: req.DisplayHint,
 		Labels:      req.Labels,
 	})
 	if err != nil {
@@ -136,4 +139,29 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
+}
+
+func (h *PostHandler) GetPostStats(w http.ResponseWriter, r *http.Request) {
+	agentID := middleware.AgentIDFromContext(r.Context())
+
+	agent, err := h.agentRepo.GetByID(agentID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve agent"})
+		return
+	}
+
+	periods := []int{7, 30, 90}
+	var stats model.PostStats
+
+	for _, days := range periods {
+		ps, err := h.postRepo.Stats(agent.UserID, days)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to compute stats"})
+			return
+		}
+		stats.Periods = append(stats.Periods, *ps)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }

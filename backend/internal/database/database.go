@@ -57,6 +57,19 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_events_post ON post_events(post_id, event_type)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_events_user ON post_events(user_id, created_at DESC)")
 
+	// Display hint for post rendering
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_hint TEXT NOT NULL DEFAULT 'card'")
+
+	// Custom display templates per user
+	db.Exec(`CREATE TABLE IF NOT EXISTS display_templates (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL REFERENCES users(id),
+		hint_name TEXT NOT NULL,
+		definition JSONB NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(user_id, hint_name)
+	)`)
+
 	// User preference weights (pushed by agent, applied in ForYou feed)
 	db.Exec(`CREATE TABLE IF NOT EXISTS user_weights (
 		user_id    TEXT NOT NULL REFERENCES users(id) PRIMARY KEY,

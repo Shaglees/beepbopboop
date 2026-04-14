@@ -55,10 +55,19 @@ type Post struct {
 	Longitude   *float64  `json:"longitude,omitempty"`
 	PostType    string    `json:"post_type,omitempty"`
 	Visibility  string    `json:"visibility"`
+	DisplayHint string    `json:"display_hint"`
 	Labels      []string  `json:"labels,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	ViewCount   int       `json:"view_count"`
 	SaveCount   int       `json:"save_count"`
+}
+
+type DisplayTemplate struct {
+	ID         string          `json:"id"`
+	UserID     string          `json:"user_id"`
+	HintName   string          `json:"hint_name"`
+	Definition json.RawMessage `json:"definition"`
+	CreatedAt  time.Time       `json:"created_at"`
 }
 
 type PostEvent struct {
@@ -107,4 +116,27 @@ type UserWeights struct {
 	UserID    string          `json:"user_id"`
 	Weights   json.RawMessage `json:"weights"`
 	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+type PostStats struct {
+	Periods []PeriodStats `json:"periods"`
+}
+
+type PeriodStats struct {
+	Days       int          `json:"days"`
+	TotalPosts int          `json:"total_posts"`
+	AvgPerDay  float64      `json:"avg_per_day"`
+	ByType     []TypeCount  `json:"by_type"`
+	TopLabels  []LabelCount `json:"top_labels"`
+}
+
+type TypeCount struct {
+	Type        string `json:"type"`
+	Count       int    `json:"count"`
+	LastDaysAgo int    `json:"last_days_ago"`
+}
+
+type LabelCount struct {
+	Label string `json:"label"`
+	Count int    `json:"count"`
 }

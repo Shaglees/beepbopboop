@@ -217,6 +217,7 @@ func hasLabel(labels []string, target string) bool {
 func runStats(args []string) {
 	fs := flag.NewFlagSet("stats", flag.ExitOnError)
 	showWeights := fs.Bool("weights", false, "also show current user weights")
+	noHistory := fs.Bool("no-history", false, "skip post history stats")
 	fs.Parse(args)
 
 	apiURL, token := loadConfig()
@@ -225,6 +226,12 @@ func runStats(args []string) {
 	summary := apiGet(apiURL+"/events/summary", token)
 
 	output := map[string]any{"engagement": summary}
+
+	// Fetch post history stats (default: included)
+	if !*noHistory {
+		history := apiGet(apiURL+"/posts/stats", token)
+		output["post_history"] = history
+	}
 
 	if *showWeights {
 		weights := apiGet(apiURL+"/user/weights", token)

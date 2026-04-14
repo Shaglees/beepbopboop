@@ -61,6 +61,7 @@ func main() {
 	userSettingsRepo := repository.NewUserSettingsRepo(db)
 	eventRepo := repository.NewEventRepo(db)
 	weightsRepo := repository.NewWeightsRepo(db)
+	templateRepo := repository.NewTemplateRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -72,6 +73,7 @@ func main() {
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
 	weightsH := handler.NewWeightsHandler(agentRepo, weightsRepo)
+	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -99,16 +101,21 @@ func main() {
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
 		r.Post("/posts/{postID}/events", eventsH.TrackEvent)
 		r.Post("/events/batch", eventsH.BatchTrack)
+		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
 	r.Group(func(r chi.Router) {
 		r.Use(agentAuth)
 		r.Get("/posts", postH.ListPosts)
+		r.Get("/posts/stats", postH.GetPostStats)
 		r.Post("/posts", postH.CreatePost)
 		r.Get("/events/summary", eventsH.Summary)
 		r.Get("/user/weights", weightsH.GetWeights)
 		r.Put("/user/weights", weightsH.UpdateWeights)
+		r.Get("/user/templates", templatesH.ListTemplatesAgent)
+		r.Put("/user/templates/{hint}", templatesH.UpsertTemplate)
+		r.Delete("/user/templates/{hint}", templatesH.DeleteTemplate)
 	})
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}

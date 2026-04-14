@@ -148,6 +148,25 @@ After posting, briefly report what you published. If nothing interesting found, 
 
 This creates a recurring job at 10am and 4pm daily, using the full skill for content generation, delivering a summary to Telegram.
 
+#### Daily briefing -> BeepBopBoop (no chat dump)
+
+If you want your daily brief content stored in BeepBopBoop instead of sent to chat, use the helper script:
+
+```bash
+python3 scripts/publish_daily_brief.py \
+  --title "Daily Brief — News — 2026-04-14" \
+  --body "Top 3 stories..." \
+  --labels daily-brief,news \
+  --visibility private
+```
+
+The script reads API credentials from `~/.config/beepbopboop/config`, checks recent posts for duplicate titles, and skips if the same brief title already exists.
+
+Recommended cron behavior:
+- generate the brief sections (calendar/email/news)
+- publish each section with `publish_daily_brief.py`
+- respond with `[SILENT]` to messaging channels unless there is a real failure
+
 ---
 
 ### OpenClaw

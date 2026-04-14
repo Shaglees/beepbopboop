@@ -9,6 +9,21 @@ struct FeedItemView: View {
     }
 
     var body: some View {
+        cardContent
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color(.separator).opacity(0.2), lineWidth: 0.5)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 2)
+    }
+
+    @ViewBuilder
+    private var cardContent: some View {
         switch post.displayHintValue {
         case .weather:
             WeatherCard(post: post, isBookmarked: isBookmarked)
@@ -57,6 +72,8 @@ private struct CardFooter: View {
             Text(post.hintLabel)
                 .font(.caption2.weight(.semibold))
                 .foregroundColor(post.hintColor)
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(post.hintColor.opacity(0.12))
@@ -84,15 +101,19 @@ private struct CardFooter: View {
                 Image(systemName: "heart")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .symbolRenderingMode(.hierarchical)
                 Image(systemName: "arrow.up.right")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .symbolRenderingMode(.hierarchical)
                 Image(systemName: "square.and.arrow.up")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .symbolRenderingMode(.hierarchical)
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)
                     .foregroundColor(isBookmarked ? post.hintColor : .secondary)
+                    .contentTransition(.symbolEffect(.replace))
             }
         }
     }
@@ -182,9 +203,10 @@ private struct WeatherCard: View {
             CardHeader(post: post)
 
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "cloud.sun.fill")
+                let weather = WeatherInfo.detect(from: post.title + " " + post.body)
+                Image(systemName: weather.icon)
                     .font(.system(size: 32))
-                    .foregroundStyle(.cyan, .yellow)
+                    .foregroundStyle(weather.primaryColor, weather.secondaryColor)
                     .frame(width: 44)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -250,7 +272,7 @@ private struct CompactCard: View {
                 if lines.count > 5 {
                     Text("+\(lines.count - 5) more")
                         .font(.caption2)
-                        .foregroundColor(.tertiary)
+                        .foregroundStyle(.tertiary)
                 }
             }
 
@@ -317,6 +339,15 @@ private struct DateCard: View {
     }
 
     private var dateParts: (month: String, day: String) {
+        // Try to extract a date from the title first (e.g. "April 16" or "May 3")
+        if let titleDate = Self.extractDate(from: post.title) {
+            let cal = Calendar.current
+            let monthF = DateFormatter()
+            monthF.dateFormat = "MMM"
+            return (monthF.string(from: titleDate), "\(cal.component(.day, from: titleDate))")
+        }
+
+        // Fall back to createdAt
         let formatters: [ISO8601DateFormatter] = {
             let f1 = ISO8601DateFormatter()
             f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -332,6 +363,16 @@ private struct DateCard: View {
         let monthF = DateFormatter()
         monthF.dateFormat = "MMM"
         return (monthF.string(from: date), "\(cal.component(.day, from: date))")
+    }
+
+    /// Try to find a date like "April 16" or "Jan 3" in text
+    private static func extractDate(from text: String) -> Date? {
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
+        let range = NSRange(text.startIndex..., in: text)
+        if let match = detector?.firstMatch(in: text, range: range), let date = match.date {
+            return date
+        }
+        return nil
     }
 }
 
@@ -457,5 +498,49 @@ private struct PlaceCard: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Weather Icon Detection
+
+private struct WeatherInfo {
+    let icon: String
+    let primaryColor: Color
+    let secondaryColor: Color
+
+    static func detect(from text: String) -> WeatherInfo {
+        let lower = text.lowercased()
+
+        // Most specific patterns first
+        if lower.contains("snow") || lower.contains("blizzard") {
+            return WeatherInfo(icon: "cloud.snow.fill", primaryColor: .gray, secondaryColor: .white)
+        }
+        if lower.contains("thunder") || lower.contains("lightning") || lower.contains("storm") {
+            return WeatherInfo(icon: "cloud.bolt.rain.fill", primaryColor: .gray, secondaryColor: .yellow)
+        }
+        if lower.contains("heavy rain") || lower.contains("downpour") || lower.contains("torrential") {
+            return WeatherInfo(icon: "cloud.heavyrain.fill", primaryColor: .gray, secondaryColor: .blue)
+        }
+        if lower.contains("rain") || lower.contains("drizzle") || lower.contains("shower") {
+            return WeatherInfo(icon: "cloud.rain.fill", primaryColor: .gray, secondaryColor: .cyan)
+        }
+        // "partly cloudy" before generic "cloudy"
+        if lower.contains("partly cloudy") || lower.contains("partly sunny") || lower.contains("mix of sun") {
+            return WeatherInfo(icon: "cloud.sun.fill", primaryColor: .cyan, secondaryColor: .yellow)
+        }
+        if lower.contains("overcast") || lower.contains("cloudy") {
+            return WeatherInfo(icon: "cloud.fill", primaryColor: .gray, secondaryColor: .gray)
+        }
+        if lower.contains("fog") || lower.contains("mist") || lower.contains("haze") {
+            return WeatherInfo(icon: "cloud.fog.fill", primaryColor: .gray, secondaryColor: .secondary)
+        }
+        if lower.contains("clear") || lower.contains("sunny") {
+            return WeatherInfo(icon: "sun.max.fill", primaryColor: .yellow, secondaryColor: .orange)
+        }
+        if lower.contains("wind") || lower.contains("gusty") || lower.contains("breezy") {
+            return WeatherInfo(icon: "wind", primaryColor: .cyan, secondaryColor: .gray)
+        }
+        // Default
+        return WeatherInfo(icon: "cloud.sun.fill", primaryColor: .cyan, secondaryColor: .yellow)
     }
 }

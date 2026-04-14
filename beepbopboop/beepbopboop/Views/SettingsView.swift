@@ -67,6 +67,7 @@ struct SettingsView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
+                    .buttonStyle(.borderedProminent)
                     .disabled(viewModel.isSaving)
                 }
 
@@ -92,6 +93,7 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") { dismiss() }
+                        .buttonStyle(.glass)
                 }
             }
             .task { await viewModel.loadSettings() }

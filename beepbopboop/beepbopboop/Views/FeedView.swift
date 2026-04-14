@@ -6,6 +6,7 @@ struct FeedView: View {
     @StateObject private var personalVM: FeedListViewModel
     @State private var selectedTab = 0
     @State private var showSettings = false
+    @Namespace private var tabGlass
     private let authService: AuthService
     private let apiService: APIService
 
@@ -47,6 +48,7 @@ struct FeedView: View {
                     } label: {
                         Image(systemName: "gearshape")
                     }
+                    .buttonStyle(.glass)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Sign Out") {
@@ -70,29 +72,31 @@ struct FeedView: View {
     // MARK: - Tab Bar
 
     private var tabBar: some View {
-        HStack(spacing: 4) {
-            tabButton("For You", tag: 0)
-            tabButton("Community", tag: 1)
-            tabButton("Personal", tag: 2)
+        GlassEffectContainer(spacing: 4) {
+            HStack(spacing: 4) {
+                tabButton("For You", tag: 0)
+                tabButton("Community", tag: 1)
+                tabButton("Personal", tag: 2)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
 
     private func tabButton(_ title: String, tag: Int) -> some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(.bouncy) {
                 selectedTab = tag
             }
         } label: {
             Text(title)
                 .font(.subheadline.weight(selectedTab == tag ? .semibold : .regular))
-                .foregroundColor(selectedTab == tag ? .white : .primary)
+                .foregroundStyle(selectedTab == tag ? .primary : .secondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(selectedTab == tag ? Color.accentColor : Color(.systemGray5))
+                .glassEffect(
+                    selectedTab == tag ? .regular.tint(.accentColor).interactive() : .regular,
+                    in: .capsule
                 )
         }
         .buttonStyle(.plain)

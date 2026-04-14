@@ -59,7 +59,7 @@ struct PostDetailView: View {
                     .cornerRadius(12)
                 }
 
-                // Metadata row: type pill + locality + full date
+                // Metadata row: type pill + hint pill + locality + full date
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Text(post.typeLabel)
@@ -69,6 +69,17 @@ struct PostDetailView: View {
                             .padding(.vertical, 3)
                             .background(post.typeColor.opacity(0.12))
                             .cornerRadius(4)
+
+                        // Show hint pill when it differs from type
+                        if post.displayHintValue != .card && post.hintLabel.lowercased() != (post.postType ?? "").lowercased() {
+                            Label(post.hintLabel, systemImage: post.hintIcon)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(post.hintColor)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(post.hintColor.opacity(0.12))
+                                .cornerRadius(4)
+                        }
 
                         if let locality = post.locality, !locality.isEmpty {
                             localityLink

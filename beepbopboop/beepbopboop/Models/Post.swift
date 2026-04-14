@@ -25,11 +25,31 @@ struct Post: Codable, Identifiable {
     let longitude: Double?
     let postType: String?
     let visibility: String?
+    let displayHint: String?
     let labels: [String]?
     let createdAt: String
 
     enum PostTypeValue {
         case event, place, discovery, article, video
+    }
+
+    enum DisplayHintValue {
+        case card, place, article, weather, calendar, deal, digest, brief, comparison, event
+    }
+
+    var displayHintValue: DisplayHintValue {
+        switch displayHint?.lowercased() {
+        case "place": return .place
+        case "article": return .article
+        case "weather": return .weather
+        case "calendar": return .calendar
+        case "deal": return .deal
+        case "digest": return .digest
+        case "brief": return .brief
+        case "comparison": return .comparison
+        case "event": return .event
+        default: return .card
+        }
     }
 
     var postTypeValue: PostTypeValue {
@@ -76,6 +96,53 @@ struct Post: Codable, Identifiable {
         case .discovery: return "sparkles"
         case .article: return "doc.text"
         case .video: return "play.rectangle"
+        }
+    }
+
+    // MARK: - Hint Display Properties
+
+    var hintColor: Color {
+        switch displayHintValue {
+        case .card: return typeColor
+        case .place: return .green
+        case .article: return .orange
+        case .weather: return .cyan
+        case .calendar: return .indigo
+        case .deal: return .pink
+        case .digest: return .teal
+        case .brief: return .gray
+        case .comparison: return .mint
+        case .event: return .purple
+        }
+    }
+
+    var hintIcon: String {
+        switch displayHintValue {
+        case .card: return typeIcon
+        case .place: return "mappin.and.ellipse"
+        case .article: return "newspaper"
+        case .weather: return "cloud.sun"
+        case .calendar: return "calendar"
+        case .deal: return "tag"
+        case .digest: return "list.bullet.rectangle"
+        case .brief: return "text.alignleft"
+        case .comparison: return "arrow.left.arrow.right"
+        case .event: return "party.popper"
+        }
+    }
+
+    var hintLabel: String {
+        switch displayHintValue {
+        case .card: return typeLabel
+        case .place: return "Place"
+        case .article: return "Article"
+        case .weather: return "Weather"
+        case .calendar: return "Calendar"
+        case .deal: return "Deal"
+        case .digest: return "Digest"
+        case .brief: return "Brief"
+        case .comparison: return "Compare"
+        case .event: return "Event"
         }
     }
 
@@ -140,6 +207,7 @@ struct Post: Codable, Identifiable {
         case longitude
         case postType = "post_type"
         case visibility
+        case displayHint = "display_hint"
         case labels
         case createdAt = "created_at"
     }

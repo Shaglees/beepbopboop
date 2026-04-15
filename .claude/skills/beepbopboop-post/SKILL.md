@@ -1031,15 +1031,105 @@ Evaluate visibility AFTER generating post content (since the body text determine
 
 Every post should have an image. The iOS app loads images via `AsyncImage`, so the `image_url` must be a direct, fast-loading URL to an image file — not a slow generation endpoint.
 
+**Routing decision:** At the start of Step 4b, determine whether the post is **geographic** (`latitude` and `longitude` are both set). If geographic, try priorities 1–4 in order. If **not geographic**, skip directly to priority 5 (Unsplash).
+
 **Image pipeline** (try in order, use the first that succeeds):
 
 #### Priority 1: Real poster/promo image (events only)
 
 If Step 3 found a direct image URL (`.jpg`, `.png`, `.webp`) from a venue website or ticketing platform, use it. Real promotional images are always better than stock or AI-generated.
 
-#### Priority 2: Unsplash search (if `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` is configured)
+#### Priority 2: Wikimedia Commons (geographic posts only)
 
-Search for a real, free-to-use photo:
+Only attempted when `latitude` and `longitude` are set on the post. No API key required — just a `User-Agent` header (403 without it).
+
+**Step 2a — Geosearch by coordinates** (finds geotagged images within 500m):
+
+```bash
+WC_IMG=$(curl -s -H "User-Agent: BeepBopBoop/1.0 (contact@beepbopboop.app)" \
+  "https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=geosearch&ggsprimary=all&ggsnamespace=6&ggsradius=500&ggscoord=LAT%7CLON&ggslimit=5&prop=imageinfo&iilimit=1&iiprop=url&iiurlwidth=1024" \
+  | jq -r '[.query.pages[] | select(.imageinfo[0].thumburl)] | sort_by(.index) | .[0].imageinfo[0].thumburl // empty')
+```
+
+Replace `LAT` and `LON` with the post's latitude and longitude. The coordinate format uses `%7C` (URL-encoded pipe `|`) between lat and lon.
+
+**Step 2b — Text search by name** (fallback if geosearch returns nothing):
+
+```bash
+if [ -z "$WC_IMG" ]; then
+  WC_IMG=$(curl -s -H "User-Agent: BeepBopBoop/1.0 (contact@beepbopboop.app)" \
+    "https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrsearch=PLACE_NAME+CITY&gsrlimit=5&prop=imageinfo&iilimit=1&iiprop=url&iiurlwidth=1024" \
+    | jq -r '[.query.pages[] | select(.imageinfo[0].thumburl)] | sort_by(.index) | .[0].imageinfo[0].thumburl // empty')
+fi
+```
+
+Replace `PLACE_NAME` and `CITY` with the venue/place name and city from the post.
+
+Key details:
+- Use `thumburl` at 1024px width (not full `url` which can be huge)
+- URLs are permanent Wikimedia CDN links
+- Strong coverage for landmarks, museums, parks, public buildings
+
+If `WC_IMG` is non-empty, use it as `image_url`. Otherwise fall through to Priority 3.
+
+#### Priority 3: Panoramax (geographic posts only)
+
+Street-level exterior imagery by coordinates. No API key or auth required.
+
+```bash
+PX_IMG=$(curl -s "https://api.panoramax.xyz/api/search?place_position=LON,LAT&place_distance=0-100&limit=1" \
+  | jq -r '.features[0].assets.sd.href // empty')
+```
+
+Key details:
+- Coordinate order is **LON,LAT** (GeoJSON convention — opposite of most APIs)
+- Use the `sd` asset (2048px) — `thumb` is too small, `hd` is too large
+- Coverage is strong in France/EU, sparse in North America
+- Shows exterior/street perspective, not interiors
+
+If `PX_IMG` is non-empty, use it as `image_url`. Otherwise fall through to Priority 4.
+
+#### Priority 4: Google Places Photos (geographic posts only, if `BEEPBOPBOOP_GOOGLE_PLACES_KEY` is configured)
+
+Two-step process — requires both `BEEPBOPBOOP_GOOGLE_PLACES_KEY` and `BEEPBOPBOOP_IMGUR_CLIENT_ID` (Google photo URLs are temporary/signed and must be re-uploaded for permanence).
+
+**Step 1 — Find place and get photo resource name:**
+
+```bash
+GP_PHOTO_NAME=$(curl -s -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-Goog-Api-Key: $BEEPBOPBOOP_GOOGLE_PLACES_KEY" \
+  -H "X-Goog-FieldMask: places.photos" \
+  -d "{\"textQuery\": \"PLACE_NAME CITY\"}" \
+  "https://places.googleapis.com/v1/places:searchText" \
+  | jq -r '.places[0].photos[0].name // empty')
+```
+
+**Step 2 — Download photo and re-upload to imgur:**
+
+```bash
+if [ -n "$GP_PHOTO_NAME" ] && [ -n "$BEEPBOPBOOP_IMGUR_CLIENT_ID" ]; then
+  curl -s -L -o /tmp/bbp_google_photo.jpg \
+    "https://places.googleapis.com/v1/${GP_PHOTO_NAME}/media?key=$BEEPBOPBOOP_GOOGLE_PLACES_KEY&maxWidthPx=1024"
+  GP_IMG=$(curl -s -X POST "https://api.imgur.com/3/image" \
+    -H "Authorization: Client-ID $BEEPBOPBOOP_IMGUR_CLIENT_ID" \
+    -F "image=@/tmp/bbp_google_photo.jpg" \
+    -F "type=file" | jq -r '.data.link // empty')
+  rm -f /tmp/bbp_google_photo.jpg
+fi
+```
+
+Key details:
+- Requires Google Cloud API key with Places API (New) enabled
+- Photo URLs are **temporary/signed** — must download + re-upload to imgur for permanence
+- Cost: ~$0.04/place (free $200/month credit covers ~5000 lookups)
+- Best global venue coverage of any source
+
+If `GP_IMG` is non-empty, use it as `image_url`. Otherwise fall through to Priority 5.
+
+#### Priority 5: Unsplash search (if `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` is configured)
+
+Fallback for all posts — both geographic and non-geographic. This is the best option for non-geographic content (articles, AI topics, abstract ideas) and a reliable fallback when location-aware sources fail.
 
 ```bash
 curl -s "https://api.unsplash.com/search/photos?query=SEARCH_KEYWORDS&per_page=1&orientation=landscape" \
@@ -1067,9 +1157,9 @@ curl -s "https://api.unsplash.com/search/photos?query=SEARCH_KEYWORDS&per_page=1
 
 If the API returns a valid URL (not `null`), use it directly as `image_url`. Unsplash CDN URLs are fast and permanent.
 
-If the API returns `null` or the request fails, fall through to Priority 3.
+If the API returns `null` or the request fails, fall through to Priority 6.
 
-#### Priority 3: Pollinations AI → imgur (if `BEEPBOPBOOP_IMGUR_CLIENT_ID` is configured)
+#### Priority 6: Pollinations AI → imgur (if `BEEPBOPBOOP_IMGUR_CLIENT_ID` is configured)
 
 Generate a custom AI image and upload it to imgur for reliable hosting:
 
@@ -1098,11 +1188,11 @@ Use the returned `https://i.imgur.com/xxxxx.jpg` URL as `image_url`. These are p
 
 Clean up: `rm -f /tmp/bbp_post_image.jpg`
 
-#### Priority 4: No image
+#### Priority 7: No image
 
 If none of the above services are configured or all fail, set `image_url` to an empty string. The iOS app shows a gradient placeholder — posts still look fine without images, but images make them significantly more engaging.
 
-**Prompt examples for Pollinations (Priority 3):**
+**Prompt examples for Pollinations (Priority 6):**
 - Coffee post → `"Warm morning light through cafe window, single origin pour over coffee, wooden counter, Pacific Northwest"`
 - Market post → `"Outdoor farmers market stalls with colorful produce, morning crowd, spring sunshine"`
 - Event post → `"Theatre marquee at dusk, warm glow from lobby windows, people arriving for evening show"`

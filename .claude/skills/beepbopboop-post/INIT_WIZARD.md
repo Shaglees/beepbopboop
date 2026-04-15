@@ -119,17 +119,20 @@ Store as `BEEPBOPBOOP_CALENDAR_URL`. This step is optional.
 
 ## IN8b: Image Services
 
-Ask: "Posts look much better with images. Two free services are supported — Unsplash for real photos and imgur for hosting AI-generated images. Set up one or both?"
+Ask: "Posts look much better with images. Three optional services are supported — Unsplash for stock photos, imgur for hosting AI-generated and re-uploaded images, and Google Places for reliable venue photos. Set up any or all?"
 
 **Unsplash** (for real stock photos):
 > "Sign up at https://unsplash.com/developers, create an app, and copy the Access Key. Free tier: 50 requests/hour."
 
-**imgur** (for hosting AI-generated images):
+**imgur** (for hosting AI-generated images and Google Places re-uploads):
 > "Register an app at https://api.imgur.com/oauth2/addclient (choose 'Anonymous usage without user authorization'). Copy the Client-ID. Free: 1250 uploads/day."
 
-If both are configured, Unsplash is tried first. If no good photo is found, a Pollinations AI image is generated and uploaded to imgur.
+**Google Places** (for reliable venue photos as a fallback):
+> "Enable the Places API (New) in Google Cloud Console, create an API key, and restrict it to Places API only. The free $200/month credit covers approximately 5000 place lookups — more than enough for typical usage."
 
-Store as `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` and `BEEPBOPBOOP_IMGUR_CLIENT_ID`. Both are optional — if neither is set, posts will have no images.
+The full image pipeline for place/location posts: Wikimedia Commons and Panoramax are tried first (free, no config needed), then Google Places if configured, then Unsplash for non-place content, then Pollinations AI as a last resort. For non-geographic posts, Unsplash is tried first followed by Pollinations.
+
+Store as `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY`, `BEEPBOPBOOP_IMGUR_CLIENT_ID`, and `BEEPBOPBOOP_GOOGLE_PLACES_KEY`. All are optional — if none are set, Wikimedia Commons and Panoramax (which need no keys) are still tried for geographic posts.
 
 ## IN9: Schedule
 

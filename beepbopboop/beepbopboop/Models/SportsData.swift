@@ -14,12 +14,6 @@ struct GameData: Codable {
     let venue: String?
     let broadcast: String?
     let series: String?            // "Game 3 · Series tied 1-1"
-
-    enum CodingKeys: String, CodingKey {
-        case sport, league, status
-        case gameTime = "gameTime"
-        case home, away, headline, venue, broadcast, series
-    }
 }
 
 struct TeamInfo: Codable {
@@ -43,14 +37,10 @@ struct StandingsData: Codable {
     let date: String               // "2026-04-16"
     let games: [StandingsGame]
     let headline: String?
-
-    enum CodingKeys: String, CodingKey {
-        case league, leagueColor, date, games, headline
-    }
 }
 
 struct StandingsGame: Codable, Identifiable {
-    var id: String { "\(home)-\(away)-\(status)" }
+    var id: String { "\(home)-\(away)-\(homeScore)-\(awayScore)" }
     let home: String               // Abbreviation
     let away: String
     let homeScore: Int
@@ -58,10 +48,6 @@ struct StandingsGame: Codable, Identifiable {
     let status: String
     let homeColor: String?
     let awayColor: String?
-
-    enum CodingKeys: String, CodingKey {
-        case home, away, homeScore, awayScore, status, homeColor, awayColor
-    }
 
     var homeSwiftUIColor: Color {
         guard let hex = homeColor else { return .gray }
@@ -145,5 +131,23 @@ extension GameData {
         let f = DateFormatter()
         f.dateFormat = "EEEE, MMM d"
         return f.string(from: date)
+    }
+
+    /// Countdown string like "IN 3 HOURS" or "TOMORROW" for matchup cards.
+    var countdown: String? {
+        guard let gt = gameTime else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        guard let date = iso.date(from: gt) else { return nil }
+        let seconds = Int(date.timeIntervalSince(Date()))
+        guard seconds > 0 else { return nil }
+        let minutes = seconds / 60
+        let hours = minutes / 60
+        let days = hours / 24
+        if minutes < 60 { return "IN \(minutes) MIN" }
+        if hours < 24 { return "IN \(hours) HOUR\(hours == 1 ? "" : "S")" }
+        if days == 1 { return "TOMORROW" }
+        if days < 7 { return "IN \(days) DAYS" }
+        return nil
     }
 }

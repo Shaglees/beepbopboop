@@ -79,6 +79,30 @@ class APIService {
         return try JSONDecoder().decode(FeedResponse.self, from: data)
     }
 
+    // MARK: - Weather
+
+    @MainActor
+    func fetchWeather() async throws -> WeatherData {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/weather") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        if httpResponse.statusCode == 422 {
+            throw APIError.locationRequired
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+        return try JSONDecoder().decode(WeatherData.self, from: data)
+    }
+
     // MARK: - User Settings
 
     @MainActor

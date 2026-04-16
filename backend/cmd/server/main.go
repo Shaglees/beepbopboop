@@ -18,6 +18,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
+	"github.com/shanegleeson/beepbopboop/backend/internal/weather"
 	"google.golang.org/api/option"
 )
 
@@ -74,6 +75,8 @@ func main() {
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
 	weightsH := handler.NewWeightsHandler(agentRepo, weightsRepo)
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
+	weatherSvc := weather.NewService()
+	weatherH := handler.NewWeatherHandler(userRepo, userSettingsRepo, weatherSvc)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -102,6 +105,7 @@ func main() {
 		r.Post("/posts/{postID}/events", eventsH.TrackEvent)
 		r.Post("/events/batch", eventsH.BatchTrack)
 		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
+		r.Get("/weather", weatherH.GetWeather)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)

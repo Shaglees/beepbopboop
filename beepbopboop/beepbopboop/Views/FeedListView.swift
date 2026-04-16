@@ -27,7 +27,16 @@ struct FeedListView: View {
 
     private var feedList: some View {
         List {
+            // Weather card injected at position 2 (after first 2 posts).
             ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
+                if index == 2, let weather = viewModel.weather {
+                    LiveWeatherCard(weather: weather)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .modifier(StaggeredAppearance(index: index, reduceMotion: reduceMotion))
+                }
+
                 Button {
                     selectedPost = post
                 } label: {
@@ -37,12 +46,20 @@ struct FeedListView: View {
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 .listRowBackground(Color.clear)
-                .modifier(StaggeredAppearance(index: index, reduceMotion: reduceMotion))
+                .modifier(StaggeredAppearance(index: index + (index >= 2 && viewModel.weather != nil ? 1 : 0), reduceMotion: reduceMotion))
                 .onAppear {
                     if viewModel.shouldLoadMore(currentPost: post) {
                         Task { await viewModel.loadMore() }
                     }
                 }
+            }
+
+            // Show weather first if fewer than 2 posts.
+            if viewModel.posts.count < 2, let weather = viewModel.weather {
+                LiveWeatherCard(weather: weather)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
             }
 
             if viewModel.isLoading && !viewModel.posts.isEmpty {

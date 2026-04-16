@@ -8,8 +8,6 @@ class FeedListViewModel: ObservableObject {
     @Published var hasMore = true
     @Published var needsLocation = false
     @Published var errorMessage: String?
-    @Published var weather: WeatherData?
-
     let feedType: FeedType
     private let apiService: APIService
     private var nextCursor: String?
@@ -41,19 +39,7 @@ class FeedListViewModel: ObservableObject {
         backoffSeconds = 0
         errorMessage = nil
 
-        // Fetch weather in parallel with first page load.
-        async let weatherTask: () = fetchWeather()
-        async let loadTask: () = loadMore()
-        _ = await (weatherTask, loadTask)
-    }
-
-    private func fetchWeather() async {
-        do {
-            weather = try await apiService.fetchWeather()
-        } catch {
-            // Weather is non-critical — don't block the feed.
-            weather = nil
-        }
+        await loadMore()
     }
 
     func loadMore() async {

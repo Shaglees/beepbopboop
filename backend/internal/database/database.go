@@ -80,5 +80,9 @@ func Open(url string) (*sql.DB, error) {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
 
+	// System user + weather agent for server-generated posts.
+	db.Exec("INSERT INTO users (id, firebase_uid) VALUES ('system', 'system') ON CONFLICT DO NOTHING")
+	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('weather-bot', 'system', 'Weather', 'active') ON CONFLICT DO NOTHING")
+
 	return db, nil
 }

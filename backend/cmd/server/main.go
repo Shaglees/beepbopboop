@@ -76,7 +76,6 @@ func main() {
 	weightsH := handler.NewWeightsHandler(agentRepo, weightsRepo)
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
 	weatherSvc := weather.NewService()
-	weatherH := handler.NewWeatherHandler(userRepo, userSettingsRepo, weatherSvc)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -105,7 +104,6 @@ func main() {
 		r.Post("/posts/{postID}/events", eventsH.TrackEvent)
 		r.Post("/events/batch", eventsH.BatchTrack)
 		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
-		r.Get("/weather", weatherH.GetWeather)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -122,6 +120,12 @@ func main() {
 		r.Delete("/user/templates/{hint}", templatesH.DeleteTemplate)
 	})
 
+	// Background weather worker — fetches weather for active user locations
+	// and upserts posts so they appear in nearby users' feeds.
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	weatherWorker := weather.NewWorker(weatherSvc, postRepo, userSettingsRepo, 30*time.Minute)
+	go weatherWorker.Run(workerCtx)
+
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 
 	go func() {
@@ -137,6 +141,7 @@ func main() {
 	sig := <-quit
 	slog.Info("shutting down", "signal", sig.String())
 
+	workerCancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	srv.Shutdown(ctx)

@@ -1,9 +1,16 @@
 import SwiftUI
 
 struct LiveWeatherCard: View {
+    let post: Post
     let weather: WeatherData
     @State private var animateParticles = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init?(post: Post) {
+        guard let wd = post.weatherData else { return nil }
+        self.post = post
+        self.weather = wd
+    }
 
     private var code: Int { weather.current.conditionCode }
     private var isDay: Bool { weather.current.isDay }

@@ -3,9 +3,17 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"math"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 )
+
+// GridCell represents a geographic grid cell with at least one user.
+type GridCell struct {
+	Lat       float64
+	Lon       float64
+	UserCount int
+}
 
 type UserSettingsRepo struct {
 	db *sql.DB
@@ -59,4 +67,34 @@ func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64
 		return nil, fmt.Errorf("upsert user_settings: %w", err)
 	}
 	return r.Get(userID)
+}
+
+// DistinctLocationCells returns unique geographic grid cells that have at least
+// one user with a set location. Grid cells are ~gridSize degrees (~11 km at 0.1).
+func (r *UserSettingsRepo) DistinctLocationCells(gridSize float64) ([]GridCell, error) {
+	rows, err := r.db.Query(`
+		SELECT
+			ROUND(latitude / $1) * $1 AS grid_lat,
+			ROUND(longitude / $1) * $1 AS grid_lon,
+			COUNT(*) AS user_count
+		FROM user_settings
+		WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+		GROUP BY grid_lat, grid_lon`, gridSize)
+	if err != nil {
+		return nil, fmt.Errorf("query location cells: %w", err)
+	}
+	defer rows.Close()
+
+	var cells []GridCell
+	for rows.Next() {
+		var c GridCell
+		if err := rows.Scan(&c.Lat, &c.Lon, &c.UserCount); err != nil {
+			return nil, fmt.Errorf("scan location cell: %w", err)
+		}
+		// Round to avoid floating point drift.
+		c.Lat = math.Round(c.Lat/gridSize) * gridSize
+		c.Lon = math.Round(c.Lon/gridSize) * gridSize
+		cells = append(cells, c)
+	}
+	return cells, rows.Err()
 }

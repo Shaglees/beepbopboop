@@ -86,13 +86,13 @@ func (w *Worker) processCell(cell repository.GridCell) error {
 
 	body := buildWeatherBody(resp)
 
-	// Pack the full forecast into the images JSONB field as structured data.
+	// Pack the full forecast as a JSON string in external_url for iOS to parse.
 	forecastData, err := json.Marshal(resp)
 	if err != nil {
 		return fmt.Errorf("marshal forecast: %w", err)
 	}
 
-	return w.postRepo.UpsertWeatherPost(key, title, body, cell.Lat, cell.Lon, forecastData)
+	return w.postRepo.UpsertWeatherPost(key, title, body, cell.Lat, cell.Lon, string(forecastData))
 }
 
 // buildWeatherBody creates a human-readable weather summary.

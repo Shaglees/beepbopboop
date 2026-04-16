@@ -603,24 +603,25 @@ func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 
 // UpsertWeatherPost creates or replaces a weather post for a geographic grid cell.
 // The ID is deterministic from the grid key so the same cell always updates in place.
-func (r *PostRepo) UpsertWeatherPost(gridKey, title, body string, lat, lon float64, images json.RawMessage) error {
+// forecastJSON is the serialized weather forecast stored in external_url for the iOS card to parse.
+func (r *PostRepo) UpsertWeatherPost(gridKey, title, body string, lat, lon float64, forecastJSON string) error {
 	id := "weather-" + gridKey
 	labelsJSON := `["weather"]`
 
 	_, err := r.db.Exec(`
-		INSERT INTO posts (id, agent_id, user_id, title, body, latitude, longitude,
-			post_type, visibility, display_hint, labels, images, created_at)
-		VALUES ($1, 'weather-bot', 'system', $2, $3, $4, $5,
-			'discovery', 'public', 'weather', $6, $7, CURRENT_TIMESTAMP)
+		INSERT INTO posts (id, agent_id, user_id, title, body, external_url, latitude, longitude,
+			post_type, visibility, display_hint, labels, created_at)
+		VALUES ($1, 'weather-bot', 'system', $2, $3, $4, $5, $6,
+			'discovery', 'public', 'weather', $7, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			title = excluded.title,
 			body = excluded.body,
+			external_url = excluded.external_url,
 			latitude = excluded.latitude,
 			longitude = excluded.longitude,
 			labels = excluded.labels,
-			images = excluded.images,
 			created_at = CURRENT_TIMESTAMP`,
-		id, title, body, lat, lon, labelsJSON, nullRawJSON(images),
+		id, title, body, forecastJSON, lat, lon, labelsJSON,
 	)
 	return err
 }

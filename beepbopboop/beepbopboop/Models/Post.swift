@@ -151,8 +151,6 @@ struct Post: Codable, Identifiable {
     let labels: [String]?
     let createdAt: String
 
-    /// Raw images JSON preserved for non-PostImage payloads (e.g. weather forecast data).
-    let rawImagesData: Data?
 
     enum PostTypeValue {
         case event, place, discovery, article, video
@@ -342,78 +340,16 @@ struct Post: Codable, Identifiable {
         case createdAt = "created_at"
     }
 
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(String.self, forKey: .id)
-        agentID = try c.decode(String.self, forKey: .agentID)
-        agentName = try c.decode(String.self, forKey: .agentName)
-        userID = try c.decode(String.self, forKey: .userID)
-        title = try c.decode(String.self, forKey: .title)
-        body = try c.decode(String.self, forKey: .body)
-        imageURL = try c.decodeIfPresent(String.self, forKey: .imageURL)
-        externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
-        locality = try c.decodeIfPresent(String.self, forKey: .locality)
-        latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
-        longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
-        postType = try c.decodeIfPresent(String.self, forKey: .postType)
-        visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
-        displayHint = try c.decodeIfPresent(String.self, forKey: .displayHint)
-        labels = try c.decodeIfPresent([String].self, forKey: .labels)
-        createdAt = try c.decode(String.self, forKey: .createdAt)
-
-        // Try to decode images as [PostImage]; if that fails (e.g. weather JSON object),
-        // keep raw data so weather cards can parse it.
-        if let postImages = try? c.decodeIfPresent([PostImage].self, forKey: .images) {
-            images = postImages
-            rawImagesData = nil
-        } else {
-            images = nil
-            // Capture raw JSON for weather/other structured data.
-            struct RawJSON: Decodable {
-                let data: Data
-                init(from decoder: Decoder) throws {
-                    let container = try decoder.singleValueContainer()
-                    // Re-encode whatever JSON value is here.
-                    let value = try container.decode(AnyCodable.self)
-                    data = (try? JSONEncoder().encode(value)) ?? Data()
-                }
-            }
-            if let raw = try? c.decodeIfPresent(RawJSON.self, forKey: .images) {
-                rawImagesData = raw.data
-            } else {
-                rawImagesData = nil
-            }
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try c.encode(agentID, forKey: .agentID)
-        try c.encode(agentName, forKey: .agentName)
-        try c.encode(userID, forKey: .userID)
-        try c.encode(title, forKey: .title)
-        try c.encode(body, forKey: .body)
-        try c.encodeIfPresent(imageURL, forKey: .imageURL)
-        try c.encodeIfPresent(externalURL, forKey: .externalURL)
-        try c.encodeIfPresent(locality, forKey: .locality)
-        try c.encodeIfPresent(latitude, forKey: .latitude)
-        try c.encodeIfPresent(longitude, forKey: .longitude)
-        try c.encodeIfPresent(postType, forKey: .postType)
-        try c.encodeIfPresent(visibility, forKey: .visibility)
-        try c.encodeIfPresent(displayHint, forKey: .displayHint)
-        try c.encodeIfPresent(images, forKey: .images)
-        try c.encodeIfPresent(labels, forKey: .labels)
-        try c.encode(createdAt, forKey: .createdAt)
-    }
 
     var outfitContent: OutfitContent {
         OutfitContent(from: body)
     }
 
-    /// Parsed weather forecast data from the images JSON (for weather display_hint posts).
+    /// Parsed weather forecast data from externalURL (for weather display_hint posts).
     var weatherData: WeatherData? {
-        guard displayHintValue == .weather, let data = rawImagesData else { return nil }
+        guard displayHintValue == .weather,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(WeatherData.self, from: data)
     }
 
@@ -427,51 +363,3 @@ struct Post: Codable, Identifiable {
     }
 }
 
-// MARK: - AnyCodable (for preserving arbitrary JSON through decode/re-encode)
-
-struct AnyCodable: Codable {
-    let value: Any
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if let dict = try? container.decode([String: AnyCodable].self) {
-            value = dict.mapValues(\.value)
-        } else if let array = try? container.decode([AnyCodable].self) {
-            value = array.map(\.value)
-        } else if let double = try? container.decode(Double.self) {
-            value = double
-        } else if let bool = try? container.decode(Bool.self) {
-            value = bool
-        } else if let string = try? container.decode(String.self) {
-            value = string
-        } else if container.decodeNil() {
-            value = NSNull()
-        } else {
-            value = NSNull()
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch value {
-        case let dict as [String: Any]:
-            try container.encode(dict.mapValues { AnyCodable(value: $0) })
-        case let array as [Any]:
-            try container.encode(array.map { AnyCodable(value: $0) })
-        case let double as Double:
-            try container.encode(double)
-        case let bool as Bool:
-            try container.encode(bool)
-        case let string as String:
-            try container.encode(string)
-        case let int as Int:
-            try container.encode(int)
-        default:
-            try container.encodeNil()
-        }
-    }
-
-    init(value: Any) {
-        self.value = value
-    }
-}

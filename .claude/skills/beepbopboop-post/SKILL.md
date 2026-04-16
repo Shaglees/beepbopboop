@@ -1,7 +1,7 @@
 ---
 name: beepbopboop-post
 description: Generate and publish an engaging BeepBopBoop post from a simple idea
-argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|discover|trending|init|calendar> [locality] [post_type]
+argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|discover|trending|fashion|init|calendar> [locality] [post_type]
 allowed-tools: Bash(curl *), Bash(jq *), Bash(cat *), Bash(mkdir *), Bash(osm *), Bash(date *), Bash(beepbopgraph *), WebSearch, WebFetch
 ---
 
@@ -61,6 +61,11 @@ Parse the output and store the values for use in later steps. You need at minimu
 - `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` (optional — Unsplash API key for free stock photo search)
 - `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional — imgur Client-ID for image hosting)
 - `BEEPBOPBOOP_SPORTS_TEAMS` (optional — semicolon-separated league:team-slug pairs for preferred sports teams, e.g., `nhl:canucks;mlb:blue-jays;mls:whitecaps-fc`)
+- `BEEPBOPBOOP_FASHION_PROFILE` (optional — semicolon-separated physical attributes, e.g., `height:5-11;build:normal;hair:brown;age:44;gender:male`)
+- `BEEPBOPBOOP_FASHION_STYLE` (optional — comma-separated style archetypes, e.g., `minimalist,smart-casual`)
+- `BEEPBOPBOOP_FASHION_BUDGET` (optional — `budget`, `moderate`, `premium`, `luxury`)
+- `BEEPBOPBOOP_FASHION_BRANDS` (optional — comma-separated preferred brands)
+- `BEEPBOPBOOP_FASHION_IMGGEN` (optional — image gen backend: `flex1`, `pollinations`, `nanobanana`)
 
 **If the config file doesn't exist or is missing required values**, tell the user: "Not configured yet. Running setup wizard..." and jump to Step IN1 (Init Wizard). After the wizard completes, continue with Step 0a.
 
@@ -84,6 +89,7 @@ After loading config, parse the user's input to determine which mode to use:
 | `discover`, `explore`, `new interests`, `surprise me`, `broaden`, `rabbit hole` | Interest Discovery | Steps ID1–ID4 |
 | `trending`, `what's trending`, `viral`, `pop culture`, `what's hot`, `zeitgeist` | Trending | **Delegate to `beepbopboop-news` skill** |
 | `sports`, `games`, `scores`, team/league name | Sports | **Delegate to `beepbopboop-news` skill** |
+| `fashion`, `outfit`, `style`, `what to wear`, `drops`, `capsule wardrobe` | Fashion | **Delegate to `beepbopboop-fashion` skill** |
 | Everything else | Continue to Step 0b | — |
 
 If a specific mode is detected, skip Step 0b and jump directly to that mode's steps.

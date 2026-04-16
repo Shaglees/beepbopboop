@@ -404,8 +404,8 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		scoredPosts := make([]scored, len(candidates))
 		for i, p := range candidates {
 			s := scorePost(p, lat, lon, radiusKm, weights)
-			// Add ±15% jitter so near-equal posts shuffle between requests.
-			jitter := 1.0 + (rand.Float64()-0.5)*0.3
+			// Add ±30% jitter so each refresh produces a noticeably different order.
+			jitter := 1.0 + (rand.Float64()-0.5)*0.6
 			scoredPosts[i] = scored{post: p, score: s * jitter}
 		}
 		sort.Slice(scoredPosts, func(i, j int) bool {
@@ -420,6 +420,19 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		sort.Slice(scoredPosts, func(i, j int) bool {
 			return scoredPosts[i].score > scoredPosts[j].score
 		})
+		// Shuffle the top segment so pull-to-refresh always feels fresh.
+		// Posts are already roughly ranked — shuffling the top 60% of the
+		// page mixes them while keeping low-scoring posts at the bottom.
+		shuffleN := len(scoredPosts)
+		if shuffleN > limit {
+			shuffleN = limit
+		}
+		shuffleN = shuffleN * 3 / 5 // top 60%
+		if shuffleN > 1 {
+			rand.Shuffle(shuffleN, func(i, j int) {
+				scoredPosts[i], scoredPosts[j] = scoredPosts[j], scoredPosts[i]
+			})
+		}
 
 		posts := make([]model.Post, 0, limit)
 		for i := 0; i < len(scoredPosts) && i < limit; i++ {

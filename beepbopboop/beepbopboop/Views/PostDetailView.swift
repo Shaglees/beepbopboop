@@ -5,6 +5,7 @@ import UIKit
 struct PostDetailView: View {
     let post: Post
     @AppStorage private var isBookmarked: Bool
+    @Environment(\.dismiss) private var dismiss
 
     init(post: Post) {
         self.post = post
@@ -16,6 +17,14 @@ struct PostDetailView: View {
     }
 
     var body: some View {
+        if post.displayHintValue == .outfit {
+            outfitDetailBody
+        } else {
+            standardDetailBody
+        }
+    }
+
+    private var standardDetailBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // Hint-specific header
@@ -107,6 +116,244 @@ struct PostDetailView: View {
         }
         .navigationTitle(post.hintLabel)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Outfit Detail
+
+    private let outfitMauve = Color(red: 0.878, green: 0.251, blue: 0.984)
+    private let warmCream = Color(red: 0.98, green: 0.97, blue: 0.95)
+
+    private var outfitDetailBody: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Top collage
+                outfitHeader
+
+                VStack(alignment: .leading, spacing: 20) {
+                    let content = post.outfitContent
+
+                    // Trend subtitle
+                    if let trend = content.trend, !trend.isEmpty {
+                        Text(trend.uppercased())
+                            .font(.system(size: 9, weight: .semibold))
+                            .tracking(3)
+                            .foregroundColor(Color(red: 0.54, green: 0.49, blue: 0.45))
+                    }
+
+                    // Serif title
+                    Text(post.title)
+                        .font(.system(size: 26, weight: .bold, design: .serif))
+                        .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
+                        .lineSpacing(4)
+
+                    // Agent line
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(outfitMauve)
+                            .frame(width: 10, height: 10)
+                        Text(post.agentName)
+                            .font(.subheadline.weight(.medium))
+                        Text("·")
+                            .foregroundColor(.secondary)
+                        Text(post.relativeTime)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+
+                    // Body text
+                    if !content.body.isEmpty {
+                        Text(content.body)
+                            .font(.system(size: 15))
+                            .foregroundColor(Color(red: 0.29, green: 0.29, blue: 0.29))
+                            .lineSpacing(6)
+                    }
+
+                    // Inline detail image (between body and styled-for-you)
+                    outfitInlineImage(slot: 0)
+
+                    // "Styled for you" callout
+                    if let forYou = content.forYou, !forYou.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("STYLED FOR YOU")
+                                .font(.system(size: 9, weight: .heavy))
+                                .tracking(1.5)
+                                .foregroundColor(outfitMauve)
+                            Text(forYou)
+                                .font(.system(size: 13))
+                                .foregroundColor(Color(red: 0.227, green: 0.227, blue: 0.227))
+                                .lineSpacing(4)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(
+                            LinearGradient(
+                                colors: [outfitMauve.opacity(0.05), outfitMauve.opacity(0.02)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(outfitMauve.opacity(0.1), lineWidth: 1)
+                        )
+                        .cornerRadius(12)
+                    }
+
+                    // Second inline detail image
+                    outfitInlineImage(slot: 1)
+
+                    // "Shop the look" section
+                    if !content.products.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("SHOP THE LOOK")
+                                .font(.system(size: 9, weight: .heavy))
+                                .tracking(1.5)
+                                .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
+
+                            VStack(spacing: 0) {
+                                ForEach(Array(content.products.enumerated()), id: \.offset) { index, product in
+                                    outfitProductRow(product: product, index: index)
+
+                                    if index < content.products.count - 1 {
+                                        Divider()
+                                            .background(Color(red: 0.94, green: 0.93, blue: 0.9))
+                                    }
+                                }
+                            }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(red: 0.91, green: 0.886, blue: 0.859), lineWidth: 1)
+                            )
+                            .cornerRadius(12)
+                        }
+                    }
+
+                    // Budget pick
+                    if let alt = content.budgetAlt {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("BUDGET PICK")
+                                .font(.system(size: 9, weight: .bold))
+                                .tracking(1)
+                                .foregroundColor(Color(red: 0.54, green: 0.49, blue: 0.45))
+                            HStack {
+                                Text(alt.name)
+                                    .font(.system(size: 13, weight: .semibold))
+                                Spacer()
+                                Text(alt.price)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
+                            }
+                        }
+                        .padding(14)
+                        .background(Color(red: 0.94, green: 0.93, blue: 0.9))
+                        .cornerRadius(10)
+                    }
+
+                    Divider()
+
+                    // Engagement bar
+                    engagementBar
+                }
+                .padding()
+            }
+        }
+        .background(warmCream)
+        .navigationTitle("Outfit")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func outfitInlineImage(slot: Int) -> some View {
+        let detailImages = post.imagesByRole("detail")
+        // Slot 0 = first remaining detail image (after the one used in top collage)
+        // Slot 1 = second remaining detail image
+        let startIndex = 1 // first detail image goes to top collage
+        let imageIndex = startIndex + slot
+        if imageIndex < detailImages.count, let url = URL(string: detailImages[imageIndex].url) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .frame(maxHeight: 240)
+                        .clipped()
+                        .cornerRadius(8)
+                default:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    private func outfitProductRow(product: OutfitContent.Product, index: Int) -> some View {
+        let productImages = post.imagesByRole("product")
+        return Button {
+            // Open search for the product
+            let query = product.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? product.name
+            if let url = URL(string: "https://www.google.com/search?q=\(query)") {
+                UIApplication.shared.open(url)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                if index < productImages.count, let url = URL(string: productImages[index].url) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        default:
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(red: 0.94, green: 0.93, blue: 0.9))
+                        }
+                    }
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(red: 0.94, green: 0.93, blue: 0.9))
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Image(systemName: "tshirt")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(product.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text(product.price)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(red: 0.53, green: 0.53, blue: 0.53))
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .padding(12)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Body Content (hint-aware)
@@ -370,6 +617,46 @@ struct PostDetailView: View {
         .cornerRadius(12)
     }
 
+    // MARK: - Outfit Header (Collage)
+
+    @ViewBuilder
+    private var outfitHeader: some View {
+        let allImages = post.images ?? []
+        let heroImages = post.imagesByRole("hero")
+        let detailImages = post.imagesByRole("detail")
+
+        // Top collage: hero + first detail (max 2 images)
+        let collageImages: [PostImage] = {
+            var imgs: [PostImage] = []
+            if let hero = heroImages.first { imgs.append(hero) }
+            else if let first = allImages.first { imgs.append(first) }
+            if let firstDetail = detailImages.first { imgs.append(firstDetail) }
+            return imgs
+        }()
+
+        if !collageImages.isEmpty {
+            OutfitCollageView(images: collageImages, postID: post.id)
+        } else if let imageURL = post.imageURL, !imageURL.isEmpty, let url = URL(string: imageURL) {
+            // Fallback to single imageURL
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 320)
+                        .clipped()
+                default:
+                    Rectangle()
+                        .fill(Color(red: 0.94, green: 0.93, blue: 0.9))
+                        .frame(height: 320)
+                        .overlay(ProgressView())
+                }
+            }
+        }
+    }
+
     // MARK: - Engagement Bar
 
     private var engagementBar: some View {
@@ -509,6 +796,111 @@ struct PostDetailView: View {
             } else {
                 Label(locality, systemImage: "location")
                     .font(.subheadline)
+            }
+        }
+    }
+}
+
+// MARK: - Outfit Collage View
+
+private struct OutfitCollageView: View {
+    let images: [PostImage]
+    let postID: String
+    private let gap: CGFloat = 3
+
+    private var templateIndex: Int {
+        abs(postID.hashValue)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            collageLayout(width: width)
+        }
+        .aspectRatio(collageAspectRatio, contentMode: .fit)
+    }
+
+    private var collageAspectRatio: CGFloat {
+        switch images.count {
+        case 1: return 16.0 / 10.0
+        case 2:
+            let variant = templateIndex % 3
+            switch variant {
+            case 0: return 16.0 / 9.0   // 2A side-by-side
+            case 1: return 9.0 / 14.0   // 2B stacked
+            default: return 16.0 / 10.0 // 2C offset
+            }
+        default: return 16.0 / 10.0
+        }
+    }
+
+    @ViewBuilder
+    private func collageLayout(width: CGFloat) -> some View {
+        switch images.count {
+        case 1:
+            collageImage(images[0], width: width, height: width / (16.0 / 10.0))
+        case 2:
+            layout2(width: width)
+        default:
+            collageImage(images[0], width: width, height: width / (16.0 / 10.0))
+        }
+    }
+
+    @ViewBuilder
+    private func layout2(width: CGFloat) -> some View {
+        let variant = templateIndex % 3
+        switch variant {
+        case 0:
+            // 2A: Side by side 60/40
+            let leftW = (width - gap) * 0.6
+            let rightW = (width - gap) * 0.4
+            let height = width / (16.0 / 9.0)
+            HStack(spacing: gap) {
+                collageImage(images[0], width: leftW, height: height)
+                collageImage(images[1], width: rightW, height: height)
+            }
+        case 1:
+            // 2B: Stacked vertically
+            let topH = width * 0.55
+            let bottomH = width * 0.35
+            VStack(spacing: gap) {
+                collageImage(images[0], width: width, height: topH)
+                collageImage(images[1], width: width, height: bottomH)
+            }
+        default:
+            // 2C: Side by side with offset heights
+            let halfW = (width - gap) / 2
+            let tallH = width / (16.0 / 10.0)
+            let shortH = tallH * 0.75
+            HStack(alignment: .top, spacing: gap) {
+                collageImage(images[0], width: halfW, height: tallH)
+                collageImage(images[1], width: halfW, height: shortH)
+                    .padding(.top, tallH - shortH)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func collageImage(_ img: PostImage, width: CGFloat, height: CGFloat) -> some View {
+        if let url = URL(string: img.url) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: width, height: height)
+                        .clipped()
+                case .failure:
+                    Rectangle()
+                        .fill(Color(red: 0.94, green: 0.93, blue: 0.9))
+                        .frame(width: width, height: height)
+                default:
+                    Rectangle()
+                        .fill(Color(red: 0.94, green: 0.93, blue: 0.9))
+                        .frame(width: width, height: height)
+                        .overlay(ProgressView())
+                }
             }
         }
     }

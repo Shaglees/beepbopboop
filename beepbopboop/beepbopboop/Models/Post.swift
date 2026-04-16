@@ -11,6 +11,125 @@ struct FeedResponse: Codable {
     }
 }
 
+struct PostImage: Codable {
+    let url: String
+    let role: String
+    let caption: String?
+
+    enum CodingKeys: String, CodingKey {
+        case url, role, caption
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        url = try container.decode(String.self, forKey: .url)
+        role = try container.decodeIfPresent(String.self, forKey: .role) ?? "detail"
+        caption = try container.decodeIfPresent(String.self, forKey: .caption)
+    }
+}
+
+struct OutfitContent {
+    struct Product {
+        let name: String
+        let price: String
+    }
+
+    let trend: String?
+    let body: String
+    let forYou: String?
+    let products: [Product]
+    let budgetAlt: Product?
+
+    init(from text: String) {
+        var mainBody = ""
+        var trend: String?
+        var forYou: String?
+        var tryLine: String?
+        var altLine: String?
+
+        // Parse line by line
+        let lines = text.components(separatedBy: "\n")
+        var currentMarker: String?
+        var currentValue = ""
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("**Trend:**") {
+                if currentMarker == nil { mainBody = currentValue.trimmingCharacters(in: .whitespacesAndNewlines) }
+                else { Self.assign(marker: currentMarker!, value: currentValue, trend: &trend, forYou: &forYou, tryLine: &tryLine, altLine: &altLine) }
+                currentMarker = "trend"
+                currentValue = String(trimmed.dropFirst("**Trend:**".count))
+            } else if trimmed.hasPrefix("**For you:**") {
+                if currentMarker == nil { mainBody = currentValue.trimmingCharacters(in: .whitespacesAndNewlines) }
+                else { Self.assign(marker: currentMarker!, value: currentValue, trend: &trend, forYou: &forYou, tryLine: &tryLine, altLine: &altLine) }
+                currentMarker = "forYou"
+                currentValue = String(trimmed.dropFirst("**For you:**".count))
+            } else if trimmed.hasPrefix("**Try:**") {
+                if currentMarker == nil { mainBody = currentValue.trimmingCharacters(in: .whitespacesAndNewlines) }
+                else { Self.assign(marker: currentMarker!, value: currentValue, trend: &trend, forYou: &forYou, tryLine: &tryLine, altLine: &altLine) }
+                currentMarker = "try"
+                currentValue = String(trimmed.dropFirst("**Try:**".count))
+            } else if trimmed.hasPrefix("**Alt:**") {
+                if currentMarker == nil { mainBody = currentValue.trimmingCharacters(in: .whitespacesAndNewlines) }
+                else { Self.assign(marker: currentMarker!, value: currentValue, trend: &trend, forYou: &forYou, tryLine: &tryLine, altLine: &altLine) }
+                currentMarker = "alt"
+                currentValue = String(trimmed.dropFirst("**Alt:**".count))
+            } else {
+                currentValue += (currentValue.isEmpty ? "" : "\n") + line
+            }
+        }
+        // Flush last marker
+        if let marker = currentMarker {
+            Self.assign(marker: marker, value: currentValue, trend: &trend, forYou: &forYou, tryLine: &tryLine, altLine: &altLine)
+        } else {
+            mainBody = currentValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        self.trend = trend?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.body = mainBody
+        self.forYou = forYou?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Parse products from tryLine
+        if let tryText = tryLine?.trimmingCharacters(in: .whitespacesAndNewlines), !tryText.isEmpty {
+            self.products = tryText.components(separatedBy: " · ").compactMap { segment in
+                Self.parseProduct(from: segment.trimmingCharacters(in: .whitespaces))
+            }
+        } else {
+            self.products = []
+        }
+
+        // Parse budget alt
+        if let altText = altLine?.trimmingCharacters(in: .whitespacesAndNewlines), !altText.isEmpty {
+            self.budgetAlt = Self.parseProduct(from: altText)
+        } else {
+            self.budgetAlt = nil
+        }
+    }
+
+    private static func assign(marker: String, value: String, trend: inout String?, forYou: inout String?, tryLine: inout String?, altLine: inout String?) {
+        switch marker {
+        case "trend": trend = value
+        case "forYou": forYou = value
+        case "try": tryLine = value
+        case "alt": altLine = value
+        default: break
+        }
+    }
+
+    private static func parseProduct(from text: String) -> Product? {
+        // Match "Name ($Price)" or "Name ($Price) extra"
+        guard let range = text.range(of: #"\(?\$[\d,.]+\)?"#, options: .regularExpression) else {
+            return text.isEmpty ? nil : Product(name: text, price: "")
+        }
+        var price = String(text[range])
+        // Clean up parentheses
+        price = price.replacingOccurrences(of: "(", with: "").replacingOccurrences(of: ")", with: "")
+        let name = text[text.startIndex..<range.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "("))
+        return name.isEmpty ? nil : Product(name: name, price: price)
+    }
+}
+
 struct Post: Codable, Identifiable {
     let id: String
     let agentID: String
@@ -26,6 +145,7 @@ struct Post: Codable, Identifiable {
     let postType: String?
     let visibility: String?
     let displayHint: String?
+    let images: [PostImage]?
     let labels: [String]?
     let createdAt: String
 
@@ -34,7 +154,7 @@ struct Post: Codable, Identifiable {
     }
 
     enum DisplayHintValue {
-        case card, place, article, weather, calendar, deal, digest, brief, comparison, event
+        case card, place, article, weather, calendar, deal, digest, brief, comparison, event, outfit
     }
 
     var displayHintValue: DisplayHintValue {
@@ -48,6 +168,7 @@ struct Post: Codable, Identifiable {
         case "brief": return .brief
         case "comparison": return .comparison
         case "event": return .event
+        case "outfit": return .outfit
         default: return .card
         }
     }
@@ -113,6 +234,7 @@ struct Post: Codable, Identifiable {
         case .brief: return .gray
         case .comparison: return .mint
         case .event: return .purple
+        case .outfit: return Color(red: 0.878, green: 0.251, blue: 0.984)
         }
     }
 
@@ -128,6 +250,7 @@ struct Post: Codable, Identifiable {
         case .brief: return "text.alignleft"
         case .comparison: return "arrow.left.arrow.right"
         case .event: return "party.popper"
+        case .outfit: return "tshirt"
         }
     }
 
@@ -143,6 +266,7 @@ struct Post: Codable, Identifiable {
         case .brief: return "Brief"
         case .comparison: return "Compare"
         case .event: return "Event"
+        case .outfit: return "Outfit"
         }
     }
 
@@ -208,7 +332,21 @@ struct Post: Codable, Identifiable {
         case postType = "post_type"
         case visibility
         case displayHint = "display_hint"
+        case images
         case labels
         case createdAt = "created_at"
+    }
+
+    var outfitContent: OutfitContent {
+        OutfitContent(from: body)
+    }
+
+    /// Images filtered by role, with fallback to imageURL
+    func imagesByRole(_ role: String) -> [PostImage] {
+        images?.filter { $0.role.lowercased() == role.lowercased() } ?? []
+    }
+
+    var heroImage: PostImage? {
+        imagesByRole("hero").first ?? images?.first
     }
 }

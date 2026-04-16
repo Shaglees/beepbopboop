@@ -4,39 +4,43 @@ import MapKit
 struct FeedItemView: View {
     let post: Post
 
-    private var isBookmarked: Bool {
-        UserDefaults.standard.bool(forKey: "bookmark_\(post.id)")
-    }
-
     var body: some View {
-        cardContent
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.secondarySystemGroupedBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color(.separator).opacity(0.2), lineWidth: 0.5)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 2)
+        if post.displayHintValue == .outfit {
+            cardContent
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
+        } else {
+            cardContent
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.secondarySystemGroupedBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color(.separator).opacity(0.2), lineWidth: 0.5)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 2)
+        }
     }
 
     @ViewBuilder
     private var cardContent: some View {
         switch post.displayHintValue {
         case .weather:
-            WeatherCard(post: post, isBookmarked: isBookmarked)
+            WeatherCard(post: post)
         case .brief, .digest:
-            CompactCard(post: post, isBookmarked: isBookmarked)
+            CompactCard(post: post)
         case .calendar, .event:
-            DateCard(post: post, isBookmarked: isBookmarked)
+            DateCard(post: post)
         case .deal:
-            DealCard(post: post, isBookmarked: isBookmarked)
+            DealCard(post: post)
         case .place:
-            PlaceCard(post: post, isBookmarked: isBookmarked)
+            PlaceCard(post: post)
+        case .outfit:
+            OutfitCard(post: post)
         default:
-            StandardCard(post: post, isBookmarked: isBookmarked)
+            StandardCard(post: post)
         }
     }
 }
@@ -53,22 +57,6 @@ private struct CardHeader: View {
                 .frame(width: 8, height: 8)
             Text(post.agentName)
                 .font(.subheadline.weight(.medium))
-            Text("·")
-                .foregroundColor(.secondary)
-            Text(post.relativeTime)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-        }
-    }
-}
-
-private struct CardFooter: View {
-    let post: Post
-    let isBookmarked: Bool
-
-    var body: some View {
-        HStack(spacing: 6) {
-            // Hint pill (use hint instead of type when they differ)
             Text(post.hintLabel)
                 .font(.caption2.weight(.semibold))
                 .foregroundColor(post.hintColor)
@@ -78,17 +66,26 @@ private struct CardFooter: View {
                 .padding(.vertical, 3)
                 .background(post.hintColor.opacity(0.12))
                 .cornerRadius(4)
+            Spacer()
+            Text(post.relativeTime)
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+        }
+    }
+}
 
-            // Show type pill too when hint differs from type
-            if post.displayHintValue != .card && post.hintLabel.lowercased() != (post.postType ?? "").lowercased() {
-                Text(post.typeLabel)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+private struct CardFooter: View {
+    let post: Post
+    @AppStorage var isBookmarked: Bool
 
+    init(post: Post) {
+        self.post = post
+        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
             if let locality = post.locality, !locality.isEmpty {
-                Text("·")
-                    .foregroundColor(.secondary)
                 Label(locality, systemImage: post.isSourceAttribution ? "link" : "location")
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -97,24 +94,17 @@ private struct CardFooter: View {
 
             Spacer()
 
-            HStack(spacing: 14) {
-                Image(systemName: "heart")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .symbolRenderingMode(.hierarchical)
-                Image(systemName: "arrow.up.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .symbolRenderingMode(.hierarchical)
-                Image(systemName: "square.and.arrow.up")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .symbolRenderingMode(.hierarchical)
+            Button {
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
+                isBookmarked.toggle()
+            } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)
                     .foregroundColor(isBookmarked ? post.hintColor : .secondary)
                     .contentTransition(.symbolEffect(.replace))
             }
+            .buttonStyle(.plain)
         }
     }
 }
@@ -123,7 +113,6 @@ private struct CardFooter: View {
 
 private struct StandardCard: View {
     let post: Post
-    let isBookmarked: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -185,7 +174,7 @@ private struct StandardCard: View {
                 .cornerRadius(6)
             }
 
-            CardFooter(post: post, isBookmarked: isBookmarked)
+            CardFooter(post: post)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -196,7 +185,6 @@ private struct StandardCard: View {
 
 private struct WeatherCard: View {
     let post: Post
-    let isBookmarked: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -220,7 +208,7 @@ private struct WeatherCard: View {
                 }
             }
 
-            CardFooter(post: post, isBookmarked: isBookmarked)
+            CardFooter(post: post)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -238,10 +226,9 @@ private struct WeatherCard: View {
 
 private struct CompactCard: View {
     let post: Post
-    let isBookmarked: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             CardHeader(post: post)
 
             Text(post.title)
@@ -259,7 +246,7 @@ private struct CompactCard: View {
                                 .foregroundColor(post.hintColor)
                                 .frame(width: 16, alignment: .trailing)
                         } else {
-                            Text("•")
+                            Text("\u{2022}")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
@@ -276,10 +263,10 @@ private struct CompactCard: View {
                 }
             }
 
-            CardFooter(post: post, isBookmarked: isBookmarked)
+            CardFooter(post: post)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
     }
 }
 
@@ -287,52 +274,53 @@ private struct CompactCard: View {
 
 private struct DateCard: View {
     let post: Post
-    let isBookmarked: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Date badge
-            VStack(spacing: 2) {
-                Text(dateParts.month)
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(post.hintColor)
-                    .textCase(.uppercase)
-                Text(dateParts.day)
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(.primary)
-            }
-            .frame(width: 48, height: 52)
-            .background(post.hintColor.opacity(0.1))
-            .cornerRadius(8)
+        VStack(alignment: .leading, spacing: 8) {
+            CardHeader(post: post)
 
-            VStack(alignment: .leading, spacing: 6) {
-                CardHeader(post: post)
+            HStack(alignment: .top, spacing: 12) {
+                // Date badge
+                VStack(spacing: 2) {
+                    Text(dateParts.month)
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(post.hintColor)
+                        .textCase(.uppercase)
+                    Text(dateParts.day)
+                        .font(.title2.weight(.bold))
+                        .foregroundColor(.primary)
+                }
+                .frame(width: 48, height: 52)
+                .background(post.hintColor.opacity(0.1))
+                .cornerRadius(8)
 
-                Text(post.title)
-                    .font(.headline)
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(post.title)
+                        .font(.headline)
+                        .lineLimit(2)
 
-                Text(post.body)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .lineLimit(3)
+                    Text(post.body)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(3)
 
-                // Event: show location + external link
-                if post.displayHintValue == .event {
-                    if let locality = post.locality, !locality.isEmpty {
-                        Label(locality, systemImage: "location")
-                            .font(.caption)
-                            .foregroundColor(post.hintColor)
-                    }
-                    if let extURL = post.externalURL, !extURL.isEmpty {
-                        Label("Get Tickets", systemImage: "arrow.up.right.square")
-                            .font(.caption.weight(.medium))
-                            .foregroundColor(post.hintColor)
+                    // Event: show location + external link
+                    if post.displayHintValue == .event {
+                        if let locality = post.locality, !locality.isEmpty {
+                            Label(locality, systemImage: "location")
+                                .font(.caption)
+                                .foregroundColor(post.hintColor)
+                        }
+                        if let extURL = post.externalURL, !extURL.isEmpty {
+                            Label("Get Tickets", systemImage: "arrow.up.right.square")
+                                .font(.caption.weight(.medium))
+                                .foregroundColor(post.hintColor)
+                        }
                     }
                 }
-
-                CardFooter(post: post, isBookmarked: isBookmarked)
             }
+
+            CardFooter(post: post)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -380,20 +368,17 @@ private struct DateCard: View {
 
 private struct DealCard: View {
     let post: Post
-    let isBookmarked: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            CardHeader(post: post)
+
             // Deal accent banner
             HStack(spacing: 6) {
                 Image(systemName: "tag.fill")
                     .font(.caption)
                 Text("DEAL")
                     .font(.caption.weight(.black))
-                Spacer()
-                Text(post.relativeTime)
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.8))
             }
             .foregroundColor(.white)
             .padding(.horizontal, 12)
@@ -436,7 +421,7 @@ private struct DealCard: View {
                 }
             }
 
-            CardFooter(post: post, isBookmarked: isBookmarked)
+            CardFooter(post: post)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -447,11 +432,12 @@ private struct DealCard: View {
 
 private struct PlaceCard: View {
     let post: Post
-    let isBookmarked: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Map first if coordinates available
+            CardHeader(post: post)
+
+            // Map if coordinates available
             if let lat = post.latitude, let lon = post.longitude {
                 Map(initialPosition: .region(MKCoordinateRegion(
                     center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
@@ -483,8 +469,6 @@ private struct PlaceCard: View {
                 }
             }
 
-            CardHeader(post: post)
-
             Text(post.title)
                 .font(.headline)
                 .lineLimit(2)
@@ -494,10 +478,226 @@ private struct PlaceCard: View {
                 .foregroundColor(.secondary)
                 .lineLimit(3)
 
-            CardFooter(post: post, isBookmarked: isBookmarked)
+            CardFooter(post: post)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Outfit Card
+
+private struct OutfitCard: View {
+    let post: Post
+    private let outfitMauve = Color(red: 0.878, green: 0.251, blue: 0.984)
+    private let darkBg = Color(red: 0.1, green: 0.086, blue: 0.071) // #1a1612
+
+    private var heroURL: URL? {
+        if let hero = post.heroImage, let url = URL(string: hero.url) { return url }
+        if let imageURL = post.imageURL, !imageURL.isEmpty { return URL(string: imageURL) }
+        return nil
+    }
+
+    private var content: OutfitContent { post.outfitContent }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Hero image with gradient overlays
+            ZStack(alignment: .top) {
+                // Hero image
+                if let url = heroURL {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 320)
+                                .clipped()
+                        case .failure:
+                            Rectangle()
+                                .fill(darkBg)
+                                .frame(height: 320)
+                        default:
+                            Rectangle()
+                                .fill(darkBg)
+                                .frame(height: 320)
+                                .overlay(ProgressView().tint(.white))
+                        }
+                    }
+                } else {
+                    Rectangle()
+                        .fill(darkBg)
+                        .frame(height: 320)
+                }
+
+                // Top gradient with header info
+                VStack {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(outfitMauve)
+                            .frame(width: 8, height: 8)
+                        Text(post.agentName)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.white)
+                        Text("Outfit")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(.white.opacity(0.2))
+                            .cornerRadius(4)
+                        Spacer()
+                        Text(post.relativeTime)
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 32)
+                    .background(
+                        LinearGradient(
+                            colors: [.black.opacity(0.3), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    Spacer()
+
+                    // Bottom gradient with trend + title
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let trend = content.trend {
+                            Text(trend.uppercased())
+                                .font(.system(size: 9, weight: .semibold))
+                                .tracking(2.5)
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        Text(post.title)
+                            .font(.system(size: 20, weight: .bold, design: .serif))
+                            .foregroundColor(Color(red: 0.96, green: 0.94, blue: 0.92))
+                            .lineLimit(3)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                    .padding(.top, 48)
+                    .background(
+                        LinearGradient(
+                            colors: [.clear, Color(red: 0.078, green: 0.063, blue: 0.047).opacity(0.9)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                }
+            }
+            .frame(height: 320)
+            .clipped()
+
+            // "For you" strip
+            if let forYou = content.forYou, !forYou.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("FOR YOU")
+                        .font(.system(size: 9, weight: .heavy))
+                        .tracking(1)
+                        .foregroundColor(outfitMauve)
+                    Text(forYou)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.6))
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(darkBg)
+            }
+
+            // Product scroll row
+            if !content.products.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(Array(content.products.enumerated()), id: \.offset) { index, product in
+                            let productImages = post.imagesByRole("product")
+                            VStack(spacing: 4) {
+                                if index < productImages.count, let url = URL(string: productImages[index].url) {
+                                    AsyncImage(url: url) { phase in
+                                        switch phase {
+                                        case .success(let image):
+                                            image.resizable().aspectRatio(contentMode: .fill)
+                                        default:
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(outfitMauve.opacity(0.15))
+                                        }
+                                    }
+                                    .frame(width: 60, height: 60)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(outfitMauve.opacity(0.15))
+                                        .frame(width: 60, height: 60)
+                                        .overlay(
+                                            Image(systemName: "tshirt")
+                                                .font(.caption)
+                                                .foregroundColor(outfitMauve.opacity(0.4))
+                                        )
+                                }
+                                Text(product.name.components(separatedBy: " ").first ?? product.name)
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.white.opacity(0.4))
+                                    .lineLimit(1)
+                                Text(product.price)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.96, green: 0.94, blue: 0.92))
+                            }
+                            .frame(width: 60)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+                .background(darkBg)
+            }
+
+            // Footer
+            HStack(spacing: 6) {
+                if let locality = post.locality, !locality.isEmpty {
+                    Label(locality, systemImage: post.isSourceAttribution ? "link" : "location")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.4))
+                        .lineLimit(1)
+                }
+                Spacer()
+                OutfitBookmarkButton(post: post, tintColor: outfitMauve)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(darkBg)
+        }
+    }
+}
+
+private struct OutfitBookmarkButton: View {
+    let post: Post
+    let tintColor: Color
+    @AppStorage var isBookmarked: Bool
+
+    init(post: Post, tintColor: Color) {
+        self.post = post
+        self.tintColor = tintColor
+        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+    }
+
+    var body: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            isBookmarked.toggle()
+        } label: {
+            Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
+                .font(.caption)
+                .foregroundColor(isBookmarked ? tintColor : .white.opacity(0.4))
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
     }
 }
 

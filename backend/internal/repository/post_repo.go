@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"sort"
 	"strings"
 	"time"
@@ -396,7 +397,10 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		}
 		scoredPosts := make([]scored, len(candidates))
 		for i, p := range candidates {
-			scoredPosts[i] = scored{post: p, score: scorePost(p, lat, lon, radiusKm, weights)}
+			s := scorePost(p, lat, lon, radiusKm, weights)
+			// Add ±5% jitter so near-equal posts shuffle between requests.
+			jitter := 1.0 + (rand.Float64()-0.5)*0.1
+			scoredPosts[i] = scored{post: p, score: s * jitter}
 		}
 		sort.Slice(scoredPosts, func(i, j int) bool {
 			return scoredPosts[i].score > scoredPosts[j].score
@@ -433,10 +437,16 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights) float64 {
 	var score float64
 
-	// Freshness: exponential decay with 14-day half-life.
 	ageDays := time.Since(p.CreatedAt).Hours() / 24
+
+	// Baseline freshness floor: ensures new content surfaces regardless of weights.
+	// 0.5 for brand-new posts, decaying with 7-day half-life.
+	score += math.Exp(-0.099*ageDays) * 0.5
+
+	// Weighted freshness: 14-day half-life, clamped bias.
+	freshnessBias := clamp(w.FreshnessBias, 0, 1.0)
 	freshness := math.Exp(-0.0495 * ageDays) // ln(2)/14 ≈ 0.0495
-	score += w.FreshnessBias * freshness
+	score += freshnessBias * freshness
 
 	// Geo proximity: 1.0 at center, 0.0 at radius edge.
 	if p.Latitude != nil && p.Longitude != nil {
@@ -445,16 +455,16 @@ func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights)
 		if geoScore < 0 {
 			geoScore = 0
 		}
-		score += w.GeoBias * geoScore
+		score += clamp(w.GeoBias, 0, 1.0) * geoScore
 	}
 
-	// Label affinity: average of matching label weights.
+	// Label affinity: average of matching label weights (each clamped).
 	if len(p.Labels) > 0 && len(w.LabelWeights) > 0 {
 		var labelSum float64
 		var labelCount int
 		for _, label := range p.Labels {
 			if wt, ok := w.LabelWeights[label]; ok {
-				labelSum += wt
+				labelSum += clamp(wt, -1.0, 1.0)
 				labelCount++
 			}
 		}
@@ -463,12 +473,22 @@ func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights)
 		}
 	}
 
-	// Type affinity.
+	// Type affinity (clamped).
 	if wt, ok := w.TypeWeights[p.PostType]; ok {
-		score += wt
+		score += clamp(wt, -1.0, 1.0)
 	}
 
 	return score
+}
+
+func clamp(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 // Stats returns aggregated post statistics for a user over the given number of days.

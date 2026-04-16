@@ -56,9 +56,11 @@ Parse the output and store the values for use in later steps. You need at minimu
 - `BEEPBOPBOOP_HOME_LAT` (optional — pre-resolved latitude of home address)
 - `BEEPBOPBOOP_HOME_LON` (optional — pre-resolved longitude of home address)
 - `BEEPBOPBOOP_FAMILY` (optional — semicolon-separated family members, format: `role:name:age_or_na:interests` per member. Roles: `partner`, `child`, `pet`. Age: number for children, `na` for partner/pet. Interests: comma-separated.)
+- `BEEPBOPBOOP_USER_CONTEXT` (optional — extra user details for personalization, e.g., "5'11\", 44yo, normal build")
 - `BEEPBOPBOOP_CALENDAR_URL` (optional — ICS calendar URL for event-based content)
 - `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` (optional — Unsplash API key for free stock photo search)
 - `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional — imgur Client-ID for image hosting)
+- `BEEPBOPBOOP_SPORTS_TEAMS` (optional — semicolon-separated league:team-slug pairs for preferred sports teams, e.g., `nhl:canucks;mlb:blue-jays;mls:whitecaps-fc`)
 
 **If the config file doesn't exist or is missing required values**, tell the user: "Not configured yet. Running setup wizard..." and jump to Step IN1 (Init Wizard). After the wizard completes, continue with Step 0a.
 
@@ -78,9 +80,10 @@ After loading config, parse the user's input to determine which mode to use:
 | `seasonal`, `what's in season`, `this month` | Seasonal | Steps SN1–SN3 |
 | `deals`, `sales`, `specials`, `discounts` | Deal | Steps DL1–DL3 |
 | `update on ...`, `follow up on ...`, `what's changed with ...` | Follow-up | Steps FU1–FU3 |
-| `hn`, `hacker news`, `producthunt`, `sources` | Source | Steps SR1–SR4 |
+| `hn`, `hacker news`, `producthunt`, `sources` | Source | **Delegate to `beepbopboop-news` skill** |
 | `discover`, `explore`, `new interests`, `surprise me`, `broaden`, `rabbit hole` | Interest Discovery | Steps ID1–ID4 |
-| `trending`, `what's trending`, `viral`, `pop culture`, `what's hot`, `zeitgeist` | Trending | Steps TR1–TR4 |
+| `trending`, `what's trending`, `viral`, `pop culture`, `what's hot`, `zeitgeist` | Trending | **Delegate to `beepbopboop-news` skill** |
+| `sports`, `games`, `scores`, team/league name | Sports | **Delegate to `beepbopboop-news` skill** |
 | Everything else | Continue to Step 0b | — |
 
 If a specific mode is detected, skip Step 0b and jump directly to that mode's steps.
@@ -92,7 +95,7 @@ If a specific mode is detected, skip Step 0b and jump directly to that mode's st
 Examine the user's idea to determine the content mode:
 
 - **Local mode** (existing flow): The idea mentions a place, activity, venue, or thing to do nearby (e.g., "coffee", "hockey games", "best parks", "restaurants") → proceed to Step 1 as normal
-- **Interest mode** (new flow): The idea mentions a topic, person, creator, news area, or uses keywords like "latest from", "news about", "what's new in", or references a topic from `BEEPBOPBOOP_INTERESTS` (e.g., "latest AI news", "latest from Fireship", "what's new in investing") → jump to Step 1i
+- **Interest mode**: The idea mentions a topic, person, creator, news area, or uses keywords like "latest from", "news about", "what's new in", or references a topic from `BEEPBOPBOOP_INTERESTS` (e.g., "latest AI news", "latest from Fireship", "what's new in investing") → **delegate to `beepbopboop-news` skill**
 
 **Routing heuristics:**
 - Mentions a specific online creator/publication → interest mode
@@ -222,46 +225,16 @@ Apply classification rules in order:
 5. Idea matches `place` keywords → `place`
 6. Default → `discovery`
 
-### Steps 1i–3i: Interest-Based Flow (interest mode only)
+### Interest-Based Flow (Delegated)
 
-**If Step 0b routed to interest mode, skip Steps 1–2b and follow these steps instead.**
+**Interest-based content (topics, creators, news) is handled by the `beepbopboop-news` skill.** Delegate to it when Step 0b detects interest mode.
 
-#### Step 1i: Resolve interest context
-
-- Parse the idea for: topic area, specific creators/sources, timeframe
-- Cross-reference with `BEEPBOPBOOP_INTERESTS` from config for additional context
-- No geocoding needed — interest-based content has no geographic location
-
-#### Step 2i: Research content
-
-Search for recent content matching the interest:
-
-- **For topics**: WebSearch `"<TOPIC> latest news <MONTH> <YEAR>"`, `"<TOPIC> breakthroughs <MONTH> <YEAR>"`
-- **For creators**: WebSearch `"<CREATOR> latest blog post"`, `"<CREATOR> latest YouTube video <MONTH> <YEAR>"`
-- **For YouTube**: WebSearch `"<CHANNEL> latest video <MONTH> <YEAR>"`
-
-WebFetch on the top 2-3 results to extract:
-- Title, author/source, publication date, key points, URL
-- For YouTube: video title, channel name, publish date, description summary
-- For blogs/articles: headline, author, publication, date, key takeaway
-
-#### Step 3i: Classify and generate
-
-For each piece of content found, classify and generate a post:
-
-**Classification:**
-- YouTube video, video essay, podcast episode with video → `video`
-- Blog post, news article, essay, newsletter → `article`
-
-**Post fields:**
-- `title` and `body`: Follow the same Writing Quality Standards as local posts
-- `locality`: Set to the source/creator name (e.g., "Simon Willison's Blog", "Fireship on YouTube") — this is the source attribution displayed with a "link" icon in the iOS app
-- `latitude` / `longitude`: Set to `null` (no geographic location)
-- `external_url`: Direct link to the content (article URL, YouTube video URL)
-- `image_url`: Find via Unsplash or generate via Pollinations+imgur (see Step 4b)
-- `post_type`: `"article"` or `"video"`
-
-**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
+#### Fashion Mode (Specialty)
+**Trigger**: topic "fashion" or user idea about clothing.
+- Use `BEEPBOPBOOP_USER_CONTEXT` to filter advice (e.g., "For a 44yo male with a 5'11\" build...").
+- Body should include: specific brands, materials (e.g., "heavyweight 12oz denim"), and fit notes.
+- Search specifically for actual photos of the items.
+- Post type: `discovery` or `place` if a local shop.
 
 ### Steps W1–W3: Weather-Aware Mode
 
@@ -422,76 +395,11 @@ Generate **1-2 discovery posts** with deal details:
 
 ---
 
-### Steps SR1–SR4: Source Ingestion
+### Source Ingestion (Delegated)
 
-**Trigger**: `hn`, `hacker news`, `producthunt`, `sources`, or auto-included in batch mode
+**Source ingestion (HN, ProductHunt, RSS, Reddit, Substack) is handled by the `beepbopboop-news` skill.** When batch mode needs source posts, invoke that skill with the appropriate source argument.
 
-**Skip this section unless Step 0a detected source mode, or batch mode is generating source posts.**
-
-The source to use is determined by:
-1. Explicit user input: `hn` → HackerNews, `producthunt` → ProductHunt, `sources` → all configured sources
-2. Batch mode: picks from `BEEPBOPBOOP_SOURCES` config
-3. If no sources configured and user says `sources`, default to `hn`
-
-#### SR1: HackerNews
-
-Fetch top stories:
-
-```bash
-curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" | jq '.[0:30]'
-```
-
-For each of the top 30 story IDs:
-
-```bash
-curl -s "https://hacker-news.firebaseio.com/v0/item/<ID>.json" | jq '{title, url, score, by}'
-```
-
-- Filter stories by matching title against `BEEPBOPBOOP_INTERESTS` (case-insensitive substring match)
-- If no interests configured, take the top 3 by score
-- Otherwise take the top 2-3 interest-matching stories by score
-- `WebFetch` each story URL for a summary of the content
-- Generate **article** posts for each:
-  - `locality`: "Hacker News"
-  - `latitude`/`longitude`: `null`
-  - `external_url`: the story URL
-  - `post_type`: `article`
-
-#### SR2: ProductHunt
-
-- `WebFetch "https://www.producthunt.com"` with prompt: "Extract today's top 5 product launches: name, tagline, URL, vote count"
-- Filter by `BEEPBOPBOOP_INTERESTS` if configured
-- Take the top 1-2 matching launches
-- `WebFetch` each product page for more details
-- Generate **article** posts:
-  - `locality`: "Product Hunt"
-  - `latitude`/`longitude`: `null`
-  - `post_type`: `article`
-
-#### SR3: RSS feeds
-
-For each `rss:<URL>` in `BEEPBOPBOOP_SOURCES`:
-
-- `WebFetch "<RSS_URL>"` with prompt: "Extract the 5 most recent items from this RSS/Atom feed: title, link, date, description"
-- Take the 2-3 most recent items
-- `WebFetch` each item URL for full content summary
-- Generate **article** posts:
-  - `locality`: feed name (extracted from the RSS `<title>` element, or the domain name as fallback)
-  - `latitude`/`longitude`: `null`
-  - `post_type`: `article`
-
-#### SR4: Substack/newsletters
-
-For each `substack:<URL>` in `BEEPBOPBOOP_SOURCES`:
-
-- `WebFetch "<SUBSTACK_URL>"` with prompt: "Extract the most recent article: title, date, URL, summary"
-- Only generate a post if the article was published within the last 7 days
-- Generate **article** post:
-  - `locality`: newsletter name (from the page title)
-  - `latitude`/`longitude`: `null`
-  - `post_type`: `article`
-
-**After generating all source posts, proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
+**Sports schedules and team news are also in the `beepbopboop-news` skill** — it uses official ESPN API endpoints and league schedule sources defined in `SPORTS_SOURCES.md`.
 
 ---
 
@@ -621,7 +529,9 @@ Start from the user's configured `BEEPBOPBOOP_INTERESTS` and their `BEEPBOPBOOP_
 | startups | indie hacking, creator economy, deep tech, climate tech, frontier markets |
 | investing | behavioral economics, alternative assets, economic history, geopolitics of trade |
 | ML | data visualization, scientific computing, computational photography, bioinformatics |
-| agents | human-computer interaction, cognitive science, swarm intelligence, digital twins |
+| Agents | human-computer interaction, cognitive science, swarm intelligence, digital twins |
+| Fashion | sustainable materials, heritage workwear, mid-life style, tailor recommendations |
+| Sports | advanced analytics, sports psychology, stadium architecture, fan culture |
 | (any location) | local history, urban ecology, architecture movements, regional food traditions, indigenous culture |
 
 Don't use this table literally — reason from the user's actual interests. The key principle: **go one hop sideways, not deeper into the same hole.** If the user follows AI, don't find more AI news — find the biology paper that AI researchers are excited about, or the architecture firm using generative design.
@@ -678,75 +588,9 @@ For each selected piece, generate a post:
 
 ---
 
-### Steps TR1–TR4: Trending / What's Hot Mode
+### Trending / What's Hot Mode (Delegated)
 
-**Trigger**: `trending`, `what's trending`, `viral`, `pop culture`, `what's hot`, `zeitgeist`
-
-**Skip this section unless Step 0a detected trending mode.**
-
-This mode captures the cultural pulse — what everyone's talking about right now across multiple domains. Not just tech news, but the full spectrum of what's trending in the world. The goal is to make the user feel culturally informed, like they just scrolled through the highlights of every platform without actually doomscrolling.
-
-#### TR1: Scan trending sources
-
-Search across **at least 5 of these categories** (rotate which ones you prioritize each run to keep things fresh):
-
-| Category | Search queries |
-|---|---|
-| **Breaking news / world events** | `WebSearch "top news stories today <DATE>"`, `"biggest news this week <MONTH> <YEAR>"` |
-| **Viral / social media** | `WebSearch "trending TikTok <MONTH> <YEAR>"`, `"viral moments this week"`, `"trending memes <MONTH> <YEAR>"` |
-| **Music** | `WebSearch "Billboard Hot 100 this week"`, `"chart topping songs <MONTH> <YEAR>"`, `"biggest new music releases this week"` |
-| **Celebrity / entertainment** | `WebSearch "celebrity news this week <MONTH> <YEAR>"`, `"entertainment gossip trending"` |
-| **Controversy / discourse** | `WebSearch "controversial news this week <MONTH> <YEAR>"`, `"internet debate this week"`, `"cancel culture this week"` |
-| **Sports** | `WebSearch "biggest sports moments this week <MONTH> <YEAR>"`, `"sports highlights trending"` |
-| **International events** | `WebSearch "international news trending <MONTH> <YEAR>"`, `"world events this week"` |
-| **TV / streaming** | `WebSearch "most watched show this week <MONTH> <YEAR>"`, `"trending on Netflix <MONTH> <YEAR>"` |
-| **Internet culture** | `WebSearch "trending Reddit this week"`, `"viral tweet this week <MONTH> <YEAR>"` |
-
-`WebFetch` on the top 1-2 results per category that look genuinely interesting.
-
-#### TR2: Filter for signal
-
-From the raw results, filter for items that:
-- Are actually trending *right now* (not recycled content from last month)
-- Have a concrete "what happened" (not vague "people are talking about...")
-- Would make the user say "oh I hadn't heard about that" or "oh I need to check that out"
-- Span different categories — don't return 5 music items
-
-**Discard:**
-- Clickbait with no substance
-- Stories already widely covered that everyone already knows
-- Anything that requires extensive context to understand
-- Promotional content disguised as trending
-
-Select **3-5 items** that represent the best cross-section of what's happening in the world.
-
-#### TR3: Write with personality
-
-For each selected trending item, the post should feel like a friend who's **culturally plugged in** giving you the quick version:
-
-**Tone guidelines:**
-- **News/world events**: Straight facts with context. "Here's what happened and why it matters."
-- **Viral/memes**: Explain what it is and why it's funny/resonating. Don't try too hard to be cool.
-- **Music**: What dropped, who made it, why people care. Include a take if the music is notable.
-- **Celebrity/gossip**: Brief, slightly amused. Don't moralize, don't fawn. "This happened. It's wild."
-- **Controversy**: Present both sides in 2 sentences. Don't take a side. Let the reader form their own view.
-- **Sports**: Highlight the moment, not the box score. What made it special?
-
-#### TR4: Generate trending posts
-
-For each selected item, generate a post:
-
-**Post fields:**
-- `title`: The hook — what makes this trending. Lead with the surprising or interesting part.
-- `body`: 2-4 sentences. What happened, why it's trending, and one detail that makes it memorable. If there's something to watch/listen to/read, say so.
-- `locality`: Source or category (e.g., "TikTok", "Billboard", "BBC News", "Netflix", "Reddit")
-- `latitude`/`longitude`: `null`
-- `external_url`: Link to the source — the video, article, song, clip
-- `post_type`: `"article"` for news/controversy, `"video"` for viral clips/music videos, `"discovery"` for cultural moments
-- `visibility`: `"public"` (trending content is inherently community-relevant)
-- `labels`: Include `"trending"`, the category (e.g., `"music"`, `"pop-culture"`, `"viral"`, `"world-news"`, `"sports"`, `"entertainment"`), and 1-2 specific topic labels. Step 4c will merge these with standard category labels.
-
-**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
+**Trending content is handled by the `beepbopboop-news` skill.** Delegate to it when Step 0a detects trending mode. In batch mode, invoke the news skill with argument `trending`.
 
 ---
 
@@ -823,23 +667,24 @@ Execute each matching schedule rule from BT1. Schedule modes map to:
 - `interest` → Interest mode (Steps 1i–3i) with the ARGS as the idea
 - `local` → Local mode (Steps 1–3) with the ARGS as the idea
 - `weather` → Weather mode (Steps W1–W3)
-- `source` → Source mode (Steps SR1–SR4) with ARGS specifying the source (e.g., `hn`)
+- `source` → **Delegate to `beepbopboop-news` skill** with ARGS specifying the source (e.g., `hn`)
 - `seasonal` → Seasonal mode (Steps SN1–SN3)
 - `deals` → Deal mode (Steps DL1–DL3)
 - `compare` → Comparison mode (Steps CP1–CP3) with ARGS as the subject
 - `calendar` → Calendar mode (Steps CL1–CL3)
 - `discover` → Interest Discovery mode (Steps ID1–ID4)
-- `trending` → Trending mode (Steps TR1–TR4)
+- `trending` → **Delegate to `beepbopboop-news` skill** with `trending`
 
 **Phase 2 — Fill with defaults** (if post count is still under target):
 - Always: weather mode → 2-3 posts
 - Always: local mode with idea "events this week" → 2-4 posts
-- If `BEEPBOPBOOP_INTERESTS` configured: pick 1-2 interests → interest mode → 2-4 posts
-- If `BEEPBOPBOOP_SOURCES` configured: pick 1-2 sources → source mode → 1-3 posts
+- If `BEEPBOPBOOP_INTERESTS` configured: pick 1-2 interests → **delegate to `beepbopboop-news`** → 2-4 posts
+- If `BEEPBOPBOOP_SOURCES` configured: pick 1-2 sources → **delegate to `beepbopboop-news`** → 1-3 posts
+- If `BEEPBOPBOOP_SPORTS_TEAMS` configured: **delegate to `beepbopboop-news` with `sports`** → 1-3 posts (upcoming games + team news)
 - If `BEEPBOPBOOP_CALENDAR_URL` configured: calendar mode → 1-3 posts
 - If seasonal month is notable (Dec, Mar, Jun, Sep, Oct): seasonal mode → 1 post
 - Always: interest discovery mode → 1-2 posts (explore adjacent topics — this keeps the feed expanding)
-- Always: trending mode → 2-3 posts (what's hot in the world right now — keeps the feed culturally relevant)
+- Always: **delegate to `beepbopboop-news` with `trending`** → 2-3 posts (what's hot in the world right now)
 - Occasionally: comparison mode → 1 post (include roughly 30% of the time)
 - Occasionally: deal mode → 1 post (include roughly 20% of the time)
 
@@ -897,6 +742,26 @@ The goal is to answer the questions a reader would actually ask:
 - How do I get tickets? Are they still available?
 - What time does it start?
 - Is there a direct booking link?
+
+#### Sports schedule lookup (do this FIRST for sports topics)
+
+**If the idea involves sports, games, matches, or a specific league/team**, read `SPORTS_SOURCES.md` in this skill directory before doing any web search. It contains official schedule URLs and ESPN API endpoints for 12+ leagues.
+
+1. Match the sport/league to an entry in `SPORTS_SOURCES.md`
+2. Check the season window — if the league is out of season, skip or note it
+3. Check `BEEPBOPBOOP_SPORTS_TEAMS` config for the user's preferred team
+4. Fetch the schedule via ESPN API:
+   ```bash
+   curl -s "https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates={YYYYMMDD}" | jq '.events[] | {name, date, status: .status.type.description, venue: .competitions[0].venue.fullName}'
+   ```
+   - Omit `?dates=` for today's games, or use `?dates=YYYYMMDD-YYYYMMDD` for a date range
+5. Filter by preferred team if set
+6. Use this official data for dates, times, opponents, and venues — **do not use WebSearch for schedule data**
+7. Only use WebSearch for enrichment: ticket links, venue atmosphere, travel info, watch party locations
+
+For AHL and OHL (no ESPN API), use `WebFetch` on their official schedule pages listed in `SPORTS_SOURCES.md`.
+
+**Skip to Phase 2** (deep dive) after the sports lookup — Phase 1 broad survey is not needed when you have official schedule data.
 
 #### How to research
 

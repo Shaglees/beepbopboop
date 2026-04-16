@@ -111,14 +111,19 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load user preference weights (nil = no weights, falls back to recency).
-	var feedWeights *repository.FeedWeights
+	// Load user preference weights, falling back to sensible defaults.
+	feedWeights := &repository.FeedWeights{
+		FreshnessBias: 0.8,
+		GeoBias:       0.3,
+		LabelWeights:  map[string]float64{},
+		TypeWeights:   map[string]float64{},
+	}
 	if uw, err := h.weightsRepo.Get(user.ID); err != nil {
-		slog.Warn("failed to load user weights, falling back to recency", "error", err)
+		slog.Warn("failed to load user weights, using defaults", "error", err)
 	} else if uw != nil {
 		var fw repository.FeedWeights
 		if err := json.Unmarshal(uw.Weights, &fw); err != nil {
-			slog.Warn("failed to parse user weights, falling back to recency", "error", err)
+			slog.Warn("failed to parse user weights, using defaults", "error", err)
 		} else {
 			feedWeights = &fw
 		}

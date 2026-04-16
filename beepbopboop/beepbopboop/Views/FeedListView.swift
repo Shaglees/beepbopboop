@@ -2,8 +2,9 @@ import SwiftUI
 
 struct FeedListView: View {
     @ObservedObject var viewModel: FeedListViewModel
+    @Binding var isHeaderVisible: Bool
     var onSettingsTapped: () -> Void
-    @Namespace private var zoomNamespace
+    @State private var selectedPost: Post?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -27,12 +28,10 @@ struct FeedListView: View {
     private var feedList: some View {
         List {
             ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
-                NavigationLink {
-                    PostDetailView(post: post)
-                        .navigationTransition(.zoom(sourceID: post.id, in: zoomNamespace))
+                Button {
+                    selectedPost = post
                 } label: {
                     FeedItemView(post: post)
-                        .matchedTransitionSource(id: post.id, in: zoomNamespace)
                 }
                 .buttonStyle(CardPressStyle())
                 .listRowSeparator(.hidden)
@@ -55,6 +54,22 @@ struct FeedListView: View {
         .listStyle(.plain)
         .scrollEdgeEffectStyle(.soft, for: .top)
         .refreshable { await viewModel.refresh() }
+        .onScrollGeometryChange(for: CGFloat.self) { geo in
+            geo.contentOffset.y
+        } action: { oldValue, newValue in
+            let delta = newValue - oldValue
+            if delta > 5 && newValue > 60 {
+                isHeaderVisible = false
+            } else if delta < -5 || newValue < 20 {
+                isHeaderVisible = true
+            }
+        }
+        .sheet(item: $selectedPost) { post in
+            NavigationStack {
+                PostDetailView(post: post)
+            }
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private var skeletonLoadingView: some View {
@@ -155,17 +170,23 @@ private struct StaggeredAppearance: ViewModifier {
 private struct SkeletonCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Header: dot + name + pill + spacer + time
             HStack(spacing: 6) {
                 Circle()
                     .fill(Color(.systemGray5))
                     .frame(width: 8, height: 8)
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color(.systemGray5))
-                    .frame(width: 90, height: 10)
+                    .frame(width: 80, height: 10)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(.systemGray5))
+                    .frame(width: 44, height: 16)
+                Spacer()
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color(.systemGray5))
                     .frame(width: 30, height: 10)
             }
+            // Body lines
             RoundedRectangle(cornerRadius: 4)
                 .fill(Color(.systemGray5))
                 .frame(height: 16)
@@ -177,11 +198,15 @@ private struct SkeletonCard: View {
                 .fill(Color(.systemGray5))
                 .frame(height: 12)
                 .padding(.trailing, 120)
+            // Footer: location + spacer + bookmark
             HStack {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color(.systemGray5))
                     .frame(width: 60, height: 10)
                 Spacer()
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color(.systemGray5))
+                    .frame(width: 14, height: 14)
             }
         }
         .padding(.horizontal, 16)

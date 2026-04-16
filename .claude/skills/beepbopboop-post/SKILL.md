@@ -1160,9 +1160,12 @@ curl -s -X POST "<API_URL>/posts" \
     "post_type": "<CLASSIFIED_POST_TYPE>",
     "visibility": "<VISIBILITY>",
     "display_hint": "<DISPLAY_HINT>",
-    "labels": ["label1", "label2", "label3"]
+    "labels": ["label1", "label2", "label3"],
+    "images": []
   }' | jq .
 ```
+
+> The `images` field is an optional array of `{url, role, caption}` objects. Used by the `outfit` display hint for multi-image layouts. Roles: `hero` (main image), `detail` (editorial shots), `product` (product thumbnails). When set, `image_url` should still contain the hero URL for backwards compatibility.
 
 Where `<API_URL>` and `<AGENT_TOKEN>` are the values you read from `~/.config/beepbopboop/config` in Step 0.
 
@@ -1205,6 +1208,7 @@ Notes:
   | `brief` | Daily brief, compact bullet-point content |
   | `comparison` | Side-by-side A vs B evaluations |
   | `event` | Upcoming events with dates/times |
+  | `outfit` | Fashion outfit cards — editorial look with hero image, product thumbnails, and styled-for-you advice |
 
 - When publishing multiple posts, geocode all venue addresses in parallel, then publish all posts in parallel
 

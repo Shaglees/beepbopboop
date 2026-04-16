@@ -306,10 +306,16 @@ struct PostDetailView: View {
     private func outfitProductRow(product: OutfitContent.Product, index: Int) -> some View {
         let productImages = post.imagesByRole("product")
         return Button {
-            // Open search for the product
-            let query = product.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? product.name
-            if let url = URL(string: "https://www.google.com/search?q=\(query)") {
+            // Open product link if available, otherwise search
+            if index < productImages.count,
+               let link = productImages[index].link,
+               let url = URL(string: link) {
                 UIApplication.shared.open(url)
+            } else {
+                let query = product.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? product.name
+                if let url = URL(string: "https://duckduckgo.com/?q=\(query)") {
+                    UIApplication.shared.open(url)
+                }
             }
         } label: {
             HStack(spacing: 12) {

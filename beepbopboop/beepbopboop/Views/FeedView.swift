@@ -6,6 +6,7 @@ struct FeedView: View {
     @StateObject private var personalVM: FeedListViewModel
     @State private var selectedTab = 0
     @State private var showSettings = false
+    @State private var isHeaderVisible = true
     @Namespace private var tabGlass
     private let authService: AuthService
     private let apiService: APIService
@@ -21,41 +22,33 @@ struct FeedView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Pill tab bar
-                tabBar
+                // Custom collapsible header
+                if isHeaderVisible {
+                    VStack(spacing: 0) {
+                        titleBar
+                        tabBar
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
 
                 // Paged content
                 TabView(selection: $selectedTab) {
-                    FeedListView(viewModel: forYouVM, onSettingsTapped: { showSettings = true })
+                    FeedListView(viewModel: forYouVM, isHeaderVisible: $isHeaderVisible, onSettingsTapped: { showSettings = true })
                         .tag(0)
                         .task { if forYouVM.posts.isEmpty && !forYouVM.isLoading { await forYouVM.refresh() } }
 
-                    FeedListView(viewModel: communityVM, onSettingsTapped: { showSettings = true })
+                    FeedListView(viewModel: communityVM, isHeaderVisible: $isHeaderVisible, onSettingsTapped: { showSettings = true })
                         .tag(1)
                         .task { if communityVM.posts.isEmpty && !communityVM.isLoading { await communityVM.refresh() } }
 
-                    FeedListView(viewModel: personalVM, onSettingsTapped: { showSettings = true })
+                    FeedListView(viewModel: personalVM, isHeaderVisible: $isHeaderVisible, onSettingsTapped: { showSettings = true })
                         .tag(2)
                         .task { if personalVM.posts.isEmpty && !personalVM.isLoading { await personalVM.refresh() } }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
-            .navigationTitle("BeepBopBoop")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .buttonStyle(.glass)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Sign Out") {
-                        authService.signOut()
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
+            .animation(.easeInOut(duration: 0.25), value: isHeaderVisible)
             .sheet(isPresented: $showSettings) {
                 SettingsView(apiService: apiService)
                     .onDisappear {
@@ -67,6 +60,33 @@ struct FeedView: View {
                     }
             }
         }
+    }
+
+    // MARK: - Title Bar
+
+    private var titleBar: some View {
+        HStack {
+            Button {
+                showSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(.glass)
+
+            Spacer()
+
+            Text("BeepBopBoop")
+                .font(.headline.weight(.bold))
+
+            Spacer()
+
+            Button("Sign Out") {
+                authService.signOut()
+            }
+            .font(.subheadline)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Tab Bar

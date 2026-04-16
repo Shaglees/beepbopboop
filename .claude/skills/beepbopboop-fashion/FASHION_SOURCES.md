@@ -177,7 +177,7 @@ Outfit posts use a multi-image `images` array. Populate it during research and p
 | `product` | Product page thumbnails from retailers | Feed card scroll row, "Shop the look" rows |
 
 - Always include at least 1 `hero` image
-- Product images: set `caption` to the brand/product short name (shown below thumbnail)
+- Product images: set `caption` to the brand/product short name, and `link` to the product page URL (tapping opens the link in-app)
 - Detail images are optional but make the lookbook detail view much richer
 - The `image_url` field should duplicate the hero URL for backwards compatibility
 

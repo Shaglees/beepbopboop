@@ -234,7 +234,7 @@ For each trend worth posting (usually 1-2 per run):
        "images": [
          {"url": "<HERO_IMAGE_URL>", "role": "hero"},
          {"url": "<DETAIL_IMAGE_URL>", "role": "detail", "caption": "<optional>"},
-         {"url": "<PRODUCT_IMAGE_URL>", "role": "product", "caption": "<BRAND_NAME>"}
+         {"url": "<PRODUCT_IMAGE_URL>", "role": "product", "caption": "<BRAND_NAME>", "link": "<PRODUCT_PAGE_URL>"}
        ]
      }' | jq .
    ```

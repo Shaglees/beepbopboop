@@ -15,9 +15,10 @@ struct PostImage: Codable {
     let url: String
     let role: String
     let caption: String?
+    let link: String?
 
     enum CodingKeys: String, CodingKey {
-        case url, role, caption
+        case url, role, caption, link
     }
 
     init(from decoder: Decoder) throws {
@@ -25,6 +26,7 @@ struct PostImage: Codable {
         url = try container.decode(String.self, forKey: .url)
         role = try container.decodeIfPresent(String.self, forKey: .role) ?? "detail"
         caption = try container.decodeIfPresent(String.self, forKey: .caption)
+        link = try container.decodeIfPresent(String.self, forKey: .link)
     }
 }
 

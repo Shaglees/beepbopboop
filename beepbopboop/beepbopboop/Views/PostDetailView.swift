@@ -17,9 +17,16 @@ struct PostDetailView: View {
     }
 
     var body: some View {
-        if post.displayHintValue == .outfit {
+        switch post.displayHintValue {
+        case .outfit:
             outfitDetailBody
-        } else {
+        case .scoreboard:
+            scoreboardDetailBody
+        case .matchup:
+            matchupDetailBody
+        case .standings:
+            standingsDetailBody
+        default:
             standardDetailBody
         }
     }
@@ -274,6 +281,530 @@ struct PostDetailView: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
+            }
+        }
+    }
+
+    // MARK: - Scoreboard Detail
+
+    private var scoreboardDetailBody: some View {
+        let game = post.gameData
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Hero header — expanded version of the card
+                if let game = game {
+                    ZStack {
+                        LinearGradient(
+                            stops: [
+                                .init(color: game.away.swiftUIColor.opacity(0.9), location: 0),
+                                .init(color: Color.black.opacity(0.7), location: 0.45),
+                                .init(color: Color.black.opacity(0.7), location: 0.55),
+                                .init(color: game.home.swiftUIColor.opacity(0.9), location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        Color.black.opacity(0.2)
+
+                        Image(systemName: game.sportIcon)
+                            .font(.system(size: 160, weight: .ultraLight))
+                            .foregroundStyle(.white.opacity(0.05))
+
+                        VStack(spacing: 16) {
+                            // League + status
+                            HStack {
+                                if let league = game.league {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: game.sportIcon)
+                                            .font(.caption2)
+                                        Text(league)
+                                            .font(.caption.weight(.bold))
+                                    }
+                                    .foregroundStyle(.white.opacity(0.6))
+                                }
+                                Spacer()
+                                Text(game.status.uppercased())
+                                    .font(.system(size: 11, weight: .heavy))
+                                    .tracking(0.5)
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Capsule().fill(game.statusColor.opacity(0.8)))
+                            }
+
+                            Spacer()
+
+                            // Score
+                            HStack(spacing: 0) {
+                                let homeWins = (game.home.score ?? 0) > (game.away.score ?? 0)
+                                let awayWins = (game.away.score ?? 0) > (game.home.score ?? 0)
+
+                                VStack(spacing: 8) {
+                                    Text(game.away.abbr)
+                                        .font(.system(size: 24, weight: .heavy, design: .rounded))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(game.away.swiftUIColor)
+                                                .shadow(color: game.away.swiftUIColor.opacity(awayWins ? 0.6 : 0), radius: 10)
+                                        )
+                                    Text(game.away.name)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                    if let record = game.away.record {
+                                        Text(record)
+                                            .font(.caption2)
+                                            .foregroundStyle(.white.opacity(0.45))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+
+                                if let awayScore = game.away.score, let homeScore = game.home.score {
+                                    HStack(spacing: 12) {
+                                        Text("\(awayScore)")
+                                            .font(.system(size: 56, weight: .thin, design: .rounded))
+                                            .foregroundStyle(.white)
+                                            .opacity(homeWins ? 0.4 : 1.0)
+                                            .shadow(color: awayWins ? .white.opacity(0.4) : .clear, radius: 14)
+                                        Text("–")
+                                            .font(.system(size: 28, weight: .ultraLight))
+                                            .foregroundStyle(.white.opacity(0.3))
+                                        Text("\(homeScore)")
+                                            .font(.system(size: 56, weight: .thin, design: .rounded))
+                                            .foregroundStyle(.white)
+                                            .opacity(awayWins ? 0.4 : 1.0)
+                                            .shadow(color: homeWins ? .white.opacity(0.4) : .clear, radius: 14)
+                                    }
+                                }
+
+                                VStack(spacing: 8) {
+                                    Text(game.home.abbr)
+                                        .font(.system(size: 24, weight: .heavy, design: .rounded))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(game.home.swiftUIColor)
+                                                .shadow(color: game.home.swiftUIColor.opacity(homeWins ? 0.6 : 0), radius: 10)
+                                        )
+                                    Text(game.home.name)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                    if let record = game.home.record {
+                                        Text(record)
+                                            .font(.caption2)
+                                            .foregroundStyle(.white.opacity(0.45))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+
+                            Spacer()
+
+                            // Headline
+                            if let headline = game.headline, !headline.isEmpty {
+                                Text(headline)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: .infinity)
+                            }
+
+                            // Venue + broadcast
+                            HStack(spacing: 16) {
+                                if let venue = game.venue {
+                                    Label(venue, systemImage: "mappin")
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.5))
+                                }
+                                Spacer()
+                                if let broadcast = game.broadcast {
+                                    Label(broadcast, systemImage: "tv")
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.5))
+                                }
+                            }
+                        }
+                        .padding(20)
+                    }
+                    .frame(height: 300)
+                }
+
+                // Recap body
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(post.title)
+                        .font(.title3.weight(.bold))
+
+                    LinkableText(post.body, font: .preferredFont(forTextStyle: .body))
+
+                    Divider()
+                    sportsEngagementBar
+                }
+                .padding()
+            }
+        }
+        .navigationTitle(game?.league ?? "Score")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { closeButton }
+    }
+
+    // MARK: - Matchup Detail
+
+    private var matchupDetailBody: some View {
+        let game = post.gameData
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Hero header
+                if let game = game {
+                    ZStack {
+                        // Diagonal split
+                        GeometryReader { _ in
+                            ZStack {
+                                game.away.swiftUIColor
+                                game.home.swiftUIColor
+                                    .clipShape(MatchupDiagonalShape())
+                                LinearGradient(
+                                    colors: [.black.opacity(0.4), .black.opacity(0.25), .black.opacity(0.4)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            }
+                        }
+
+                        Image(systemName: game.sportIcon)
+                            .font(.system(size: 160, weight: .ultraLight))
+                            .foregroundStyle(.white.opacity(0.05))
+
+                        VStack(spacing: 16) {
+                            // League + series
+                            HStack {
+                                if let league = game.league {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: game.sportIcon)
+                                            .font(.caption2)
+                                        Text(league)
+                                            .font(.caption.weight(.bold))
+                                    }
+                                    .foregroundStyle(.white.opacity(0.7))
+                                }
+                                Spacer()
+                                if let series = game.series {
+                                    Text(series)
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(.white.opacity(0.15))
+                                        .cornerRadius(6)
+                                }
+                            }
+
+                            Spacer()
+
+                            // Teams
+                            HStack(spacing: 0) {
+                                VStack(spacing: 8) {
+                                    Text(game.away.abbr)
+                                        .font(.system(size: 36, weight: .heavy, design: .rounded))
+                                        .foregroundStyle(.white)
+                                        .shadow(color: game.away.swiftUIColor.opacity(0.6), radius: 10)
+                                    Text(game.away.name)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.white.opacity(0.85))
+                                    if let record = game.away.record {
+                                        Text(record)
+                                            .font(.caption2)
+                                            .foregroundStyle(.white.opacity(0.5))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+
+                                ZStack {
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                        .frame(width: 52, height: 52)
+                                    Circle()
+                                        .stroke(.white.opacity(0.2), lineWidth: 1)
+                                        .frame(width: 52, height: 52)
+                                    Text("VS")
+                                        .font(.system(size: 18, weight: .black, design: .rounded))
+                                        .foregroundStyle(.white)
+                                }
+
+                                VStack(spacing: 8) {
+                                    Text(game.home.abbr)
+                                        .font(.system(size: 36, weight: .heavy, design: .rounded))
+                                        .foregroundStyle(.white)
+                                        .shadow(color: game.home.swiftUIColor.opacity(0.6), radius: 10)
+                                    Text(game.home.name)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.white.opacity(0.85))
+                                    if let record = game.home.record {
+                                        Text(record)
+                                            .font(.caption2)
+                                            .foregroundStyle(.white.opacity(0.5))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+
+                            Spacer()
+
+                            // Game time
+                            VStack(spacing: 6) {
+                                if let countdown = game.countdown {
+                                    Text(countdown)
+                                        .font(.system(size: 11, weight: .heavy))
+                                        .tracking(2)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 5)
+                                        .background(Capsule().fill(.white.opacity(0.15)))
+                                }
+                                if let time = game.formattedGameTime {
+                                    Text(time)
+                                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.white)
+                                        .shadow(color: .white.opacity(0.2), radius: 8)
+                                }
+                                if let date = game.formattedGameDate {
+                                    Text(date)
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(.white.opacity(0.65))
+                                }
+                            }
+
+                            // Venue + broadcast
+                            HStack(spacing: 16) {
+                                if let venue = game.venue {
+                                    Label(venue, systemImage: "mappin")
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.5))
+                                }
+                                Spacer()
+                                if let broadcast = game.broadcast {
+                                    Label(broadcast, systemImage: "tv")
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.5))
+                                }
+                            }
+                        }
+                        .padding(20)
+                    }
+                    .frame(height: 340)
+                }
+
+                // Preview body
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(post.title)
+                        .font(.title3.weight(.bold))
+
+                    LinkableText(post.body, font: .preferredFont(forTextStyle: .body))
+
+                    Divider()
+                    sportsEngagementBar
+                }
+                .padding()
+            }
+        }
+        .navigationTitle(game?.league ?? "Matchup")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { closeButton }
+    }
+
+    // MARK: - Standings Detail
+
+    private let standingsDarkBg = Color(red: 0.1, green: 0.09, blue: 0.08)
+
+    private var standingsDetailBody: some View {
+        let standings = post.standingsData
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if let standings = standings {
+                    let accent: Color = {
+                        guard let hex = standings.leagueColor else { return .blue }
+                        let c = Color(hexString: hex)
+                        return c == .gray ? .blue : c
+                    }()
+
+                    // League header
+                    HStack(spacing: 8) {
+                        Text(standings.league)
+                            .font(.system(size: 20, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text("SCORES")
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(2)
+                            .foregroundStyle(.white.opacity(0.5))
+                        Spacer()
+                        Text(standingsFormattedDate(standings.date))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(
+                        LinearGradient(
+                            colors: [accent.opacity(0.8), accent.opacity(0.4)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+
+                    // Game rows — expanded for detail
+                    VStack(spacing: 0) {
+                        ForEach(Array(standings.games.enumerated()), id: \.element.id) { index, game in
+                            standingsDetailRow(game)
+                            if index < standings.games.count - 1 {
+                                Divider()
+                                    .overlay(Color.white.opacity(0.06))
+                            }
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .background(standingsDarkBg)
+
+                    // Headline banner
+                    if let headline = standings.headline, !headline.isEmpty {
+                        HStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(accent)
+                                .frame(width: 4, height: 18)
+                            Text(headline)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.white.opacity(0.9))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 14)
+                        .background(standingsDarkBg)
+                    }
+                }
+
+                // Summary body
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(post.title)
+                        .font(.title3.weight(.bold))
+
+                    LinkableText(post.body, font: .preferredFont(forTextStyle: .body))
+
+                    Divider()
+                    sportsEngagementBar
+                }
+                .padding()
+            }
+        }
+        .navigationTitle(standings?.league ?? "Scores")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { closeButton }
+    }
+
+    @ViewBuilder
+    private func standingsDetailRow(_ game: StandingsGame) -> some View {
+        let homeWins = game.homeScore > game.awayScore
+        let awayWins = game.awayScore > game.homeScore
+
+        HStack(spacing: 0) {
+            // Away team
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(game.awaySwiftUIColor)
+                    .frame(width: 4, height: 24)
+                Text(game.away)
+                    .font(.system(size: 16, weight: awayWins ? .bold : .medium, design: .rounded))
+                    .foregroundStyle(awayWins ? .white : .white.opacity(0.5))
+                    .frame(width: 42, alignment: .leading)
+                Text("\(game.awayScore)")
+                    .font(.system(size: 18, weight: awayWins ? .bold : .regular, design: .rounded))
+                    .foregroundStyle(awayWins ? game.awaySwiftUIColor : .white.opacity(0.4))
+                    .frame(width: 26, alignment: .trailing)
+            }
+
+            Text("@")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.2))
+                .frame(width: 32)
+
+            // Home team
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(game.homeSwiftUIColor)
+                    .frame(width: 4, height: 24)
+                Text(game.home)
+                    .font(.system(size: 16, weight: homeWins ? .bold : .medium, design: .rounded))
+                    .foregroundStyle(homeWins ? .white : .white.opacity(0.5))
+                    .frame(width: 42, alignment: .leading)
+                Text("\(game.homeScore)")
+                    .font(.system(size: 18, weight: homeWins ? .bold : .regular, design: .rounded))
+                    .foregroundStyle(homeWins ? game.homeSwiftUIColor : .white.opacity(0.4))
+                    .frame(width: 26, alignment: .trailing)
+            }
+
+            Spacer()
+
+            Text(game.status.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.35))
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+    }
+
+    private func standingsFormattedDate(_ dateStr: String) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        guard let date = f.date(from: dateStr) else { return dateStr }
+        if Calendar.current.isDateInToday(date) { return "Today" }
+        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
+        f.dateFormat = "EEEE, MMM d"
+        return f.string(from: date)
+    }
+
+    // MARK: - Sports Shared Components
+
+    private var sportsEngagementBar: some View {
+        HStack(spacing: 0) {
+            Button {
+                withAnimation(.bouncy) { isBookmarked.toggle() }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } label: {
+                Label(
+                    isBookmarked ? "Bookmarked" : "Bookmark",
+                    systemImage: isBookmarked ? "bookmark.fill" : "bookmark"
+                )
+                .font(.subheadline)
+                .foregroundColor(isBookmarked ? .orange : .secondary)
+                .symbolEffect(.bounce, value: isBookmarked)
+                .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            ShareLink(item: sportsShareText) {
+                Label("Share", systemImage: "square.and.arrow.up")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+    }
+
+    /// Share text for sports posts — excludes external_url since it's JSON, not a link.
+    private var sportsShareText: String {
+        post.title + "\n\n" + post.body
+    }
+
+    private var closeButton: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -951,5 +1482,19 @@ private struct DetailWeatherInfo {
             return DetailWeatherInfo(icon: "wind", label: "Windy", primaryColor: .cyan, secondaryColor: .gray)
         }
         return DetailWeatherInfo(icon: "cloud.sun.fill", label: "Partly Cloudy", primaryColor: .cyan, secondaryColor: .yellow)
+    }
+}
+
+// MARK: - Matchup Diagonal Shape (Detail)
+
+private struct MatchupDiagonalShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { p in
+            p.move(to: CGPoint(x: rect.maxX * 0.35, y: 0))
+            p.addLine(to: CGPoint(x: rect.maxX, y: 0))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            p.addLine(to: CGPoint(x: rect.maxX * 0.65, y: rect.maxY))
+            p.closeSubpath()
+        }
     }
 }

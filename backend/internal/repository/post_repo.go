@@ -452,20 +452,19 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights) float64 {
 	var score float64
 
-	ageDays := time.Since(p.CreatedAt).Hours() / 24
+	ageHours := time.Since(p.CreatedAt).Hours()
+	ageDays := ageHours / 24
 
-	// Strong recency boost for very fresh content.
-	if ageDays < 1.0/24.0 { // < 1 hour old
-		score += 0.5
-	} else if ageDays < 0.25 { // < 6 hours old
-		score += 0.2
+	// Recency boost: full strength for first 12 hours, linear trail-off to zero at 34h.
+	if ageHours < 12 {
+		score += 0.6
+	} else if ageHours < 34 {
+		// Linear decay: 0.6 at 12h → 0 at 34h
+		score += 0.6 * (34 - ageHours) / 22
 	}
 
-	// Baseline freshness floor: ensures new content surfaces regardless of weights.
-	// 0.5 for brand-new posts, decaying with 7-day half-life.
-	score += math.Exp(-0.099*ageDays) * 0.5
-
-	// Weighted freshness: 14-day half-life, clamped bias.
+	// Long-tail freshness: gradual decay so older content still has a chance.
+	// 14-day half-life, scaled by user's freshness bias.
 	freshnessBias := clamp(w.FreshnessBias, 0, 1.0)
 	freshness := math.Exp(-0.0495 * ageDays) // ln(2)/14 ≈ 0.0495
 	score += freshnessBias * freshness

@@ -69,7 +69,7 @@ func main() {
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo)
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
-	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo)
+	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo)
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
 	weightsH := handler.NewWeightsHandler(agentRepo, weightsRepo)

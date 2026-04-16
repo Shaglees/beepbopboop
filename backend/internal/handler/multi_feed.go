@@ -15,14 +15,16 @@ type MultiFeedHandler struct {
 	postRepo         *repository.PostRepo
 	userSettingsRepo *repository.UserSettingsRepo
 	weightsRepo      *repository.WeightsRepo
+	eventRepo        *repository.EventRepo
 }
 
-func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo) *MultiFeedHandler {
+func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo, eventRepo *repository.EventRepo) *MultiFeedHandler {
 	return &MultiFeedHandler{
 		userRepo:         userRepo,
 		postRepo:         postRepo,
 		userSettingsRepo: userSettingsRepo,
 		weightsRepo:      weightsRepo,
+		eventRepo:        eventRepo,
 	}
 }
 
@@ -111,22 +113,33 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load user preference weights, falling back to sensible defaults.
-	feedWeights := &repository.FeedWeights{
+	// Sensible defaults for new users or when engagement data is sparse.
+	defaultWeights := &repository.FeedWeights{
 		FreshnessBias: 0.8,
 		GeoBias:       0.3,
-		LabelWeights:  map[string]float64{},
-		TypeWeights:   map[string]float64{},
+		LabelWeights: map[string]float64{
+			"fashion":     0.4,
+			"sports":      0.4,
+			"trending":    0.3,
+			"hacker-news": 0.3,
+			"outfit":      0.3,
+			"event":       0.2,
+			"discovery":   0.2,
+			"article":     0.1,
+		},
+		TypeWeights: map[string]float64{
+			"event":     0.3,
+			"discovery": 0.2,
+			"article":   0.1,
+			"video":     0.2,
+		},
 	}
-	if uw, err := h.weightsRepo.Get(user.ID); err != nil {
-		slog.Warn("failed to load user weights, using defaults", "error", err)
-	} else if uw != nil {
-		var fw repository.FeedWeights
-		if err := json.Unmarshal(uw.Weights, &fw); err != nil {
-			slog.Warn("failed to parse user weights, using defaults", "error", err)
-		} else {
-			feedWeights = &fw
-		}
+
+	// Compute dynamic weights from user engagement (cached for 1 hour).
+	feedWeights, err := h.weightsRepo.GetOrCompute(user.ID, h.eventRepo, defaultWeights)
+	if err != nil {
+		slog.Warn("failed to compute user weights, using defaults", "error", err)
+		feedWeights = defaultWeights
 	}
 
 	posts, nextCursor, err := h.postRepo.ListForYou(user.ID, *settings.Latitude, *settings.Longitude, settings.RadiusKm, cursor, limit, feedWeights)

@@ -351,11 +351,12 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		FROM posts p
 		JOIN agents a ON a.id = p.agent_id
 		WHERE (
-			(p.visibility IN ('public', 'personal')
+			(p.visibility = 'public'
 			 AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
 			 AND p.latitude BETWEEN $1 AND $2
 			 AND p.longitude BETWEEN $3 AND $4)
 			OR p.user_id = $5
+			OR (p.visibility = 'public' AND p.latitude IS NULL)
 		  )`+cursorClause+fmt.Sprintf(`
 		ORDER BY p.created_at DESC, p.seq DESC
 		LIMIT $%d`, argIdx), args...,
@@ -380,13 +381,14 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		lastSeq = seq
 		rowsProcessed++
 
-		// User's own posts always pass; community posts need Haversine check
+		// User's own posts always pass; geo posts need Haversine check;
+		// non-geo public posts (articles, news, fashion) pass through.
 		if p.UserID == userID {
 			candidates = append(candidates, p)
-		} else if p.Latitude != nil && p.Longitude != nil {
-			if geo.HaversineKm(lat, lon, *p.Latitude, *p.Longitude) <= radiusKm {
-				candidates = append(candidates, p)
-			}
+		} else if p.Latitude == nil || p.Longitude == nil {
+			candidates = append(candidates, p)
+		} else if geo.HaversineKm(lat, lon, *p.Latitude, *p.Longitude) <= radiusKm {
+			candidates = append(candidates, p)
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -402,9 +404,18 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		scoredPosts := make([]scored, len(candidates))
 		for i, p := range candidates {
 			s := scorePost(p, lat, lon, radiusKm, weights)
-			// Add ±5% jitter so near-equal posts shuffle between requests.
-			jitter := 1.0 + (rand.Float64()-0.5)*0.1
+			// Add ±15% jitter so near-equal posts shuffle between requests.
+			jitter := 1.0 + (rand.Float64()-0.5)*0.3
 			scoredPosts[i] = scored{post: p, score: s * jitter}
+		}
+		sort.Slice(scoredPosts, func(i, j int) bool {
+			return scoredPosts[i].score > scoredPosts[j].score
+		})
+		// Diversity pass: penalize consecutive posts with the same display hint.
+		for i := 1; i < len(scoredPosts); i++ {
+			if scoredPosts[i].post.DisplayHint == scoredPosts[i-1].post.DisplayHint {
+				scoredPosts[i].score *= 0.85
+			}
 		}
 		sort.Slice(scoredPosts, func(i, j int) bool {
 			return scoredPosts[i].score > scoredPosts[j].score
@@ -442,6 +453,13 @@ func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights)
 	var score float64
 
 	ageDays := time.Since(p.CreatedAt).Hours() / 24
+
+	// Strong recency boost for very fresh content.
+	if ageDays < 1.0/24.0 { // < 1 hour old
+		score += 0.5
+	} else if ageDays < 0.25 { // < 6 hours old
+		score += 0.2
+	}
 
 	// Baseline freshness floor: ensures new content surfaces regardless of weights.
 	// 0.5 for brand-new posts, decaying with 7-day half-life.

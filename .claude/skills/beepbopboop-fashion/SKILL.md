@@ -13,8 +13,10 @@ You generate personalized fashion and style posts by researching current trends,
 
 - Every product recommendation must link to a real, purchasable item — never invent brands or products
 - Trend claims must come from current fashion editorial sources (see `FASHION_SOURCES.md`)
-- Personalization must be grounded in the user's actual attributes — don't guess or assume
-- Image gen prompts must be tasteful, editorial, and appropriate — fashion photography, not glamour
+- **NEVER mention the user's height, weight, build, age, or any physical attributes in post body text** — use those internally for product/silhouette selection only
+- **NEVER use Google URLs** for `external_url` — always use the real source article or retailer page URL
+- **Write with a distinct voice** — sharp, opinionated, slightly wry. Think Highsnobiety meets a group chat. Not a department store catalog.
+- Image gen prompts must be tasteful, editorial, and appropriate — fashion photography, not glamour. No faces.
 - Price information should be current — if unsure, say "~$XXX" or "from $XXX"
 - Never be condescending about budget tiers — every tier has great options
 
@@ -146,7 +148,8 @@ For the top 1-2 trends, find real products:
    WebSearch "site:<retailer> <trend keyword> men"
    ```
 3. Extract: product name, brand, price, product page URL, product image URL
-4. Aim for 2-3 products per trend at the user's budget tier
+4. Collect product image URLs — these become `product`-role entries in the `images` array. Each product image entry should have `caption` set to the brand/product short name.
+5. Aim for 2-3 products per trend at the user's budget tier
 5. Find 1 budget alternative if user is `moderate` or above
 
 ### TR4: Generate and post
@@ -158,7 +161,7 @@ For each trend worth posting (usually 1-2 per run):
 
    **Pollinations (default):**
    ```bash
-   PROMPT="Editorial fashion photograph of a mid-40s man with brown hair, 5 foot 11 with normal build, wearing [outfit]. [Style mood]. Urban setting, natural light, candid pose, shallow depth of field. No text, no logos."
+   PROMPT="Editorial fashion photograph, [specific outfit description from products]. [Style mood from trend research]. Urban setting, natural light, shallow depth of field. No text, no logos, no faces."
    ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$PROMPT'))")
    curl -s -L -o /tmp/fashion_outfit.jpg "https://gen.pollinations.ai/image/$ENCODED?width=1024&height=1344&model=flux&seed=-1&quality=medium&nologo=true"
    ```
@@ -176,16 +179,32 @@ For each trend worth posting (usually 1-2 per run):
      -H "Authorization: Client-ID $BEEPBOPBOOP_UNSPLASH_ACCESS_KEY" | jq -r '.results[0].urls.regular'
    ```
 
+   The hero image becomes `{"url": "...", "role": "hero"}` in the images array AND goes in `image_url` (for backwards compat). If you can generate or source a second editorial shot (different angle, styling detail), add it as `{"url": "...", "role": "detail"}` — this appears as an inline image in the lookbook detail view.
+
 3. **Compose post body:**
+
+   **Voice:** Write like a sharp, opinionated friend who works in fashion — not a department store catalog. Be concise, confident, slightly wry. Drop cultural references. Have a point of view. Never hedge with "could work" or "might look nice" — commit to the recommendation. Think: Highsnobiety meets a group chat.
+
+   **Rules:**
+   - NEVER mention the reader's height, weight, build, age, or any physical attributes in the body text
+   - DO use those attributes internally to choose products and silhouettes — just don't say "at 5'11" or "for your build"
+   - The `**For you:**` section should read as styling advice, not a body assessment
+   - Keep the intro paragraph to 2-3 punchy sentences max — set up the trend, don't over-explain it
+   - Vary sentence length. Mix fragments with full sentences. Creates rhythm.
+
    ```
-   **Trend:** [What's trending and why]
+   [2-3 sentence intro — what's happening, why it matters, cultural context]
 
-   **For you:** [Personalized take based on height, build, age, style prefs]
+   **Trend:** [Crisp, specific — name the trend in 3-5 words]
 
-   **Try:** [Brand Product ($price)](URL) · [Brand Product ($price)](URL) · [Brand Product ($price)](URL)
+   **For you:** [Styling advice — how to wear it, what to pair it with, what to avoid. No body stats.]
 
-   **Alt:** [Budget alternative — Brand Product ($price)](URL)
+   **Try:** Brand Product ($price) · Brand Product ($price) · Brand Product ($price)
+
+   **Alt:** Brand Product ($price)
    ```
+
+   > Product URLs go in the `images` array as product-role entries, NOT as markdown links in the body. The iOS parser expects plain `Name ($Price)` format.
 
 4. **Dedup check:**
    ```bash
@@ -193,6 +212,9 @@ For each trend worth posting (usually 1-2 per run):
    ```
 
 5. **Publish:**
+
+   > **IMPORTANT — `external_url` must be a real article URL** (e.g., `https://www.highsnobiety.com/p/unstructured-blazers-trend/`). NEVER use a Google search URL, Google AMP link, or any `google.com` domain. Use the actual URL of the editorial article or retailer page you sourced the trend from. If you only have a Google link, follow it to get the real destination URL.
+
    ```bash
    curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
      -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
@@ -200,15 +222,20 @@ For each trend worth posting (usually 1-2 per run):
      -d '{
        "title": "<TITLE>",
        "body": "<BODY>",
-       "image_url": "<IMAGE_URL>",
-       "external_url": "<SOURCE_ARTICLE_URL>",
+       "image_url": "<HERO_IMAGE_URL>",
+       "external_url": "<REAL_SOURCE_ARTICLE_URL — not a Google link>",
        "locality": "<SOURCE_NAME>",
        "latitude": null,
        "longitude": null,
        "post_type": "article",
        "visibility": "personal",
        "display_hint": "outfit",
-       "labels": ["fashion", "<trend-slug>", "<season>", "<style-archetype>", "<garment-type>"]
+       "labels": ["fashion", "<trend-slug>", "<season>", "<style-archetype>", "<garment-type>"],
+       "images": [
+         {"url": "<HERO_IMAGE_URL>", "role": "hero"},
+         {"url": "<DETAIL_IMAGE_URL>", "role": "detail", "caption": "<optional>"},
+         {"url": "<PRODUCT_IMAGE_URL>", "role": "product", "caption": "<BRAND_NAME>"}
+       ]
      }' | jq .
    ```
 
@@ -260,7 +287,9 @@ For each piece, find a real product from retailers matching `FASHION_BUDGET` and
 
 Follow TR4 steps for image generation and posting, but:
 - Title format: "[Occasion] Look: [Key piece or vibe]"
-- Body includes the full outfit breakdown with each piece linked
+- Body uses the same voice and rules from TR4 step 3 — sharp, opinionated, no personal attributes
+- Include `images` array: hero image + product-role entries for each outfit piece (with `caption` set to brand/product name)
+- `external_url` must be a real article/retailer URL — NEVER a Google link
 - Labels include the occasion: `["fashion", "outfit", "<occasion-slug>", "<season>"]`
 
 ---
@@ -294,10 +323,12 @@ Take the top 2-3 most relevant drops.
 
 For each drop:
 - Title: "[Brand] [Product] Just Dropped — [Hook]"
-- Body: What it is, why it matters, price, availability
+- Body: Same voice/rules as TR4 step 3. What it is, why it matters, price, availability. No personal attributes.
 - `display_hint`: `"outfit"` if wearable, `"article"` if brand news
+- When `display_hint: "outfit"`, include `images` array with hero + product-role entries
+- `external_url` must be the real product/article page — NEVER a Google link
 - `labels`: `["fashion", "drops", "<brand-slug>", "<product-type>"]`
-- Image: product image from the drop page, or AI render of user wearing it
+- Image: product image from the drop page, or AI-generated editorial shot
 
 ---
 
@@ -323,8 +354,10 @@ Focus on:
 ### SEA3: Generate and post
 
 - Title: "[Season] → [Season]: [Key transition piece or strategy]"
-- Body: What's changing, what to buy, what to keep, what to store
+- Body: Same voice/rules as TR4 step 3. No personal attributes. Sharp, opinionated.
 - Include 2-3 specific product recommendations
+- When fashion-related, include `images` array with hero + product-role entries for recommended items
+- `external_url` must be a real article/retailer URL — NEVER a Google link
 - `labels`: `["fashion", "seasonal", "<current-season>", "<next-season>"]`
 
 ---
@@ -359,13 +392,17 @@ Find real products for each slot.
 ### CAP3: Generate and post
 
 - Title: "[Context] Capsule: [N] Pieces, [M] Outfits"
-- Body: Each piece listed with brand, price, link. Then 3-4 example outfit combinations.
-- Image: AI render of one key outfit from the capsule
+- Body: Same voice/rules as TR4 step 3. No personal attributes. Sharp, opinionated.
+- Include `images` array: hero image + product-role entries for each capsule piece (with `caption` set to brand/product name)
+- `external_url` must be a real article/retailer URL — NEVER a Google link
+- Image: AI-generated editorial shot of one key outfit from the capsule
 - `labels`: `["fashion", "capsule", "<context-slug>", "<season>"]`
 
 ---
 
 ## Publishing
+
+> All outfit posts MUST include the `images` array. At minimum: 1 hero-role image. Product-role images are displayed as thumbnails in the feed card scroll row and as product rows in the detail view.
 
 ### Visibility
 

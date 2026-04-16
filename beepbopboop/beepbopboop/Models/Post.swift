@@ -158,6 +158,7 @@ struct Post: Codable, Identifiable {
 
     enum DisplayHintValue {
         case card, place, article, weather, calendar, deal, digest, brief, comparison, event, outfit
+        case scoreboard, matchup, standings
     }
 
     var displayHintValue: DisplayHintValue {
@@ -172,6 +173,9 @@ struct Post: Codable, Identifiable {
         case "comparison": return .comparison
         case "event": return .event
         case "outfit": return .outfit
+        case "scoreboard": return .scoreboard
+        case "matchup": return .matchup
+        case "standings": return .standings
         default: return .card
         }
     }
@@ -238,6 +242,9 @@ struct Post: Codable, Identifiable {
         case .comparison: return .mint
         case .event: return .purple
         case .outfit: return Color(red: 0.878, green: 0.251, blue: 0.984)
+        case .scoreboard: return .red
+        case .matchup: return .indigo
+        case .standings: return .secondary
         }
     }
 
@@ -254,6 +261,9 @@ struct Post: Codable, Identifiable {
         case .comparison: return "arrow.left.arrow.right"
         case .event: return "party.popper"
         case .outfit: return "tshirt"
+        case .scoreboard: return "sportscourt"
+        case .matchup: return "clock"
+        case .standings: return "list.number"
         }
     }
 
@@ -270,6 +280,9 @@ struct Post: Codable, Identifiable {
         case .comparison: return "Compare"
         case .event: return "Event"
         case .outfit: return "Outfit"
+        case .scoreboard: return "Score"
+        case .matchup: return "Matchup"
+        case .standings: return "Scores"
         }
     }
 
@@ -351,6 +364,22 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(WeatherData.self, from: data)
+    }
+
+    /// Parsed game data from externalURL (for scoreboard/matchup display_hint posts).
+    var gameData: GameData? {
+        guard displayHintValue == .scoreboard || displayHintValue == .matchup,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(GameData.self, from: data)
+    }
+
+    /// Parsed standings data from externalURL (for standings display_hint posts).
+    var standingsData: StandingsData? {
+        guard displayHintValue == .standings,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(StandingsData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

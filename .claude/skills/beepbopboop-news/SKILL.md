@@ -196,17 +196,66 @@ For each team with upcoming or recent games, generate posts:
 - `title`: "[Team] vs [Opponent] — [Day of week]" or "[Team] at [Opponent] — [Day]"
 - `body`: Date/time (user's timezone), venue, broadcast info, any relevant storyline from a quick `WebSearch "[team] [opponent] preview"`
 - `post_type`: `event`
-- `display_hint`: `event`
-- `external_url`: ticket link (WebSearch "[team] tickets [date]")
+- `display_hint`: `matchup`
+- `external_url`: **JSON object** (NOT a ticket link) with structured game data for the iOS matchup card:
+  ```json
+  {
+    "sport": "hockey",
+    "league": "NHL",
+    "status": "Scheduled",
+    "gameTime": "2026-04-17T18:00:00-07:00",
+    "home": { "name": "Oilers", "abbr": "EDM", "record": "45-25-4", "color": "#041E42" },
+    "away": { "name": "Canucks", "abbr": "VAN", "record": "42-28-6", "color": "#00205B" },
+    "venue": "Rogers Place",
+    "broadcast": "ESPN+",
+    "series": "Game 3 · Series tied 1-1"
+  }
+  ```
+  Include `series` only during playoffs. Team colors should be the team's primary brand color as a hex string. Use the ESPN API data for records, venue, and broadcast. The `gameTime` must be ISO-8601 with timezone offset.
 - `labels`: `["sports", "<league>", "<team-slug>", "event"]`
 
 **Recent result (status: "Final"):**
 - `title`: "[Team] [W/L] [Score] — [Headline moment]"
 - `body`: Final score, key moments, standout performers. Quick `WebSearch "[team] game recap"` for color.
 - `post_type`: `article`
-- `display_hint`: `article`
-- `external_url`: recap article link
+- `display_hint`: `scoreboard`
+- `external_url`: **JSON object** (NOT a recap link) with structured game data for the iOS scoreboard card:
+  ```json
+  {
+    "sport": "hockey",
+    "league": "NHL",
+    "status": "Final",
+    "home": { "name": "Canucks", "abbr": "VAN", "score": 5, "record": "42-28-6", "color": "#00205B" },
+    "away": { "name": "Ducks", "abbr": "ANA", "score": 2, "record": "28-38-8", "color": "#F47A38" },
+    "headline": "Miller 2G 1A · Demko 31 saves",
+    "venue": "Rogers Arena",
+    "broadcast": "Sportsnet"
+  }
+  ```
+  The `headline` should be the key stat line from the game (top performers, notable achievements). Team colors must be hex strings.
 - `labels`: `["sports", "<league>", "<team-slug>", "recap"]`
+
+**Daily roundup (when 3+ games from same league on same day):**
+Instead of individual scoreboard posts for every game, create a single standings/digest post:
+- `title`: "[League] Scores — [Date]"
+- `body`: Brief summary of the day's action
+- `post_type`: `article`
+- `display_hint`: `standings`
+- `external_url`: **JSON object** with multi-game data:
+  ```json
+  {
+    "league": "NHL",
+    "leagueColor": "#000000",
+    "date": "2026-04-16",
+    "games": [
+      { "home": "VAN", "away": "ANA", "homeScore": 5, "awayScore": 2, "status": "Final", "homeColor": "#00205B", "awayColor": "#F47A38" },
+      { "home": "EDM", "away": "CGY", "homeScore": 3, "awayScore": 1, "status": "Final", "homeColor": "#041E42", "awayColor": "#D2001C" }
+    ],
+    "headline": "Canucks clinch playoff spot"
+  }
+  ```
+  Include ALL games from that league on that day, not just the user's preferred team. The `headline` should highlight the most notable outcome.
+- `labels`: `["sports", "<league>", "digest"]`
 
 **Team news (always check):**
 - `WebSearch "<team-name> news today"` for trades, injuries, signings, milestones

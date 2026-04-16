@@ -5,7 +5,7 @@ struct FeedItemView: View {
     let post: Post
 
     var body: some View {
-        if post.displayHintValue == .outfit || post.displayHintValue == .weather {
+        if [.outfit, .weather, .scoreboard, .matchup, .standings].contains(post.displayHintValue) {
             cardContent
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
@@ -43,6 +43,24 @@ struct FeedItemView: View {
             PlaceCard(post: post)
         case .outfit:
             OutfitCard(post: post)
+        case .scoreboard:
+            if let card = ScoreboardCard(post: post) {
+                card
+            } else {
+                StandardCard(post: post)
+            }
+        case .matchup:
+            if let card = MatchupCard(post: post) {
+                card
+            } else {
+                StandardCard(post: post)
+            }
+        case .standings:
+            if let card = StandingsCard(post: post) {
+                card
+            } else {
+                StandardCard(post: post)
+            }
         default:
             StandardCard(post: post)
         }

@@ -1209,6 +1209,9 @@ Notes:
   | `comparison` | Side-by-side A vs B evaluations |
   | `event` | Upcoming events with dates/times |
   | `outfit` | Fashion outfit cards — editorial look with hero image, product thumbnails, and styled-for-you advice |
+  | `scoreboard` | Sports game results — team colors, large score, status pill. Requires structured JSON in `external_url` (see news skill SP3) |
+  | `matchup` | Sports upcoming game — split team-color gradient, game time, venue. Requires structured JSON in `external_url` |
+  | `standings` | Sports multi-game digest — compact score rows for a full day of games. Requires structured JSON in `external_url` |
 
 - When publishing multiple posts, geocode all venue addresses in parallel, then publish all posts in parallel
 

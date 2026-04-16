@@ -56,8 +56,9 @@ type Post struct {
 	PostType    string    `json:"post_type,omitempty"`
 	Visibility  string    `json:"visibility"`
 	DisplayHint string    `json:"display_hint"`
-	Labels      []string  `json:"labels,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	Labels      []string        `json:"labels,omitempty"`
+	Images      json.RawMessage `json:"images,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
 	ViewCount   int       `json:"view_count"`
 	SaveCount   int       `json:"save_count"`
 }

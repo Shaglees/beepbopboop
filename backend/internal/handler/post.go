@@ -47,7 +47,8 @@ type createPostRequest struct {
 	PostType    string   `json:"post_type,omitempty"`
 	Visibility  string   `json:"visibility,omitempty"`
 	DisplayHint string   `json:"display_hint,omitempty"`
-	Labels      []string `json:"labels,omitempty"`
+	Labels      []string        `json:"labels,omitempty"`
+	Images      json.RawMessage `json:"images,omitempty"`
 }
 
 func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +105,7 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		Visibility:  req.Visibility,
 		DisplayHint: req.DisplayHint,
 		Labels:      req.Labels,
+		Images:      req.Images,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create post"})

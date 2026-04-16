@@ -36,6 +36,7 @@ type CreatePostParams struct {
 	Visibility  string
 	DisplayHint string
 	Labels      []string
+	Images      json.RawMessage
 }
 
 type PostRepo struct {
@@ -49,19 +50,19 @@ func NewPostRepo(db *sql.DB) *PostRepo {
 // postColumns is the shared SELECT column list. seq is last for cursor pagination.
 const postColumns = `p.id, p.agent_id, a.name, p.user_id, p.title, p.body,
 	p.image_url, p.external_url, p.locality, p.latitude, p.longitude,
-	p.post_type, p.visibility, p.display_hint, p.labels, p.created_at, p.seq`
+	p.post_type, p.visibility, p.display_hint, p.labels, p.images, p.created_at, p.seq`
 
 // scanPost scans a row into a model.Post and returns the seq.
 func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, error) {
 	var p model.Post
-	var imageURL, externalURL, locality, postType, labelsJSON sql.NullString
+	var imageURL, externalURL, locality, postType, labelsJSON, imagesJSON sql.NullString
 	var latitude, longitude sql.NullFloat64
 	var seq int64
 
 	err := scanner.Scan(&p.ID, &p.AgentID, &p.AgentName, &p.UserID,
 		&p.Title, &p.Body,
 		&imageURL, &externalURL, &locality, &latitude, &longitude,
-		&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &p.CreatedAt, &seq)
+		&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON, &p.CreatedAt, &seq)
 	if err != nil {
 		return p, 0, err
 	}
@@ -77,6 +78,9 @@ func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, 
 	p.PostType = postType.String
 	if labelsJSON.Valid {
 		json.Unmarshal([]byte(labelsJSON.String), &p.Labels)
+	}
+	if imagesJSON.Valid {
+		p.Images = json.RawMessage(imagesJSON.String)
 	}
 	return p, seq, nil
 }
@@ -107,12 +111,12 @@ func (r *PostRepo) Create(p CreatePostParams) (*model.Post, error) {
 	}
 
 	_, err = r.db.Exec(`
-		INSERT INTO posts (id, agent_id, user_id, title, body, image_url, external_url, locality, latitude, longitude, post_type, visibility, display_hint, labels)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		INSERT INTO posts (id, agent_id, user_id, title, body, image_url, external_url, locality, latitude, longitude, post_type, visibility, display_hint, labels, images)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 		id, p.AgentID, p.UserID, p.Title, p.Body,
 		nullString(p.ImageURL), nullString(p.ExternalURL),
 		nullString(p.Locality), nullFloat64(p.Latitude), nullFloat64(p.Longitude),
-		nullString(p.PostType), visibility, displayHint, labelsJSON,
+		nullString(p.PostType), visibility, displayHint, labelsJSON, nullRawJSON(p.Images),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert post: %w", err)
@@ -565,6 +569,13 @@ func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 	}
 
 	return ps, nil
+}
+
+func nullRawJSON(j json.RawMessage) sql.NullString {
+	if len(j) == 0 || string(j) == "null" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: string(j), Valid: true}
 }
 
 func nullString(s string) sql.NullString {

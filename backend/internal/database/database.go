@@ -60,6 +60,9 @@ func Open(url string) (*sql.DB, error) {
 	// Display hint for post rendering
 	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS display_hint TEXT NOT NULL DEFAULT 'card'")
 
+	// Images JSONB for multi-image posts (outfit collages, product thumbnails)
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS images JSONB")
+
 	// Custom display templates per user
 	db.Exec(`CREATE TABLE IF NOT EXISTS display_templates (
 		id TEXT PRIMARY KEY,

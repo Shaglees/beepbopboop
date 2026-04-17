@@ -54,6 +54,8 @@ struct FeedListView: View {
         .listStyle(.plain)
         .scrollEdgeEffectStyle(.soft, for: .top)
         .refreshable { await viewModel.refresh() }
+        .onAppear { viewModel.restartPollingIfNeeded() }
+        .onDisappear { viewModel.stopPolling() }
         .onScrollGeometryChange(for: CGFloat.self) { geo in
             geo.contentOffset.y
         } action: { oldValue, newValue in

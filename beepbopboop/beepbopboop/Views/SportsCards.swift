@@ -325,7 +325,7 @@ struct MatchupCard: View {
                                     .fill(.white.opacity(0.15))
                             )
                     }
-                    if let time = game.formattedGameTime {
+                    if let time = game.formattedGameTimeShort {
                         Text(time)
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
@@ -526,9 +526,17 @@ struct StandingsCard: View {
     private var formattedDate: String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
+        // Parse in UTC since bare dates have no timezone offset
+        f.timeZone = TimeZone(identifier: "UTC")
         guard let date = f.date(from: standings.date) else { return standings.date }
-        if Calendar.current.isDateInToday(date) { return "Today" }
-        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
+        // Compare using a calendar set to UTC to avoid day-boundary drift
+        var utcCal = Calendar.current
+        utcCal.timeZone = TimeZone(identifier: "UTC")!
+        let today = Date()
+        if utcCal.isDate(date, inSameDayAs: today) { return "Today" }
+        if let yesterday = utcCal.date(byAdding: .day, value: -1, to: today),
+           utcCal.isDate(date, inSameDayAs: yesterday) { return "Yesterday" }
+        f.timeZone = .current
         f.dateFormat = "EEE, MMM d"
         return f.string(from: date)
     }

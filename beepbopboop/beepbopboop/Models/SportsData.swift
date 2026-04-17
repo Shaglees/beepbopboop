@@ -112,22 +112,34 @@ extension GameData {
         return .secondary
     }
 
-    /// Formatted game time for matchup cards.
-    var formattedGameTime: String? {
+    /// Parse game time ISO-8601 string into a Date.
+    private var gameDate: Date? {
         guard let gt = gameTime else { return nil }
         let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = iso.date(from: gt) { return d }
         iso.formatOptions = [.withInternetDateTime]
-        guard let date = iso.date(from: gt) else { return gt }
+        return iso.date(from: gt)
+    }
+
+    /// Formatted game time with timezone abbreviation (e.g. "7:30 PM EDT").
+    var formattedGameTime: String? {
+        guard let date = gameDate else { return gameTime }
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a zzz"
+        return f.string(from: date)
+    }
+
+    /// Formatted game time without timezone (for compact cards).
+    var formattedGameTimeShort: String? {
+        guard let date = gameDate else { return gameTime }
         let f = DateFormatter()
         f.dateFormat = "h:mm a"
         return f.string(from: date)
     }
 
     var formattedGameDate: String? {
-        guard let gt = gameTime else { return nil }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime]
-        guard let date = iso.date(from: gt) else { return nil }
+        guard let date = gameDate else { return nil }
         let f = DateFormatter()
         f.dateFormat = "EEEE, MMM d"
         return f.string(from: date)
@@ -135,10 +147,7 @@ extension GameData {
 
     /// Countdown string like "IN 3 HOURS" or "TOMORROW" for matchup cards.
     var countdown: String? {
-        guard let gt = gameTime else { return nil }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime]
-        guard let date = iso.date(from: gt) else { return nil }
+        guard let date = gameDate else { return nil }
         let seconds = Int(date.timeIntervalSince(Date()))
         guard seconds > 0 else { return nil }
         let minutes = seconds / 60

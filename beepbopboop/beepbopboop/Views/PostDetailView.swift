@@ -763,9 +763,16 @@ struct PostDetailView: View {
     private func standingsFormattedDate(_ dateStr: String) -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
+        // Parse in UTC since bare dates have no timezone offset
+        f.timeZone = TimeZone(identifier: "UTC")
         guard let date = f.date(from: dateStr) else { return dateStr }
-        if Calendar.current.isDateInToday(date) { return "Today" }
-        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
+        var utcCal = Calendar.current
+        utcCal.timeZone = TimeZone(identifier: "UTC")!
+        let today = Date()
+        if utcCal.isDate(date, inSameDayAs: today) { return "Today" }
+        if let yesterday = utcCal.date(byAdding: .day, value: -1, to: today),
+           utcCal.isDate(date, inSameDayAs: yesterday) { return "Yesterday" }
+        f.timeZone = .current
         f.dateFormat = "EEEE, MMM d"
         return f.string(from: date)
     }
@@ -1296,8 +1303,7 @@ struct PostDetailView: View {
         for f in formatters {
             if let date = f.date(from: post.createdAt) {
                 let df = DateFormatter()
-                df.dateStyle = .medium
-                df.timeStyle = .short
+                df.dateFormat = "MMM d, yyyy 'at' h:mm a zzz"
                 return df.string(from: date)
             }
         }

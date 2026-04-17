@@ -84,6 +84,11 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("INSERT INTO users (id, firebase_uid) VALUES ('system', 'system') ON CONFLICT DO NOTHING")
 	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('weather-bot', 'system', 'Weather', 'active') ON CONFLICT DO NOTHING")
 
+	// Post scheduling: status tracks published vs scheduled, scheduled_at holds publish time
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'published'")
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_scheduled ON posts(status, scheduled_at) WHERE status = 'scheduled'")
+
 	// Post reactions (explicit user feedback for agent content tuning)
 	db.Exec(`CREATE TABLE IF NOT EXISTS post_reactions (
 		post_id    TEXT NOT NULL REFERENCES posts(id),

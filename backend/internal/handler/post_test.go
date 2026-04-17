@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
@@ -1037,4 +1038,186 @@ func TestValidationMaps_Sorted(t *testing.T) {
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
+}
+
+// ============================================================================
+// Scheduling tests
+// ============================================================================
+
+func TestPostHandler_CreatePost_Scheduled(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	agentRepo := repository.NewAgentRepo(db)
+	postRepo := repository.NewPostRepo(db)
+
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-sched")
+	agent, _ := agentRepo.Create(user.ID, "Sched Agent")
+
+	h := handler.NewPostHandler(agentRepo, postRepo)
+
+	futureTime := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
+	body := `{"title": "Future post", "body": "This should be scheduled.", "scheduled_at": "` + futureTime + `", "labels": ["test"]}`
+	req := httptest.NewRequest("POST", "/posts", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithAgentID(req.Context(), agent.ID))
+	rec := httptest.NewRecorder()
+
+	h.CreatePost(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["status"] != "scheduled" {
+		t.Errorf("expected status=scheduled, got %v", resp["status"])
+	}
+	if resp["scheduled_at"] == nil {
+		t.Error("expected scheduled_at to be set")
+	}
+}
+
+func TestPostHandler_CreatePost_ImmediateWhenNoSchedule(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	agentRepo := repository.NewAgentRepo(db)
+	postRepo := repository.NewPostRepo(db)
+
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-imm")
+	agent, _ := agentRepo.Create(user.ID, "Imm Agent")
+
+	h := handler.NewPostHandler(agentRepo, postRepo)
+
+	body := `{"title": "Immediate post", "body": "Published right away.", "labels": ["test"]}`
+	req := httptest.NewRequest("POST", "/posts", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithAgentID(req.Context(), agent.ID))
+	rec := httptest.NewRecorder()
+
+	h.CreatePost(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["status"] != "published" {
+		t.Errorf("expected status=published, got %v", resp["status"])
+	}
+}
+
+func TestPostHandler_ListPosts_StatusFilter(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	agentRepo := repository.NewAgentRepo(db)
+	postRepo := repository.NewPostRepo(db)
+
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-filter")
+	agent, _ := agentRepo.Create(user.ID, "Filter Agent")
+
+	h := handler.NewPostHandler(agentRepo, postRepo)
+
+	// Create one immediate and one scheduled post
+	for _, b := range []string{
+		`{"title": "Now post", "body": "Published.", "labels": ["test"]}`,
+		`{"title": "Later post", "body": "Scheduled.", "scheduled_at": "` + time.Now().Add(2*time.Hour).UTC().Format(time.RFC3339) + `", "labels": ["test"]}`,
+	} {
+		req := httptest.NewRequest("POST", "/posts", bytes.NewBufferString(b))
+		req = req.WithContext(middleware.WithAgentID(req.Context(), agent.ID))
+		rec := httptest.NewRecorder()
+		h.CreatePost(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create failed: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	// List scheduled only
+	req := httptest.NewRequest("GET", "/posts?status=scheduled", nil)
+	req = req.WithContext(middleware.WithAgentID(req.Context(), agent.ID))
+	rec := httptest.NewRecorder()
+	h.ListPosts(rec, req)
+
+	var posts []map[string]any
+	json.NewDecoder(rec.Body).Decode(&posts)
+	if len(posts) != 1 {
+		t.Fatalf("expected 1 scheduled post, got %d", len(posts))
+	}
+	if posts[0]["title"] != "Later post" {
+		t.Errorf("expected 'Later post', got %v", posts[0]["title"])
+	}
+}
+
+func TestPostRepo_PublishScheduled(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	agentRepo := repository.NewAgentRepo(db)
+	postRepo := repository.NewPostRepo(db)
+
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-pub")
+	agent, _ := agentRepo.Create(user.ID, "Pub Agent")
+
+	// Create a post scheduled in the past (should be published immediately by worker)
+	pastTime := time.Now().Add(-1 * time.Minute)
+	_, err := postRepo.Create(repository.CreatePostParams{
+		AgentID:     agent.ID,
+		UserID:      user.ID,
+		Title:       "Past scheduled",
+		Body:        "Should get published.",
+		PostType:    "discovery",
+		Visibility:  "public",
+		Labels:      []string{"test"},
+		ScheduledAt: &pastTime,
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	// The post has scheduled_at in the past, but Create sets status=published
+	// when scheduled_at is not in the future, so let's manually create one with
+	// a future scheduled_at, then manipulate it to test the worker.
+	futureTime := time.Now().Add(2 * time.Hour)
+	post2, err := postRepo.Create(repository.CreatePostParams{
+		AgentID:     agent.ID,
+		UserID:      user.ID,
+		Title:       "Future scheduled",
+		Body:        "Not yet published.",
+		PostType:    "discovery",
+		Visibility:  "public",
+		Labels:      []string{"test"},
+		ScheduledAt: &futureTime,
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+	if post2.Status != "scheduled" {
+		t.Fatalf("expected status=scheduled, got %s", post2.Status)
+	}
+
+	// Move scheduled_at to the past to simulate time passing
+	_, err = db.Exec("UPDATE posts SET scheduled_at = NOW() - INTERVAL '1 minute' WHERE id = $1", post2.ID)
+	if err != nil {
+		t.Fatalf("update scheduled_at: %v", err)
+	}
+
+	// Run publisher
+	n, err := postRepo.PublishScheduled()
+	if err != nil {
+		t.Fatalf("publish scheduled: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("expected 1 published, got %d", n)
+	}
+
+	// Verify post is now published
+	published, err := postRepo.GetByID(post2.ID)
+	if err != nil {
+		t.Fatalf("get post: %v", err)
+	}
+	if published.Status != "published" {
+		t.Errorf("expected status=published after worker, got %s", published.Status)
+	}
 }

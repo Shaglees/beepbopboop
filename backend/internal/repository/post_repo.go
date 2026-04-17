@@ -37,6 +37,7 @@ type CreatePostParams struct {
 	DisplayHint string
 	Labels      []string
 	Images      json.RawMessage
+	ScheduledAt *time.Time
 }
 
 type PostRepo struct {
@@ -50,19 +51,22 @@ func NewPostRepo(db *sql.DB) *PostRepo {
 // postColumns is the shared SELECT column list. seq is last for cursor pagination.
 const postColumns = `p.id, p.agent_id, a.name, p.user_id, p.title, p.body,
 	p.image_url, p.external_url, p.locality, p.latitude, p.longitude,
-	p.post_type, p.visibility, p.display_hint, p.labels, p.images, p.created_at, p.seq`
+	p.post_type, p.visibility, p.display_hint, p.labels, p.images,
+	p.status, p.scheduled_at, p.created_at, p.seq`
 
 // scanPost scans a row into a model.Post and returns the seq.
 func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, error) {
 	var p model.Post
 	var imageURL, externalURL, locality, postType, labelsJSON, imagesJSON sql.NullString
 	var latitude, longitude sql.NullFloat64
+	var scheduledAt sql.NullTime
 	var seq int64
 
 	err := scanner.Scan(&p.ID, &p.AgentID, &p.AgentName, &p.UserID,
 		&p.Title, &p.Body,
 		&imageURL, &externalURL, &locality, &latitude, &longitude,
-		&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON, &p.CreatedAt, &seq)
+		&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON,
+		&p.Status, &scheduledAt, &p.CreatedAt, &seq)
 	if err != nil {
 		return p, 0, err
 	}
@@ -81,6 +85,9 @@ func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, 
 	}
 	if imagesJSON.Valid {
 		p.Images = json.RawMessage(imagesJSON.String)
+	}
+	if scheduledAt.Valid {
+		p.ScheduledAt = &scheduledAt.Time
 	}
 	return p, seq, nil
 }
@@ -101,6 +108,13 @@ func (r *PostRepo) Create(p CreatePostParams) (*model.Post, error) {
 		displayHint = "card"
 	}
 
+	status := "published"
+	var scheduledAt sql.NullTime
+	if p.ScheduledAt != nil && p.ScheduledAt.After(time.Now()) {
+		status = "scheduled"
+		scheduledAt = sql.NullTime{Time: *p.ScheduledAt, Valid: true}
+	}
+
 	var labelsJSON sql.NullString
 	if len(p.Labels) > 0 {
 		b, err := json.Marshal(p.Labels)
@@ -111,12 +125,13 @@ func (r *PostRepo) Create(p CreatePostParams) (*model.Post, error) {
 	}
 
 	_, err = r.db.Exec(`
-		INSERT INTO posts (id, agent_id, user_id, title, body, image_url, external_url, locality, latitude, longitude, post_type, visibility, display_hint, labels, images)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		INSERT INTO posts (id, agent_id, user_id, title, body, image_url, external_url, locality, latitude, longitude, post_type, visibility, display_hint, labels, images, status, scheduled_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
 		id, p.AgentID, p.UserID, p.Title, p.Body,
 		nullString(p.ImageURL), nullString(p.ExternalURL),
 		nullString(p.Locality), nullFloat64(p.Latitude), nullFloat64(p.Longitude),
 		nullString(p.PostType), visibility, displayHint, labelsJSON, nullRawJSON(p.Images),
+		status, scheduledAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert post: %w", err)
@@ -212,7 +227,7 @@ func (r *PostRepo) ListPersonal(userID, cursor string, limit int) ([]model.Post,
 		SELECT `+postColumns+`
 		FROM posts p
 		JOIN agents a ON a.id = p.agent_id
-		WHERE p.user_id = $1`+cursorClause+fmt.Sprintf(`
+		WHERE p.user_id = $1 AND p.status = 'published'`+cursorClause+fmt.Sprintf(`
 		ORDER BY p.created_at DESC, p.seq DESC
 		LIMIT $%d`, argIdx), args...,
 	)
@@ -271,7 +286,8 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 		SELECT `+postColumns+`
 		FROM posts p
 		JOIN agents a ON a.id = p.agent_id
-		WHERE p.visibility IN ('public', 'personal')
+		WHERE p.status = 'published'
+		  AND p.visibility IN ('public', 'personal')
 		  AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
 		  AND p.latitude BETWEEN $1 AND $2
 		  AND p.longitude BETWEEN $3 AND $4`+cursorClause+fmt.Sprintf(`
@@ -350,7 +366,8 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		SELECT `+postColumns+`
 		FROM posts p
 		JOIN agents a ON a.id = p.agent_id
-		WHERE (
+		WHERE p.status = 'published'
+		  AND (
 			(p.visibility = 'public'
 			 AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
 			 AND p.latitude BETWEEN $1 AND $2
@@ -533,7 +550,7 @@ func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 	err := r.db.QueryRow(`
 		SELECT COUNT(*)
 		FROM posts
-		WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 day' * $2`,
+		WHERE user_id = $1 AND status = 'published' AND created_at > NOW() - INTERVAL '1 day' * $2`,
 		userID, days,
 	).Scan(&ps.TotalPosts)
 	if err != nil {
@@ -549,7 +566,7 @@ func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 			COUNT(*) AS count,
 			EXTRACT(DAY FROM NOW() - MAX(created_at))::int AS last_days_ago
 		FROM posts
-		WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 day' * $2
+		WHERE user_id = $1 AND status = 'published' AND created_at > NOW() - INTERVAL '1 day' * $2
 		GROUP BY post_type
 		ORDER BY count DESC`,
 		userID, days,
@@ -575,7 +592,7 @@ func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 		SELECT label, COUNT(*) AS count
 		FROM posts,
 		LATERAL jsonb_array_elements_text(labels::jsonb) AS label
-		WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 day' * $2
+		WHERE user_id = $1 AND status = 'published' AND created_at > NOW() - INTERVAL '1 day' * $2
 		  AND labels IS NOT NULL AND labels != 'null'
 		GROUP BY label
 		ORDER BY count DESC
@@ -599,6 +616,48 @@ func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 	}
 
 	return ps, nil
+}
+
+// PublishScheduled finds posts with status='scheduled' whose scheduled_at has passed
+// and updates them to status='published'. Returns the number of posts published.
+func (r *PostRepo) PublishScheduled() (int64, error) {
+	result, err := r.db.Exec(`
+		UPDATE posts
+		SET status = 'published', created_at = CURRENT_TIMESTAMP
+		WHERE status = 'scheduled' AND scheduled_at <= CURRENT_TIMESTAMP`)
+	if err != nil {
+		return 0, fmt.Errorf("publish scheduled: %w", err)
+	}
+	return result.RowsAffected()
+}
+
+// ListByUserIDWithStatus returns posts for a user filtered by status.
+func (r *PostRepo) ListByUserIDWithStatus(userID, status string, limit int) ([]model.Post, error) {
+	rows, err := r.db.Query(`
+		SELECT `+postColumns+`
+		FROM posts p
+		JOIN agents a ON a.id = p.agent_id
+		WHERE p.user_id = $1 AND p.status = $2
+		ORDER BY COALESCE(p.scheduled_at, p.created_at) ASC, p.seq DESC
+		LIMIT $3`, userID, status, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query posts by status: %w", err)
+	}
+	defer rows.Close()
+
+	posts := make([]model.Post, 0)
+	for rows.Next() {
+		p, _, err := scanPost(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan post: %w", err)
+		}
+		posts = append(posts, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate posts: %w", err)
+	}
+	return posts, nil
 }
 
 // UpsertWeatherPost creates or replaces a weather post for a geographic grid cell.

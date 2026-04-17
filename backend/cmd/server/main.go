@@ -18,6 +18,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
+	"github.com/shanegleeson/beepbopboop/backend/internal/scheduler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/weather"
 	"google.golang.org/api/option"
 )
@@ -126,11 +127,12 @@ func main() {
 		r.Delete("/user/templates/{hint}", templatesH.DeleteTemplate)
 	})
 
-	// Background weather worker — fetches weather for active user locations
-	// and upserts posts so they appear in nearby users' feeds.
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	weatherWorker := weather.NewWorker(weatherSvc, postRepo, userSettingsRepo, 30*time.Minute)
 	go weatherWorker.Run(workerCtx)
+
+	schedulerWorker := scheduler.NewWorker(postRepo, 1*time.Minute)
+	go schedulerWorker.Run(workerCtx)
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 

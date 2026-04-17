@@ -1033,6 +1033,106 @@ func TestValidationMaps_Sorted(t *testing.T) {
 	checkMap("ValidImageRoles", handler.ValidImageRoles, expectedRoles)
 }
 
+// ============================================================================
+// URL validation tests (issue #12)
+// ============================================================================
+
+func TestLintPost_InvalidImageURL(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	tests := []struct {
+		name     string
+		imageURL string
+		wantErr  bool
+	}{
+		{"valid https", "https://example.com/img.jpg", false},
+		{"valid http", "http://example.com/img.jpg", false},
+		{"ftp scheme", "ftp://example.com/img.jpg", true},
+		{"no scheme", "example.com/img.jpg", true},
+		{"javascript scheme", "javascript:alert(1)", true},
+		{"data uri", "data:image/png;base64,abc", true},
+		{"empty host", "https:///path", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"title":"t","body":"b","image_url":` + jsonString(tt.imageURL) + `,"labels":["test"]}`
+			_, resp := lintCall(t, h, body)
+			hasErr := hasFieldError(lintErrors(resp), "image_url")
+			if hasErr != tt.wantErr {
+				t.Errorf("image_url=%q: wantErr=%v, gotErr=%v, errors=%v", tt.imageURL, tt.wantErr, hasErr, lintErrors(resp))
+			}
+		})
+	}
+}
+
+func TestLintPost_InvalidExternalURL(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	tests := []struct {
+		name        string
+		externalURL string
+		displayHint string
+		wantErr     bool
+	}{
+		{"valid https", "https://example.com/article", "", false},
+		{"ftp scheme", "ftp://example.com/file", "", true},
+		{"no scheme", "not-a-url", "", true},
+		// Structured hints store JSON, not URLs — should NOT be validated as URL
+		{"scoreboard JSON ok", `{"status":"Final","home":{"name":"A","abbr":"A"},"away":{"name":"B","abbr":"B"}}`, "scoreboard", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body string
+			if tt.displayHint != "" {
+				body = `{"title":"t","body":"b","external_url":` + jsonString(tt.externalURL) + `,"display_hint":"` + tt.displayHint + `","labels":["test"]}`
+			} else {
+				body = `{"title":"t","body":"b","external_url":` + jsonString(tt.externalURL) + `,"labels":["test"]}`
+			}
+			_, resp := lintCall(t, h, body)
+			hasErr := hasFieldError(lintErrors(resp), "external_url")
+			if hasErr != tt.wantErr {
+				t.Errorf("external_url=%q hint=%q: wantErr=%v, gotErr=%v, errors=%v",
+					tt.externalURL, tt.displayHint, tt.wantErr, hasErr, lintErrors(resp))
+			}
+		})
+	}
+}
+
+func TestLintPost_URLTooLong(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	longURL := "https://example.com/" + string(make([]byte, 2100))
+	body := `{"title":"t","body":"b","image_url":` + jsonString(longURL) + `,"labels":["test"]}`
+	_, resp := lintCall(t, h, body)
+	if !hasFieldError(lintErrors(resp), "image_url") {
+		t.Error("expected error for URL exceeding max length")
+	}
+}
+
+func TestLintPost_ImageArrayURLValidation(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	// Valid URL in images array — should pass
+	body := `{"title":"t","body":"b","images":[{"url":"https://example.com/img.jpg","role":"hero"}],"labels":["test"]}`
+	_, resp := lintCall(t, h, body)
+	if hasFieldError(lintErrors(resp), "images[0].url") {
+		t.Errorf("valid image URL should not error, got: %v", lintErrors(resp))
+	}
+
+	// Invalid URL in images array — should fail
+	body = `{"title":"t","body":"b","images":[{"url":"ftp://bad.com/img.jpg","role":"hero"}],"labels":["test"]}`
+	_, resp = lintCall(t, h, body)
+	if !hasFieldError(lintErrors(resp), "images[0].url") {
+		t.Error("expected error for invalid image URL in array")
+	}
+}
+
 // jsonString returns a JSON-encoded string value (with escaping).
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)

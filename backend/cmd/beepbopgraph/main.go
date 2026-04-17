@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -22,7 +24,7 @@ var (
 
 func main() {
 	flag.StringVar(&dbPath, "db", defaultDBPath(), "path to SQLite database")
-	flag.IntVar(&ttl, "ttl", 14, "TTL in days for post history")
+	flag.IntVar(&ttl, "ttl", 30, "TTL in days for post history")
 	flag.Parse()
 
 	args := flag.Args()
@@ -96,11 +98,18 @@ func runSave(db *sql.DB, args []string) {
 func runHistory(db *sql.DB, args []string) {
 	fs := flag.NewFlagSet("history", flag.ExitOnError)
 	limit := fs.Int("limit", 20, "max entries to show")
+	days := fs.Int("days", 0, "filter to entries within N days (0 = use TTL)")
 	filterType := fs.String("type", "", "filter by post type")
 	filterLabel := fs.String("label", "", "filter by label")
+	filterTag := fs.String("tag", "", "filter by tag")
 	fs.Parse(args)
 
-	posts, err := dedup.ListRecent(db, ttl)
+	lookback := ttl
+	if *days > 0 {
+		lookback = *days
+	}
+
+	posts, err := dedup.ListRecent(db, lookback)
 	if err != nil {
 		fatal("list: %v", err)
 	}
@@ -111,6 +120,9 @@ func runHistory(db *sql.DB, args []string) {
 			continue
 		}
 		if *filterLabel != "" && !hasLabel(p.Labels, *filterLabel) {
+			continue
+		}
+		if *filterTag != "" && !strings.EqualFold(p.Tag, *filterTag) {
 			continue
 		}
 		filtered = append(filtered, p)
@@ -126,6 +138,7 @@ func runHistory(db *sql.DB, args []string) {
 		Labels   []string `json:"labels"`
 		DaysAgo  int      `json:"days_ago"`
 		Locality string   `json:"locality,omitempty"`
+		Tag      string   `json:"tag,omitempty"`
 	}
 	rows := make([]row, len(filtered))
 	for i, p := range filtered {
@@ -136,6 +149,7 @@ func runHistory(db *sql.DB, args []string) {
 			Labels:   p.Labels,
 			DaysAgo:  dedup.DaysAgo(p.CreatedAt),
 			Locality: p.Locality,
+			Tag:      p.Tag,
 		}
 	}
 	jsonOut(map[string]any{"posts": rows, "total": len(rows)})
@@ -162,6 +176,8 @@ func parseInputFlags(cmd string, args []string) ([]dedup.CheckInput, error) {
 	lat := fs.Float64("lat", 0, "latitude")
 	lon := fs.Float64("lon", 0, "longitude")
 	url := fs.String("url", "", "external URL")
+	body := fs.String("body", "", "post body (first 200 chars used for body hash)")
+	tag := fs.String("tag", "", "tag for categorizing entries (e.g. interest-discovery)")
 	batch := fs.String("batch", "", "JSON array of posts")
 	fs.Parse(args)
 
@@ -169,6 +185,12 @@ func parseInputFlags(cmd string, args []string) ([]dedup.CheckInput, error) {
 		var inputs []dedup.CheckInput
 		if err := json.Unmarshal([]byte(*batch), &inputs); err != nil {
 			return nil, fmt.Errorf("parse batch JSON: %w", err)
+		}
+		// Compute body hashes for batch inputs that have body text
+		for i := range inputs {
+			if inputs[i].Body != "" {
+				inputs[i].Body = bodyHash(inputs[i].Body)
+			}
 		}
 		return inputs, nil
 	}
@@ -182,6 +204,10 @@ func parseInputFlags(cmd string, args []string) ([]dedup.CheckInput, error) {
 		PostType: *postType,
 		Locality: *locality,
 		URL:      *url,
+		Tag:      *tag,
+	}
+	if *body != "" {
+		input.Body = bodyHash(*body)
 	}
 	if *labels != "" {
 		input.Labels = strings.Split(*labels, ",")
@@ -193,6 +219,18 @@ func parseInputFlags(cmd string, args []string) ([]dedup.CheckInput, error) {
 	return []dedup.CheckInput{input}, nil
 }
 
+// bodyHash computes a SHA-256 hash of the first 200 characters of the body text.
+func bodyHash(body string) string {
+	// Truncate to first 200 chars
+	text := body
+	if len(text) > 200 {
+		text = text[:200]
+	}
+	text = strings.ToLower(strings.TrimSpace(text))
+	h := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(h[:])
+}
+
 func inputToEntry(input dedup.CheckInput) dedup.PostEntry {
 	return dedup.PostEntry{
 		Title:       input.Title,
@@ -202,6 +240,8 @@ func inputToEntry(input dedup.CheckInput) dedup.PostEntry {
 		Latitude:    input.Lat,
 		Longitude:   input.Lon,
 		Labels:      input.Labels,
+		BodyHash:    input.Body, // Already hashed by parseInputFlags
+		Tag:         input.Tag,
 	}
 }
 

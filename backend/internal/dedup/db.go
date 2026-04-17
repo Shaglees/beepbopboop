@@ -34,6 +34,10 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 
+	// v2 schema additions — safe to re-run (ALTER TABLE errors ignored if column already exists)
+	db.Exec("ALTER TABLE posts ADD COLUMN body_hash TEXT")
+	db.Exec("ALTER TABLE posts ADD COLUMN tag TEXT")
+
 	return db, nil
 }
 
@@ -45,9 +49,10 @@ func SavePost(db *sql.DB, entry PostEntry) error {
 	defer tx.Rollback()
 
 	res, err := tx.Exec(
-		`INSERT INTO posts (title, external_url, post_type, locality, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO posts (title, external_url, post_type, locality, latitude, longitude, body_hash, tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		entry.Title, nilIfEmpty(entry.ExternalURL), entry.PostType,
 		nilIfEmpty(entry.Locality), entry.Latitude, entry.Longitude,
+		nilIfEmpty(entry.BodyHash), nilIfEmpty(entry.Tag),
 	)
 	if err != nil {
 		return fmt.Errorf("insert post: %w", err)
@@ -74,9 +79,10 @@ func SavePosts(db *sql.DB, entries []PostEntry) error {
 
 	for _, entry := range entries {
 		res, err := tx.Exec(
-			`INSERT INTO posts (title, external_url, post_type, locality, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO posts (title, external_url, post_type, locality, latitude, longitude, body_hash, tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			entry.Title, nilIfEmpty(entry.ExternalURL), entry.PostType,
 			nilIfEmpty(entry.Locality), entry.Latitude, entry.Longitude,
+			nilIfEmpty(entry.BodyHash), nilIfEmpty(entry.Tag),
 		)
 		if err != nil {
 			return fmt.Errorf("insert post %q: %w", entry.Title, err)
@@ -99,7 +105,7 @@ func ListRecent(db *sql.DB, ttlDays int) ([]PostEntry, error) {
 	cutoff := time.Now().AddDate(0, 0, -ttlDays)
 
 	rows, err := db.Query(
-		`SELECT id, title, COALESCE(external_url, ''), post_type, COALESCE(locality, ''), latitude, longitude, created_at
+		`SELECT id, title, COALESCE(external_url, ''), post_type, COALESCE(locality, ''), latitude, longitude, COALESCE(body_hash, ''), COALESCE(tag, ''), created_at
 		 FROM posts WHERE created_at >= ? ORDER BY created_at DESC`, cutoff,
 	)
 	if err != nil {
@@ -110,7 +116,7 @@ func ListRecent(db *sql.DB, ttlDays int) ([]PostEntry, error) {
 	var posts []PostEntry
 	for rows.Next() {
 		var p PostEntry
-		if err := rows.Scan(&p.ID, &p.Title, &p.ExternalURL, &p.PostType, &p.Locality, &p.Latitude, &p.Longitude, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Title, &p.ExternalURL, &p.PostType, &p.Locality, &p.Latitude, &p.Longitude, &p.BodyHash, &p.Tag, &p.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan post: %w", err)
 		}
 		posts = append(posts, p)

@@ -11,6 +11,8 @@ type PostEntry struct {
 	Latitude    *float64
 	Longitude   *float64
 	Labels      []string
+	BodyHash    string
+	Tag         string
 	CreatedAt   time.Time
 }
 
@@ -22,6 +24,8 @@ type CheckInput struct {
 	Lat      *float64 `json:"lat,omitempty"`
 	Lon      *float64 `json:"lon,omitempty"`
 	URL      string   `json:"url,omitempty"`
+	Body     string   `json:"body,omitempty"`
+	Tag      string   `json:"tag,omitempty"`
 }
 
 type Match struct {

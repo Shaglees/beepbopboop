@@ -77,19 +77,26 @@ func Check(existing []PostEntry, input CheckInput, ttlDays int) CheckResult {
 		}
 
 		sim := lScore*wLabel + tScore*wType + gScore*wGeo + rScore*wRecency
+
+		// Body hash boost: if the first 200 chars match, this is likely the same venue/angle
+		if input.Body != "" && post.BodyHash != "" && input.Body == post.BodyHash {
+			sim += 0.15
+		}
+
 		sim = math.Round(sim*100) / 100
 
 		if sim < 0.25 {
 			continue
 		}
 
+		bodyMatch := input.Body != "" && post.BodyHash != "" && input.Body == post.BodyHash
 		m := Match{
 			Title:         post.Title,
 			DaysAgo:       DaysAgo(post.CreatedAt),
 			Similarity:    sim,
 			OverlapLabels: overlap,
 			SameType:      input.PostType == post.PostType,
-			Reason:        generateReason(lScore, gScore, tScore, distKm),
+			Reason:        generateReason(lScore, gScore, tScore, distKm, bodyMatch),
 		}
 		if distKm != nil {
 			m.DistanceKm = distKm
@@ -199,8 +206,12 @@ func recencyScore(createdAt time.Time, ttlDays int) float64 {
 	return score
 }
 
-func generateReason(lScore, gScore, tScore float64, distKm *float64) string {
+func generateReason(lScore, gScore, tScore float64, distKm *float64, bodyMatch bool) string {
 	var parts []string
+
+	if bodyMatch {
+		parts = append(parts, "same body content")
+	}
 
 	if lScore > 0.5 {
 		parts = append(parts, "same topic")
@@ -221,6 +232,9 @@ func generateReason(lScore, gScore, tScore float64, distKm *float64) string {
 	base := strings.Join(parts, "+")
 
 	// Add suggestion
+	if bodyMatch {
+		return fmt.Sprintf("%s — same venue/angle, use a different approach", base)
+	}
 	if lScore > 0.5 && tScore > 0 {
 		if distKm != nil && *distKm < 2 {
 			return fmt.Sprintf("%s — consider a different venue or angle", base)

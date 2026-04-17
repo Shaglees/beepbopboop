@@ -90,6 +90,8 @@ After loading config, parse the user's input to determine which mode to use:
 | `trending`, `what's trending`, `viral`, `pop culture`, `what's hot`, `zeitgeist` | Trending | **Delegate to `beepbopboop-news` skill** |
 | `sports`, `games`, `scores`, team/league name | Sports | **Delegate to `beepbopboop-news` skill** |
 | `fashion`, `outfit`, `style`, `what to wear`, `drops`, `capsule wardrobe` | Fashion | **Delegate to `beepbopboop-fashion` skill** |
+| `digest`, `roundup`, `weekly digest`, `summary` | Digest | Steps DG1–DG3 |
+| `brief`, `morning brief`, `daily brief`, `today's take` | Brief | Steps BR1–BR3 |
 | Everything else | Continue to Step 0b | — |
 
 If a specific mode is detected, skip Step 0b and jump directly to that mode's steps.
@@ -218,7 +220,7 @@ Otherwise, auto-classify:
 | Type | Trigger Keywords |
 |------|-----------------|
 | `event` | theatre, theater, play, musical, concert, gig, show, cinema, film screening, exhibition, festival, performance, recital, opera, ballet, comedy show, improv, standup, open mic, launch, premiere, opening night — OR the idea is about a specific date/time-bound experience |
-| `place` | cafe, coffee, restaurant, bar, pub, park, gym, bakery, bookshop, library, museum, gallery, hotel, shop, supermarket, pharmacy, clinic, playground, pool, beach, market — OR the idea is fundamentally about a venue/location to visit |
+| `place` | cafe, coffee, restaurant, bar, pub, park, gym, bakery, bookshop, library, museum, gallery, hotel, shop, supermarket, pharmacy, clinic, playground, pool, beach, market — OR the idea is fundamentally about a venue/location to visit. **When post has lat/lon and is about a specific venue, set `display_hint: "place"`** |
 | `article` | Blog post, news article, essay, written content from a specific source — used in interest mode for written content |
 | `video` | YouTube video, video essay, podcast episode with video — used in interest mode for video content |
 | `discovery` | Everything else — general tips, observations, recommendations, insights |
@@ -248,7 +250,9 @@ Apply classification rules in order:
 
 **Skip this section unless Step 0a detected weather mode, or batch mode is generating weather posts.**
 
-#### W1: Fetch weather
+> **Important**: The system weather worker creates rich LiveWeatherCards with structured forecast data using `display_hint: "weather"`. Agent weather posts must NOT duplicate the forecast. Instead, agent weather creates **editorial commentary** about what the weather means for the user's day.
+
+#### W1: Fetch weather and compose brief
 
 Use the location from `BEEPBOPBOOP_DEFAULT_LOCATION` (or a provided locality argument):
 
@@ -261,31 +265,42 @@ Extract from results:
 - Conditions: sunny, cloudy, rainy, snowy, overcast, etc.
 - Any notable weather events (storm warning, heat wave, etc.)
 
-#### W2: Map conditions to activities
+**Compose a brief** (`display_hint: "brief"`):
+- **Title**: "What to Do Today" or "Today's Take" — NOT a forecast title
+- **Body**: 3-5 newline-separated bullets about what the weather means for the user's day:
+  - Activity suggestions based on conditions (e.g., "Patio weather — Clement & Pekoe has outdoor seating")
+  - Timing advice (e.g., "Clearing by 3pm, plan outdoor errands for the afternoon")
+  - Practical tips (e.g., "Light jacket territory — 14°C but feels warmer in the sun")
+  - Local context (e.g., "Farmers market will be soggy — try the covered section on South side")
+- **NOT a forecast.** The system weather card handles that. This is editorial commentary.
+- Post type: `discovery`, `display_hint: "brief"`
 
-Use the weather to guide activity suggestions:
+#### W2: Decide batch weather fill
 
-| Condition | Activity suggestions |
-|---|---|
-| Sunny + warm (>18°C) | Patios, parks, outdoor markets, beaches, cycling routes, rooftop bars |
-| Sunny + cool (8–18°C) | Walking tours, outdoor cafes, scenic viewpoints, hiking trails |
-| Rainy | Museums, cinemas, cozy cafes, bookshops, indoor markets, art galleries |
-| Cold (<8°C) | Hot chocolate spots, indoor activities, warm restaurants, heated patios |
-| Snowy | Ski hills, snowshoeing trails, warm pubs, fireside dining |
+When called from batch mode:
+- **Always**: 1 brief post via W1 above
+- **0-1 editorial article/discovery**: Only if there's a genuinely interesting weather story (e.g., "First frost of the season", "Heat wave starting tomorrow", "Storm warning — here's what to cancel"). Set `display_hint: "article"`, NOT `"weather"`. If no interesting story, skip — 1 brief is enough.
 
-Pick 2-3 activities from the matching condition row that suit the location.
+When called standalone (not batch):
+- Generate the 1 brief from W1
+- If the weather is genuinely noteworthy, add 1 editorial post as above
 
-#### W3: Generate weather posts
+#### W3: Publish weather posts
 
-For each selected activity:
-
-1. Run the existing local flow (Steps 1 → 2 → 3 → 4) with the activity as the idea
-2. Weave weather context naturally into the post body opening: "It's 22°C and cloudless today — " or "Rain all afternoon — "
-3. Post type: `place` or `discovery`
+For each weather post:
+- **Brief posts**: `display_hint: "brief"`, `post_type: "discovery"`, labels include `weather`, `daily-brief`
+- **Editorial posts**: `display_hint: "article"`, `post_type: "discovery"` or `"article"`, labels include `weather` plus the story topic
+- **NEVER** set `display_hint: "weather"` for agent posts — only the system weather worker uses that hint with structured JSON
 
 **Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
-**Example title**: "Rain all afternoon: the Royal BC Museum has a new exhibition on loan from Berlin"
+**Example brief**:
+> **Title**: "Today's Take"
+> **Body**:
+> Rain clearing by 2pm — morning is for indoor errands
+> Murchie's on Government does a proper afternoon tea for €18 while you wait it out
+> Temperature climbing to 16°C by 3pm — perfect for a Beacon Hill walk
+> Bring a light layer, the wind off the harbour has bite today
 
 ---
 
@@ -317,6 +332,7 @@ Generate **1 discovery post** with a ranking/comparison format:
 - Body should name specific places, what they're best at, and include prices where available
 - Each place gets a one-line verdict
 - Post type: `discovery`
+- **`display_hint: "comparison"`** — this renders as a side-by-side comparison card in iOS
 
 **Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
@@ -396,6 +412,7 @@ Generate **1-2 discovery posts** with deal details:
 - Title should lead with the value proposition: specific prices, percentage off, or "free"
 - Body should include: what the deal is, where/how to get it, when it expires, any conditions
 - Post type: `discovery`
+- **`display_hint: "deal"`** — this renders as a deal-focused card with price emphasis in iOS
 
 **Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
@@ -517,6 +534,98 @@ Generate **1 post** framed as an update:
 
 ---
 
+### Steps DG1–DG3: Digest Mode
+
+**Trigger**: `digest`, `roundup`, `weekly digest`, `summary`, or called from BT3 Phase 2 fill.
+
+**Skip this section unless Step 0a detected digest mode, or batch mode is generating a digest post.**
+
+A digest is a multi-item roundup post — "5 AI Developments This Week" or "Your Local Scene This Weekend". The iOS CompactCard renders each line of the body as a numbered row.
+
+#### DG1: Pick a digest topic
+
+Choose one based on available data and what would be most useful today:
+
+| Topic type | Example title | Data source |
+|---|---|---|
+| Interest-based roundup | "5 AI Developments This Week" | `BEEPBOPBOOP_INTERESTS` + WebSearch |
+| Local scene roundup | "Your Local Scene This Weekend" | Event/place data from location |
+| Sports roundup | "What Your Teams Did This Week" | `BEEPBOPBOOP_SPORTS_TEAMS` + ESPN API |
+| Mixed weekly digest | "This Week in Your World" | Combine 2-3 sources |
+
+Pick the topic that has the richest data available. If the user provided a hint (e.g., `digest AI`), bias toward that direction.
+
+#### DG2: Research 4-7 items
+
+For each item in the digest:
+- Research via WebSearch and WebFetch as appropriate for the topic type
+- Each item = one line in the body (newline-separated)
+- Each line should be a self-contained nugget: title + one-sentence summary or key detail
+- Lines should feel scannable — a reader should get value just from skimming
+
+**Format example** (body text):
+```
+Claude 4.5 scores 94% on ARC-AGI — Anthropic's latest reasoning model sets a new benchmark
+Google DeepMind open-sources Gemma 3 with 2B parameter model — runs on a laptop
+OpenAI ships GPT-5 Turbo with 2M context window — 10x previous limit
+Meta releases Llama 4 Scout with mixture-of-experts — 109B active params from 400B total
+Mistral launches Le Chat Enterprise with on-prem deployment — targeting regulated industries
+```
+
+#### DG3: Publish digest post
+
+- `display_hint: "digest"` — iOS renders as numbered compact rows
+- `post_type: "article"`
+- `visibility: "public"`
+- Labels should include `digest`, the topic area (e.g., `ai`, `local-events`, `sports`), and relevant sub-topics
+- Title should signal a roundup: use numbers ("5 things..."), timeframes ("This Week..."), or scope ("Your Local Scene...")
+
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
+
+---
+
+### Steps BR1–BR3: Brief Mode
+
+**Trigger**: `brief`, `morning brief`, `daily brief`, `today's take`, or called from BT3 Phase 2 fill.
+
+**Skip this section unless Step 0a detected brief mode, or batch mode is generating a brief post.**
+
+A brief is a compact, multi-topic snapshot — "Morning Brief" or "Weekend Ahead". The iOS CompactCard renders each line as a bullet row.
+
+#### BR1: Compose brief bullets
+
+Compose 3-5 concise bullet points covering a mix of:
+- **Today's weather take** — editorial, not forecast (e.g., "Light jacket territory — 14°C but clearing by noon"). The system weather card handles the actual forecast.
+- **One local event worth knowing about** — something happening today/this week in `BEEPBOPBOOP_DEFAULT_LOCATION`
+- **One trending topic or interest item** — from `BEEPBOPBOOP_INTERESTS` or current news
+- **One discovery / surprise item** — something unexpected, a local fact, a new opening, an adjacent-interest nugget
+
+Each bullet should be self-contained and scannable. No bullet should exceed ~100 characters.
+
+#### BR2: Format body
+
+Each bullet = one line in the body (newline-separated). iOS CompactCard renders as bullet rows.
+
+**Format example** (body text):
+```
+Light jacket weather — 15°C and clearing by noon
+Temple Bar Food Market has a new Basque cheesecake stall worth the queue
+Claude 4.5 dropped overnight — 94% on ARC-AGI, your AI workflow just got faster
+The Long Room at Trinity is free entry this week for Dublin residents
+```
+
+#### BR3: Publish brief post
+
+- `display_hint: "brief"` — iOS renders as bullet-point compact rows
+- `post_type: "discovery"`
+- `visibility: "public"` (unless bullets reference family or home location)
+- Labels should cover the topics mentioned in the bullets (e.g., `weather`, `food`, `ai`, `local-events`)
+- Title: "Morning Brief", "Today's Take", "Weekend Ahead", or similar — keep it short and recurring
+
+**Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
+
+---
+
 ### Steps ID1–ID4: Interest Discovery Mode
 
 **Trigger**: `discover`, `explore`, `new interests`, `surprise me`, `broaden`, `rabbit hole`
@@ -526,6 +635,14 @@ Generate **1 post** framed as an update:
 This mode is the agent's ability to **find new interests the user didn't know they had**. Instead of searching within configured interests, it explores *adjacent* and *tangential* topics — things a curious version of the user would stumble into. The goal is serendipity: "I didn't know I cared about this until you showed me."
 
 #### ID1: Map the interest graph
+
+**First, check what you've explored recently** to avoid repeating the same adjacent territories:
+
+```bash
+beepbopgraph history --tag interest-discovery --days 30
+```
+
+Review the returned posts and their labels — steer toward adjacent territories you haven't covered recently.
 
 Start from the user's configured `BEEPBOPBOOP_INTERESTS` and their `BEEPBOPBOOP_DEFAULT_LOCATION`. Build an interest adjacency map by reasoning about what's *one hop away*:
 
@@ -590,7 +707,13 @@ For each selected piece, generate a post:
 
 **Then proceed to Step 4a (visibility) → Step 4b (image) → Step 4c (labels) → Step 4d (dedup) → Step 5 (publish).**
 
-**After publishing**, if the agent has memory capabilities, save a note about which adjacent topics resonated (were published) so future discovery runs explore *new* adjacent territories rather than repeating. Over time, the agent builds an expanding map of the user's intellectual curiosity.
+**After publishing**, save to beepbopgraph with the `interest-discovery` tag so future runs can avoid repeating the same adjacent territories:
+
+```bash
+beepbopgraph save --batch '<JSON_ARRAY>' --tag interest-discovery
+```
+
+Over time, this builds an expanding map of the user's intellectual curiosity that ID1 checks before exploring.
 
 ---
 
@@ -635,7 +758,7 @@ curl -s -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" "$BEEPBOPBOOP_API_UR
 If the endpoint returns data (total_events > 0), use it as **soft guidance** for your content plan:
 - **High save-rate labels** (saves/views > 0.3): generate more content with these labels
 - **High dwell-time types**: favor these post types in your mix
-- **Low-engagement labels**: reduce unless you have a genuinely fresh angle
+- **Low-engagement labels**: reduce this type. If you include one, the angle MUST differ from your last 5 posts with this label
 - This is guidance, not a hard constraint — still maintain variety and surprise
 
 If the endpoint returns empty data or errors, skip this step silently and proceed.
@@ -675,9 +798,9 @@ curl -s -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" "$BEEPBOPBOOP_API_UR
 
 This returns 7/30/90-day stats with post counts by type (`last_days_ago` shows recency) and top labels. Use this to guide your content plan:
 
-- **Type cadence**: If a type hasn't appeared in 5+ days (`last_days_ago >= 5`), consider including it today
-- **Type saturation**: If a type is >40% of 7-day posts, reduce it unless explicitly scheduled
-- **Label diversity**: If top 3 labels account for >60% of 30-day posts, actively explore new topics
+- **Type cadence**: If a type hasn't appeared in 5+ days (`last_days_ago >= 5`), strongly prefer including it — your feed is getting stale on this type
+- **Type saturation**: If a type is >40% of 7-day posts, reduce this type. If you include one, the angle MUST differ from your last 5 posts with this label
+- **Label diversity**: If top 3 labels account for >60% of 30-day posts, you MUST include at least 1 post with a label you haven't used in 14+ days
 - **Volume tracking**: Compare `avg_per_day` against `BATCH_MIN` — if you're consistently under target, boost today's count
 
 This is especially important for "every so often" modes (comparison, deals, seasonal, discovery) that don't have a daily schedule. Use `last_days_ago` to decide when it's time to include them again.
@@ -705,9 +828,13 @@ Execute each matching schedule rule from BT1. Schedule modes map to:
 - `calendar` → Calendar mode (Steps CL1–CL3)
 - `discover` → Interest Discovery mode (Steps ID1–ID4)
 - `trending` → **Delegate to `beepbopboop-news` skill** with `trending`
+- `digest` → Digest mode (Steps DG1–DG3)
+- `brief` → Brief mode (Steps BR1–BR3)
 
 **Phase 2 — Fill with defaults** (if post count is still under target):
-- Always: weather mode → 2-3 posts
+- Always: weather brief → 1 brief post (via BR1–BR3 adapted with weather focus)
+- Weather editorial → 0-1 article post (only if genuinely interesting weather story — first frost, heat wave, storm warning)
+- Always: digest → 1 digest post (via DG1–DG3 — pick topic based on available data)
 - Always: local mode with idea "events this week" → 2-4 posts
 - If `BEEPBOPBOOP_INTERESTS` configured: pick 1-2 interests → **delegate to `beepbopboop-news`** → 2-4 posts
 - If `BEEPBOPBOOP_SOURCES` configured: pick 1-2 sources → **delegate to `beepbopboop-news`** → 1-3 posts
@@ -746,6 +873,29 @@ Verify the final post set meets these criteria:
 - No more than 3 consecutive same-type posts — reorder if needed
 
 If any check fails, reorder or swap posts to fix it.
+
+#### BT7.5: Diversity Scorecard
+
+After the diversity check and before publishing, produce a scorecard to verify feed quality:
+
+```
+DIVERSITY SCORECARD
+- Types: 3/5 used (place, article, discovery) ✓
+- Hints: 5/14 used (place, article, brief, digest, outfit) ✓
+- Labels: 8 unique, top 3 = 42% ✓
+- Local vs non-local: 5/8 (63%) ✓
+- Consecutive same-type: max 2 ✓
+- Weather posts: 1 (brief) ✓
+```
+
+**Flag thresholds — if any of these fail, fix the batch before publishing:**
+- Type count < 2 → must add variety (swap a post for a different type)
+- Hint count < 3 → consider using digest/brief/place for suitable posts
+- Top 3 labels > 60% of all labels → swap one post for an unexplored label
+- Consecutive same-type > 3 → reorder the batch
+- Weather posts > 2 → excessive, cut to 1 brief + 0-1 editorial
+
+Print the scorecard to the user before proceeding to BT8.
 
 #### BT8: Publish all posts
 
@@ -1220,6 +1370,8 @@ Notes:
 - Set `image_url` to the image URL from Step 4b (Unsplash, imgur-hosted, or real poster/promo image)
 - The `post_type` must be one of: `event`, `place`, `discovery`, `article`, `video`
 - The `display_hint` tells the iOS app how to render the post. Pick from the base hints below. Defaults to `card` if omitted.
+
+  > **CRITICAL: You MUST set `display_hint` on every post.** Defaulting to `card` wastes purpose-built UI components. Check this table and pick the most specific hint. If you have lat/lon → `place`. If it's a list → `digest` or `brief`. If it's a comparison → `comparison`. If it's a deal → `deal`.
 
   | Hint | When to use |
   |---|---|

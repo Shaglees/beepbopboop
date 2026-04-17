@@ -119,10 +119,10 @@ private struct CardFooter: View {
 
             Spacer()
 
-            ReactionButtons(
+            ReactionPicker(
                 activeReaction: $activeReaction,
                 postID: post.id,
-                tintStyle: .standard
+                style: .feedCompact
             )
 
             Button {
@@ -139,60 +139,202 @@ private struct CardFooter: View {
     }
 }
 
-// MARK: - Reaction Buttons (Shared)
+// MARK: - Reaction Picker
 
-enum ReactionTintStyle {
-    case standard    // colored icons on secondary background
-    case dark        // colored icons on dark background (outfit/sports)
+enum ReactionPickerStyle {
+    case feedCompact    // standard card footer
+    case feedDark       // outfit/sports card footer (white-on-dark)
+    case detailBar      // standard detail engagement bar
+    case detailBarDark  // sports detail engagement bar
+
+    var isDark: Bool { self == .feedDark || self == .detailBarDark }
+    var isFeed: Bool { self == .feedCompact || self == .feedDark }
 }
 
-private struct ReactionButtons: View {
+struct ReactionPicker: View {
     @Binding var activeReaction: String?
     let postID: String
-    var tintStyle: ReactionTintStyle = .standard
+    var style: ReactionPickerStyle
+    @State private var isExpanded = false
     @EnvironmentObject private var apiService: APIService
 
-    private let reactions: [(key: String, icon: String, color: Color)] = [
-        ("more", "arrow.up.circle", .green),
-        ("less", "arrow.down.circle", .orange),
-        ("stale", "repeat.circle", .yellow),
-        ("not_for_me", "xmark.circle", .red),
+    private struct ReactionDef: Identifiable {
+        let key: String
+        let icon: String
+        let label: String
+        let color: Color
+        var id: String { key }
+    }
+
+    private static let reactionDefs: [ReactionDef] = [
+        ReactionDef(key: "more", icon: "arrow.up.circle", label: "More", color: .green),
+        ReactionDef(key: "less", icon: "arrow.down.circle", label: "Less", color: .orange),
+        ReactionDef(key: "stale", icon: "repeat.circle", label: "Stale", color: .yellow),
+        ReactionDef(key: "not_for_me", icon: "xmark.circle", label: "Not for me", color: .red),
     ]
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(reactions, id: \.key) { reaction in
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    let wasActive = activeReaction == reaction.key
-                    let previous = activeReaction
-                    activeReaction = wasActive ? nil : reaction.key
+        if style.isFeed {
+            feedLayout
+        } else {
+            detailLayout
+        }
+    }
 
-                    Task {
-                        do {
-                            if wasActive {
-                                try await apiService.removeReaction(postID: postID)
-                            } else {
-                                try await apiService.setReaction(postID: postID, reaction: reaction.key)
+    // MARK: Feed Layout (compact trigger → floating picker)
+
+    @ViewBuilder
+    private var feedLayout: some View {
+        feedTrigger
+            .overlay(alignment: .bottomTrailing) {
+                if isExpanded {
+                    Color.clear
+                        .frame(width: 320, height: 320)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                isExpanded = false
                             }
-                        } catch {
-                            activeReaction = previous // revert on failure
                         }
-                    }
+                        .offset(x: 100, y: 100)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if isExpanded {
+                    floatingPicker
+                        .offset(y: -48)
+                        .transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isExpanded)
+    }
+
+    @ViewBuilder
+    private var feedTrigger: some View {
+        if let active = activeReaction,
+           let reaction = Self.reactionDefs.first(where: { $0.key == active }) {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: reaction.icon + ".fill")
+                        .font(.caption2)
+                    Text(reaction.label)
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundColor(reaction.color)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(reaction.color.opacity(0.12))
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Reacted with \(reaction.label). Double tap to change.")
+        } else {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                Image(systemName: isExpanded ? "face.smiling.fill" : "face.smiling")
+                    .font(.footnote)
+                    .foregroundColor(style.isDark ? .white.opacity(0.4) : .secondary)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("React to this post")
+        }
+    }
+
+    private var floatingPicker: some View {
+        HStack(spacing: 8) {
+            ForEach(Self.reactionDefs) { reaction in
+                Button {
+                    selectReaction(reaction)
                 } label: {
                     let isActive = activeReaction == reaction.key
-                    Image(systemName: isActive ? reaction.icon + ".fill" : reaction.icon)
-                        .font(.caption)
-                        .foregroundColor(isActive ? reaction.color : unselectedColor)
+                    VStack(spacing: 4) {
+                        Image(systemName: isActive ? reaction.icon + ".fill" : reaction.icon)
+                            .font(.body)
+                            .contentTransition(.symbolEffect(.replace))
+                        Text(reaction.label)
+                            .font(.caption2)
+                    }
+                    .foregroundColor(isActive ? reaction.color : (style.isDark ? .white.opacity(0.5) : .secondary))
+                    .frame(minWidth: 56, minHeight: 56)
+                    .background(isActive ? reaction.color.opacity(0.12) : .clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(reaction.label)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(pickerBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+    }
+
+    @ViewBuilder
+    private var pickerBackground: some View {
+        if style.isDark {
+            RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.7))
+        } else {
+            RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial)
+        }
+    }
+
+    // MARK: Detail Layout (always-visible inline pills)
+
+    private var detailLayout: some View {
+        HStack(spacing: 8) {
+            ForEach(Self.reactionDefs) { reaction in
+                let isActive = activeReaction == reaction.key
+                Button {
+                    selectReaction(reaction)
+                } label: {
+                    Label(reaction.label, systemImage: isActive ? reaction.icon + ".fill" : reaction.icon)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(isActive ? .white : reaction.color)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(isActive ? reaction.color : reaction.color.opacity(style.isDark ? 0.15 : 0.1))
+                        .clipShape(Capsule())
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isActive ? "Reacted with \(reaction.label). Double tap to change." : reaction.label)
             }
         }
     }
 
-    private var unselectedColor: Color {
-        tintStyle == .dark ? .white.opacity(0.4) : .secondary
+    // MARK: Action
+
+    private func selectReaction(_ reaction: ReactionDef) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let wasActive = activeReaction == reaction.key
+        let previous = activeReaction
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            activeReaction = wasActive ? nil : reaction.key
+            isExpanded = false
+        }
+
+        Task {
+            do {
+                if wasActive {
+                    try await apiService.removeReaction(postID: postID)
+                } else {
+                    try await apiService.setReaction(postID: postID, reaction: reaction.key)
+                }
+            } catch {
+                activeReaction = previous
+            }
+        }
     }
 }
 
@@ -772,10 +914,10 @@ private struct OutfitFooter: View {
                     .lineLimit(1)
             }
             Spacer()
-            ReactionButtons(
+            ReactionPicker(
                 activeReaction: $activeReaction,
                 postID: post.id,
-                tintStyle: .dark
+                style: .feedDark
             )
             OutfitBookmarkButton(post: post, tintColor: outfitMauve)
         }

@@ -5,12 +5,14 @@ import SwiftUI
 struct ScoreboardCard: View {
     let post: Post
     let game: GameData
+    @State private var activeReaction: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init?(post: Post) {
         guard let gd = post.gameData else { return nil }
         self.post = post
         self.game = gd
+        self._activeReaction = State(initialValue: post.myReaction)
     }
 
     private var homeWins: Bool {
@@ -163,6 +165,11 @@ struct ScoreboardCard: View {
                                 .font(.caption2)
                                 .foregroundStyle(.white.opacity(0.4))
                         }
+                        ReactionPicker(
+                            activeReaction: $activeReaction,
+                            postID: post.id,
+                            style: .feedDark
+                        )
                         SportsBookmarkButton(post: post, darkMode: true)
                     }
                 }
@@ -178,12 +185,14 @@ struct ScoreboardCard: View {
 struct MatchupCard: View {
     let post: Post
     let game: GameData
+    @State private var activeReaction: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init?(post: Post) {
         guard let gd = post.gameData else { return nil }
         self.post = post
         self.game = gd
+        self._activeReaction = State(initialValue: post.myReaction)
     }
 
     var body: some View {
@@ -348,6 +357,11 @@ struct MatchupCard: View {
                             .foregroundStyle(.white.opacity(0.4))
                     }
                     Spacer()
+                    ReactionPicker(
+                        activeReaction: $activeReaction,
+                        postID: post.id,
+                        style: .feedDark
+                    )
                     SportsBookmarkButton(post: post, darkMode: true)
                 }
             }
@@ -362,6 +376,7 @@ struct MatchupCard: View {
 struct StandingsCard: View {
     let post: Post
     let standings: StandingsData
+    @State private var activeReaction: String?
 
     private let darkBg = Color(red: 0.1, green: 0.09, blue: 0.08)
 
@@ -369,6 +384,7 @@ struct StandingsCard: View {
         guard let sd = post.standingsData else { return nil }
         self.post = post
         self.standings = sd
+        self._activeReaction = State(initialValue: post.myReaction)
     }
 
     private var accentColor: Color {
@@ -427,6 +443,11 @@ struct StandingsCard: View {
                         .foregroundStyle(.white.opacity(0.8))
                         .lineLimit(1)
                     Spacer()
+                    ReactionPicker(
+                        activeReaction: $activeReaction,
+                        postID: post.id,
+                        style: .feedDark
+                    )
                     SportsBookmarkButton(post: post, darkMode: true)
                 }
                 .padding(.horizontal, 16)
@@ -435,6 +456,11 @@ struct StandingsCard: View {
             } else {
                 HStack {
                     Spacer()
+                    ReactionPicker(
+                        activeReaction: $activeReaction,
+                        postID: post.id,
+                        style: .feedDark
+                    )
                     SportsBookmarkButton(post: post, darkMode: true)
                 }
                 .padding(.horizontal, 16)

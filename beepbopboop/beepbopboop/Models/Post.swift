@@ -170,6 +170,7 @@ struct Post: Codable, Identifiable {
     let displayHint: String?
     let images: [PostImage]?
     let labels: [String]?
+    let myReaction: String?
     let createdAt: String
 
 
@@ -371,6 +372,7 @@ struct Post: Codable, Identifiable {
         case displayHint = "display_hint"
         case images
         case labels
+        case myReaction = "my_reaction"
         case createdAt = "created_at"
     }
 

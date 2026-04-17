@@ -84,5 +84,16 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("INSERT INTO users (id, firebase_uid) VALUES ('system', 'system') ON CONFLICT DO NOTHING")
 	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('weather-bot', 'system', 'Weather', 'active') ON CONFLICT DO NOTHING")
 
+	// Post reactions (explicit user feedback for agent content tuning)
+	db.Exec(`CREATE TABLE IF NOT EXISTS post_reactions (
+		post_id    TEXT NOT NULL REFERENCES posts(id),
+		user_id    TEXT NOT NULL REFERENCES users(id),
+		reaction   TEXT NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (post_id, user_id)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_reactions_user ON post_reactions(user_id, updated_at DESC)")
+
 	return db, nil
 }

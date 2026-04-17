@@ -16,16 +16,52 @@ type MultiFeedHandler struct {
 	userSettingsRepo *repository.UserSettingsRepo
 	weightsRepo      *repository.WeightsRepo
 	eventRepo        *repository.EventRepo
+	reactionRepo     *repository.ReactionRepo
 }
 
-func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo, eventRepo *repository.EventRepo) *MultiFeedHandler {
+func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo, eventRepo *repository.EventRepo, reactionRepo *repository.ReactionRepo) *MultiFeedHandler {
 	return &MultiFeedHandler{
 		userRepo:         userRepo,
 		postRepo:         postRepo,
 		userSettingsRepo: userSettingsRepo,
 		weightsRepo:      weightsRepo,
 		eventRepo:        eventRepo,
+		reactionRepo:     reactionRepo,
 	}
+}
+
+// enrichAndFilter batch-looks up reactions, sets MyReaction on each post,
+// and removes posts that the user has negatively reacted to.
+func (h *MultiFeedHandler) enrichAndFilter(posts []model.Post, userID string) []model.Post {
+	if len(posts) == 0 {
+		return posts
+	}
+
+	postIDs := make([]string, len(posts))
+	for i := range posts {
+		postIDs[i] = posts[i].ID
+	}
+
+	reactions, err := h.reactionRepo.GetForPosts(postIDs, userID)
+	if err != nil {
+		slog.Warn("failed to lookup reactions for feed", "error", err)
+		return posts
+	}
+	if len(reactions) == 0 {
+		return posts
+	}
+
+	filtered := make([]model.Post, 0, len(posts))
+	for i := range posts {
+		if r, ok := reactions[posts[i].ID]; ok {
+			if repository.NegativeReactions[r] {
+				continue // hide negatively-reacted posts
+			}
+			posts[i].MyReaction = &r
+		}
+		filtered = append(filtered, posts[i])
+	}
+	return filtered
 }
 
 func (h *MultiFeedHandler) GetPersonal(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +84,8 @@ func (h *MultiFeedHandler) GetPersonal(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load feed"})
 		return
 	}
+
+	posts = h.enrichAndFilter(posts, user.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(model.FeedResponse{Posts: posts, NextCursor: nextCursor})
@@ -83,6 +121,8 @@ func (h *MultiFeedHandler) GetCommunity(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load feed"})
 		return
 	}
+
+	posts = h.enrichAndFilter(posts, user.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(model.FeedResponse{Posts: posts, NextCursor: nextCursor})
@@ -147,6 +187,8 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load feed"})
 		return
 	}
+
+	posts = h.enrichAndFilter(posts, user.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(model.FeedResponse{Posts: posts, NextCursor: nextCursor})

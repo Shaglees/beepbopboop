@@ -640,6 +640,31 @@ If the endpoint returns data (total_events > 0), use it as **soft guidance** for
 
 If the endpoint returns empty data or errors, skip this step silently and proceed.
 
+#### BT1b2: Check user reactions
+
+Fetch explicit user reaction feedback to understand content preferences:
+
+```bash
+curl -s -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" "$BEEPBOPBOOP_API_URL/reactions/summary" | jq .
+```
+
+This returns 30-day aggregated reaction counts by label and post type. Reactions are **explicit, intentional signals** from the user — they carry more weight than implicit engagement:
+
+- **`more` reactions**: The user actively wants more of this label/type. Prioritize generating content with these labels.
+- **`less` reactions**: The user wants less of this. Reduce content with these labels unless you have a compelling new angle.
+- **`stale` reactions**: Content feels repetitive. Find fresh perspectives, new sources, or different angles for these topics. Don't just reduce — innovate.
+- **`not_for_me` reactions**: Not relevant to the user. Strongly avoid these labels/types in future content.
+
+**Priority over engagement data**: If a label has high implicit engagement (saves, dwell time) but also `less`/`stale` reactions, the reactions win. The user is explicitly telling you something that passive behavior doesn't capture.
+
+**How to interpret mixed signals:**
+- High `more` + low engagement = user likes the idea but execution needs improvement
+- Low `more` + high engagement = content is fine for browsing but not noteworthy
+- `stale` on a popular label = vary the angle, don't drop the topic entirely
+- `not_for_me` is the strongest signal = almost never generate this label/type
+
+If the endpoint returns empty data or errors, skip this step silently and proceed.
+
 #### BT1c: Check posting history
 
 Fetch rolling post statistics to understand your publishing patterns:

@@ -61,6 +61,7 @@ type Post struct {
 	CreatedAt   time.Time       `json:"created_at"`
 	ViewCount   int       `json:"view_count"`
 	SaveCount   int       `json:"save_count"`
+	MyReaction  *string   `json:"my_reaction,omitempty"`
 }
 
 type DisplayTemplate struct {
@@ -111,6 +112,37 @@ type EventSummary struct {
 	TypeEngagement  []TypeEngagement  `json:"type_engagement"`
 	TotalEvents     int               `json:"total_events"`
 	PeriodDays      int               `json:"period_days"`
+}
+
+type PostReaction struct {
+	PostID    string    `json:"post_id"`
+	UserID    string    `json:"user_id"`
+	Reaction  string    `json:"reaction"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type ReactionSummary struct {
+	LabelReactions []LabelReaction `json:"label_reactions"`
+	TypeReactions  []TypeReaction  `json:"type_reactions"`
+	TotalReactions int             `json:"total_reactions"`
+	PeriodDays     int             `json:"period_days"`
+}
+
+type LabelReaction struct {
+	Label    string `json:"label"`
+	More     int    `json:"more"`
+	Less     int    `json:"less"`
+	Stale    int    `json:"stale"`
+	NotForMe int    `json:"not_for_me"`
+}
+
+type TypeReaction struct {
+	PostType string `json:"type"`
+	More     int    `json:"more"`
+	Less     int    `json:"less"`
+	Stale    int    `json:"stale"`
+	NotForMe int    `json:"not_for_me"`
 }
 
 type UserWeights struct {

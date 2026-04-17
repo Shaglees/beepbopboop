@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 enum FeedType {
@@ -12,7 +13,7 @@ enum FeedType {
     }
 }
 
-class APIService {
+class APIService: ObservableObject {
     private let baseURL: String
     private let authService: AuthService
 
@@ -121,6 +122,44 @@ class APIService {
             throw APIError.httpError(httpResponse.statusCode)
         }
         return try JSONDecoder().decode(UserSettings.self, from: data)
+    }
+
+    // MARK: - Reactions
+
+    @MainActor
+    func setReaction(postID: String, reaction: String) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/posts/\(postID)/reaction") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["reaction": reaction])
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
+    @MainActor
+    func removeReaction(postID: String) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/posts/\(postID)/reaction") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
     }
 
     enum APIError: LocalizedError {

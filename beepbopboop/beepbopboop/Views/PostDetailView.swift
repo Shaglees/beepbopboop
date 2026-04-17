@@ -6,10 +6,13 @@ struct PostDetailView: View {
     let post: Post
     @AppStorage private var isBookmarked: Bool
     @Environment(\.dismiss) private var dismiss
+    @State private var activeReaction: String?
+    @EnvironmentObject private var apiService: APIService
 
     init(post: Post) {
         self.post = post
         self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._activeReaction = State(initialValue: post.myReaction)
     }
 
     private var bodyLines: [String] {
@@ -766,7 +769,7 @@ struct PostDetailView: View {
     // MARK: - Sports Shared Components
 
     private var sportsEngagementBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 12) {
             Button {
                 withAnimation(.bouncy) { isBookmarked.toggle() }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -781,6 +784,8 @@ struct PostDetailView: View {
                 .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
+
+            detailReactionButtons
 
             Spacer()
 
@@ -1197,7 +1202,7 @@ struct PostDetailView: View {
     // MARK: - Engagement Bar
 
     private var engagementBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 12) {
             Button {
                 withAnimation(.bouncy) {
                     isBookmarked.toggle()
@@ -1215,6 +1220,8 @@ struct PostDetailView: View {
             }
             .buttonStyle(.plain)
 
+            detailReactionButtons
+
             Spacer()
 
             ShareLink(item: shareText) {
@@ -1224,8 +1231,6 @@ struct PostDetailView: View {
             }
 
             if let externalURL = post.externalURL, !externalURL.isEmpty, let url = URL(string: externalURL) {
-                Spacer()
-                    .frame(width: 20)
                 Link(destination: url) {
                     Label("Open", systemImage: "arrow.up.right.square")
                         .font(.subheadline)
@@ -1235,6 +1240,47 @@ struct PostDetailView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
+    }
+
+    // MARK: - Detail Reaction Buttons
+
+    private var detailReactionButtons: some View {
+        let reactions: [(key: String, icon: String, label: String, color: Color)] = [
+            ("more", "arrow.up.circle", "More", .green),
+            ("less", "arrow.down.circle", "Less", .orange),
+            ("stale", "repeat.circle", "Stale", .yellow),
+            ("not_for_me", "xmark.circle", "Not for me", .red),
+        ]
+
+        return HStack(spacing: 8) {
+            ForEach(reactions, id: \.key) { reaction in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    let wasActive = activeReaction == reaction.key
+                    let previous = activeReaction
+                    activeReaction = wasActive ? nil : reaction.key
+
+                    Task {
+                        do {
+                            if wasActive {
+                                try await apiService.removeReaction(postID: post.id)
+                            } else {
+                                try await apiService.setReaction(postID: post.id, reaction: reaction.key)
+                            }
+                        } catch {
+                            activeReaction = previous
+                        }
+                    }
+                } label: {
+                    let isActive = activeReaction == reaction.key
+                    Label(reaction.label, systemImage: isActive ? reaction.icon + ".fill" : reaction.icon)
+                        .font(.caption)
+                        .foregroundColor(isActive ? reaction.color : .secondary)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     // MARK: - Helpers

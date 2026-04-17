@@ -63,6 +63,7 @@ func main() {
 	eventRepo := repository.NewEventRepo(db)
 	weightsRepo := repository.NewWeightsRepo(db)
 	templateRepo := repository.NewTemplateRepo(db)
+	reactionRepo := repository.NewReactionRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -70,11 +71,12 @@ func main() {
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo)
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
-	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo)
+	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo)
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
 	weightsH := handler.NewWeightsHandler(agentRepo, weightsRepo)
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
+	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
 	weatherSvc := weather.NewService()
 
 	// Middleware
@@ -103,6 +105,8 @@ func main() {
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
 		r.Post("/posts/{postID}/events", eventsH.TrackEvent)
 		r.Post("/events/batch", eventsH.BatchTrack)
+		r.Put("/posts/{postID}/reaction", reactionsH.SetReaction)
+		r.Delete("/posts/{postID}/reaction", reactionsH.RemoveReaction)
 		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
 	})
 
@@ -114,6 +118,7 @@ func main() {
 		r.Post("/posts", postH.CreatePost)
 		r.Post("/posts/lint", postH.LintPost)
 		r.Get("/events/summary", eventsH.Summary)
+		r.Get("/reactions/summary", reactionsH.Summary)
 		r.Get("/user/weights", weightsH.GetWeights)
 		r.Put("/user/weights", weightsH.UpdateWeights)
 		r.Get("/user/templates", templatesH.ListTemplatesAgent)

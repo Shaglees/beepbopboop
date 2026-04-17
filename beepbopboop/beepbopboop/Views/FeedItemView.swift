@@ -99,10 +99,13 @@ private struct CardHeader: View {
 private struct CardFooter: View {
     let post: Post
     @AppStorage var isBookmarked: Bool
+    @State private var activeReaction: String?
+    @EnvironmentObject private var apiService: APIService
 
     init(post: Post) {
         self.post = post
         self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._activeReaction = State(initialValue: post.myReaction)
     }
 
     var body: some View {
@@ -116,9 +119,14 @@ private struct CardFooter: View {
 
             Spacer()
 
+            ReactionButtons(
+                activeReaction: $activeReaction,
+                postID: post.id,
+                tintStyle: .standard
+            )
+
             Button {
-                let generator = UIImpactFeedbackGenerator(style: .light)
-                generator.impactOccurred()
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
@@ -128,6 +136,63 @@ private struct CardFooter: View {
             }
             .buttonStyle(.plain)
         }
+    }
+}
+
+// MARK: - Reaction Buttons (Shared)
+
+enum ReactionTintStyle {
+    case standard    // colored icons on secondary background
+    case dark        // colored icons on dark background (outfit/sports)
+}
+
+private struct ReactionButtons: View {
+    @Binding var activeReaction: String?
+    let postID: String
+    var tintStyle: ReactionTintStyle = .standard
+    @EnvironmentObject private var apiService: APIService
+
+    private let reactions: [(key: String, icon: String, color: Color)] = [
+        ("more", "arrow.up.circle", .green),
+        ("less", "arrow.down.circle", .orange),
+        ("stale", "repeat.circle", .yellow),
+        ("not_for_me", "xmark.circle", .red),
+    ]
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(reactions, id: \.key) { reaction in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    let wasActive = activeReaction == reaction.key
+                    let previous = activeReaction
+                    activeReaction = wasActive ? nil : reaction.key
+
+                    Task {
+                        do {
+                            if wasActive {
+                                try await apiService.removeReaction(postID: postID)
+                            } else {
+                                try await apiService.setReaction(postID: postID, reaction: reaction.key)
+                            }
+                        } catch {
+                            activeReaction = previous // revert on failure
+                        }
+                    }
+                } label: {
+                    let isActive = activeReaction == reaction.key
+                    Image(systemName: isActive ? reaction.icon + ".fill" : reaction.icon)
+                        .font(.caption)
+                        .foregroundColor(isActive ? reaction.color : unselectedColor)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var unselectedColor: Color {
+        tintStyle == .dark ? .white.opacity(0.4) : .secondary
     }
 }
 
@@ -681,20 +746,41 @@ private struct OutfitCard: View {
             }
 
             // Footer
-            HStack(spacing: 6) {
-                if let locality = post.locality, !locality.isEmpty {
-                    Label(locality, systemImage: post.isSourceAttribution ? "link" : "location")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.4))
-                        .lineLimit(1)
-                }
-                Spacer()
-                OutfitBookmarkButton(post: post, tintColor: outfitMauve)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(darkBg)
+            OutfitFooter(post: post, outfitMauve: outfitMauve)
+                .background(darkBg)
         }
+    }
+}
+
+private struct OutfitFooter: View {
+    let post: Post
+    let outfitMauve: Color
+    @State private var activeReaction: String?
+
+    init(post: Post, outfitMauve: Color) {
+        self.post = post
+        self.outfitMauve = outfitMauve
+        self._activeReaction = State(initialValue: post.myReaction)
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let locality = post.locality, !locality.isEmpty {
+                Label(locality, systemImage: post.isSourceAttribution ? "link" : "location")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.4))
+                    .lineLimit(1)
+            }
+            Spacer()
+            ReactionButtons(
+                activeReaction: $activeReaction,
+                postID: post.id,
+                tintStyle: .dark
+            )
+            OutfitBookmarkButton(post: post, tintColor: outfitMauve)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 }
 

@@ -799,6 +799,7 @@ curl -s -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" "$BEEPBOPBOOP_API_UR
 This returns 7/30/90-day stats with post counts by type (`last_days_ago` shows recency) and top labels. Use this to guide your content plan:
 
 - **Type cadence**: If a type hasn't appeared in 5+ days (`last_days_ago >= 5`), strongly prefer including it — your feed is getting stale on this type
+- **Hint cadence**: Apply cadence logic to display hints too. If `outfit`, `scoreboard`, `matchup`, or `standings` hints haven't appeared in 3+ days, strongly prefer including them — these are high-value specialty content that keeps the feed distinctive.
 - **Type saturation**: If a type is >40% of 7-day posts, reduce this type. If you include one, the angle MUST differ from your last 5 posts with this label
 - **Label diversity**: If top 3 labels account for >60% of 30-day posts, you MUST include at least 1 post with a label you haven't used in 14+ days
 - **Volume tracking**: Compare `avg_per_day` against `BATCH_MIN` — if you're consistently under target, boost today's count
@@ -830,23 +831,26 @@ Execute each matching schedule rule from BT1. Schedule modes map to:
 - `trending` → **Delegate to `beepbopboop-news` skill** with `trending`
 - `digest` → Digest mode (Steps DG1–DG3)
 - `brief` → Brief mode (Steps BR1–BR3)
+- `sports` → **Delegate to `beepbopboop-news` skill** with `sports`
+- `fashion` → **Delegate to `beepbopboop-fashion` skill** with ARGS (default: rotating focus)
 
 **Phase 2 — Fill with defaults** (if post count is still under target):
-- Always: weather brief → 1 brief post (via BR1–BR3 adapted with weather focus)
-- Weather editorial → 0-1 article post (only if genuinely interesting weather story — first frost, heat wave, storm warning)
-- Always: digest → 1 digest post (via DG1–DG3 — pick topic based on available data)
-- Always: local mode with idea "events this week" → 2-4 posts
-- If `BEEPBOPBOOP_INTERESTS` configured: pick 1-2 interests → **delegate to `beepbopboop-news`** → 2-4 posts
-- If `BEEPBOPBOOP_SOURCES` configured: pick 1-2 sources → **delegate to `beepbopboop-news`** → 1-3 posts
-- If `BEEPBOPBOOP_SPORTS_TEAMS` configured: **delegate to `beepbopboop-news` with `sports`** → 1-3 posts (upcoming games + team news)
-- If `BEEPBOPBOOP_CALENDAR_URL` configured: calendar mode → 1-3 posts
-- If seasonal month is notable (Dec, Mar, Jun, Sep, Oct): seasonal mode → 1 post
-- Always: interest discovery mode → 1-2 posts (explore adjacent topics — this keeps the feed expanding)
-- Always: **delegate to `beepbopboop-news` with `trending`** → 2-3 posts (what's hot in the world right now)
-- Occasionally: comparison mode → 1 post (include roughly 30% of the time)
-- Occasionally: deal mode → 1 post (include roughly 20% of the time)
+1. Always: weather brief → 1 brief post (via BR1–BR3 adapted with weather focus)
+2. Weather editorial → 0-1 article post (only if genuinely interesting weather story — first frost, heat wave, storm warning)
+3. Always: digest → 1 digest post (via DG1–DG3 — pick topic based on available data)
+4. Always: local mode with idea "events this week" → 2-4 posts
+5. If `BEEPBOPBOOP_SPORTS_TEAMS` configured: **MUST delegate to `beepbopboop-news` with `sports`** → 1-3 posts (upcoming games, scores, team news). This is not optional — when teams are configured, sports posts MUST appear in the batch. Expect scoreboard/matchup/standings display hints.
+6. Always: **delegate to `beepbopboop-fashion` skill** → 1-2 posts. Pick a rotating focus from trend/outfit/seasonal based on what hasn't appeared recently. Expect outfit display hints.
+7. If `BEEPBOPBOOP_INTERESTS` configured: pick 1-2 interests → **delegate to `beepbopboop-news`** → 2-4 posts
+8. If `BEEPBOPBOOP_SOURCES` configured: pick 1-2 sources → **delegate to `beepbopboop-news`** → 1-3 posts
+9. If `BEEPBOPBOOP_CALENDAR_URL` configured: calendar mode → 1-3 posts
+10. If seasonal month is notable (Dec, Mar, Jun, Sep, Oct): seasonal mode → 1 post
+11. Always: interest discovery mode → 1-2 posts (explore adjacent topics — this keeps the feed expanding)
+12. Always: **delegate to `beepbopboop-news` with `trending`** → 2-3 posts (what's hot in the world right now)
+13. Occasionally: comparison mode → 1 post (include roughly 30% of the time)
+14. Occasionally: deal mode → 1 post (include roughly 20% of the time)
 
-**Phase 3 — Trim** if total exceeds `BATCH_MAX`, drop the least essential posts (deals and seasonal first).
+**Phase 3 — Trim** if total exceeds `BATCH_MAX`, drop the least essential posts (deals, comparison, and extra local/interest duplicates first). **Preserve at least 1 sports post (if teams configured) and 1 fashion post.** These are high-value specialty content that keeps the feed distinctive — trim generic fills before cutting them.
 
 #### BT4: Execute scheduled content
 
@@ -871,8 +875,10 @@ Verify the final post set meets these criteria:
 - At least 2 different `post_type` values
 - At least 1 local post (with coordinates) and 1 non-local post (without coordinates)
 - No more than 3 consecutive same-type posts — reorder if needed
+- If `BEEPBOPBOOP_SPORTS_TEAMS` configured: at least 1 sports-hint post (scoreboard, matchup, or standings)
+- At least 1 fashion-hint post (outfit) in the batch
 
-If any check fails, reorder or swap posts to fix it.
+If any check fails, reorder or swap posts to fix it. For missing sports or fashion posts, delegate to the appropriate sibling skill (`beepbopboop-news` with `sports` or `beepbopboop-fashion`) to generate the missing post(s) before publishing.
 
 #### BT7.5: Diversity Scorecard
 
@@ -886,6 +892,8 @@ DIVERSITY SCORECARD
 - Local vs non-local: 5/8 (63%) ✓
 - Consecutive same-type: max 2 ✓
 - Weather posts: 1 (brief) ✓
+- Sports posts: 2 (matchup, standings) ✓
+- Fashion posts: 1 (outfit) ✓
 ```
 
 **Flag thresholds — if any of these fail, fix the batch before publishing:**
@@ -894,6 +902,8 @@ DIVERSITY SCORECARD
 - Top 3 labels > 60% of all labels → swap one post for an unexplored label
 - Consecutive same-type > 3 → reorder the batch
 - Weather posts > 2 → excessive, cut to 1 brief + 0-1 editorial
+- Sports posts = 0 (with `BEEPBOPBOOP_SPORTS_TEAMS` configured) → must delegate to `beepbopboop-news` with `sports` to generate at least 1 scoreboard/matchup/standings post
+- Fashion posts = 0 → must delegate to `beepbopboop-fashion` for at least 1 outfit post
 
 Print the scorecard to the user before proceeding to BT8.
 

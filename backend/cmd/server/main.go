@@ -112,6 +112,7 @@ func main() {
 		r.Get("/posts", postH.ListPosts)
 		r.Get("/posts/stats", postH.GetPostStats)
 		r.Post("/posts", postH.CreatePost)
+		r.Post("/posts/lint", postH.LintPost)
 		r.Get("/events/summary", eventsH.Summary)
 		r.Get("/user/weights", weightsH.GetWeights)
 		r.Put("/user/weights", weightsH.UpdateWeights)

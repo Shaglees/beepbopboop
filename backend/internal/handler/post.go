@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
 
-var validPostTypes = map[string]bool{
+var ValidPostTypes = map[string]bool{
 	"event":     true,
 	"place":     true,
 	"discovery": true,
@@ -18,10 +19,33 @@ var validPostTypes = map[string]bool{
 	"video":     true,
 }
 
-var validVisibility = map[string]bool{
+var ValidVisibility = map[string]bool{
 	"public":   true,
 	"personal": true,
 	"private":  true,
+}
+
+var ValidDisplayHints = map[string]bool{
+	"card":        true,
+	"place":       true,
+	"article":     true,
+	"weather":     true,
+	"calendar":    true,
+	"deal":        true,
+	"digest":      true,
+	"brief":       true,
+	"comparison":  true,
+	"event":       true,
+	"outfit":      true,
+	"scoreboard":  true,
+	"matchup":     true,
+	"standings":   true,
+}
+
+var ValidImageRoles = map[string]bool{
+	"hero":    true,
+	"detail":  true,
+	"product": true,
 }
 
 type PostHandler struct {
@@ -37,19 +61,341 @@ func NewPostHandler(agentRepo *repository.AgentRepo, postRepo *repository.PostRe
 }
 
 type createPostRequest struct {
-	Title       string   `json:"title"`
-	Body        string   `json:"body"`
-	ImageURL    string   `json:"image_url,omitempty"`
-	ExternalURL string   `json:"external_url,omitempty"`
-	Locality    string   `json:"locality,omitempty"`
-	Latitude    *float64 `json:"latitude,omitempty"`
-	Longitude   *float64 `json:"longitude,omitempty"`
-	PostType    string   `json:"post_type,omitempty"`
-	Visibility  string   `json:"visibility,omitempty"`
-	DisplayHint string   `json:"display_hint,omitempty"`
+	Title       string          `json:"title"`
+	Body        string          `json:"body"`
+	ImageURL    string          `json:"image_url,omitempty"`
+	ExternalURL string          `json:"external_url,omitempty"`
+	Locality    string          `json:"locality,omitempty"`
+	Latitude    *float64        `json:"latitude,omitempty"`
+	Longitude   *float64        `json:"longitude,omitempty"`
+	PostType    string          `json:"post_type,omitempty"`
+	Visibility  string          `json:"visibility,omitempty"`
+	DisplayHint string          `json:"display_hint,omitempty"`
 	Labels      []string        `json:"labels,omitempty"`
 	Images      json.RawMessage `json:"images,omitempty"`
 }
+
+// --- Validation types ---
+
+type validationIssue struct {
+	Field   string `json:"field"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type validationResult struct {
+	Valid    bool              `json:"valid"`
+	Errors   []validationIssue `json:"errors"`
+	Warnings []validationIssue `json:"warnings"`
+}
+
+// validatePost checks a createPostRequest and returns structured errors/warnings.
+// Pure function — no DB access.
+func validatePost(req *createPostRequest) validationResult {
+	var errs []validationIssue
+	var warns []validationIssue
+
+	// --- Basic fields ---
+	if req.Title == "" {
+		errs = append(errs, validationIssue{Field: "title", Code: "required", Message: "title is required"})
+	}
+	if req.Body == "" {
+		errs = append(errs, validationIssue{Field: "body", Code: "required", Message: "body is required"})
+	}
+
+	// Apply defaults before validation
+	if req.PostType == "" {
+		req.PostType = "discovery"
+	}
+	if !ValidPostTypes[req.PostType] {
+		errs = append(errs, validationIssue{
+			Field:   "post_type",
+			Code:    "invalid",
+			Message: fmt.Sprintf("invalid post_type %q: must be event, place, discovery, article, or video", req.PostType),
+		})
+	}
+
+	if req.Visibility == "" {
+		req.Visibility = "public"
+	}
+	if !ValidVisibility[req.Visibility] {
+		errs = append(errs, validationIssue{
+			Field:   "visibility",
+			Code:    "invalid",
+			Message: fmt.Sprintf("invalid visibility %q: must be public, personal, or private", req.Visibility),
+		})
+	}
+
+	if req.DisplayHint != "" && !ValidDisplayHints[req.DisplayHint] {
+		errs = append(errs, validationIssue{
+			Field:   "display_hint",
+			Code:    "invalid",
+			Message: fmt.Sprintf("unknown display_hint %q", req.DisplayHint),
+		})
+	}
+
+	// Labels
+	if len(req.Labels) > 20 {
+		warns = append(warns, validationIssue{Field: "labels", Code: "truncated", Message: "more than 20 labels; will be truncated to 20"})
+	}
+	if len(req.Labels) == 0 {
+		warns = append(warns, validationIssue{Field: "labels", Code: "missing", Message: "no labels; hurts feed ranking"})
+	}
+
+	// Images array validation
+	if len(req.Images) > 0 {
+		var images []map[string]interface{}
+		if err := json.Unmarshal(req.Images, &images); err != nil {
+			errs = append(errs, validationIssue{Field: "images", Code: "invalid_json", Message: "images must be a valid JSON array of objects"})
+		} else {
+			for i, img := range images {
+				prefix := fmt.Sprintf("images[%d]", i)
+				if _, ok := img["url"]; !ok {
+					errs = append(errs, validationIssue{
+						Field:   prefix + ".url",
+						Code:    "required",
+						Message: fmt.Sprintf("image %d must have a url", i),
+					})
+				}
+				if role, ok := img["role"].(string); ok && !ValidImageRoles[role] {
+					warns = append(warns, validationIssue{
+						Field:   prefix + ".role",
+						Code:    "unknown",
+						Message: fmt.Sprintf("unknown image role %q; known: hero, detail, product", role),
+					})
+				}
+			}
+		}
+	}
+
+	// Public post without location
+	if req.Visibility == "public" && req.Locality == "" && req.Latitude == nil {
+		warns = append(warns, validationIssue{
+			Field:   "locality",
+			Code:    "missing",
+			Message: "public post with no locality or coordinates",
+		})
+	}
+
+	// --- external_url schema validation for structured hints ---
+	if req.ExternalURL != "" {
+		switch req.DisplayHint {
+		case "weather":
+			validateWeatherData(req.ExternalURL, &errs, &warns)
+		case "scoreboard", "matchup":
+			validateGameData(req.ExternalURL, req.DisplayHint, &errs, &warns)
+		case "standings":
+			validateStandingsData(req.ExternalURL, &errs, &warns)
+		}
+	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" {
+		errs = append(errs, validationIssue{
+			Field:   "external_url",
+			Code:    "required",
+			Message: fmt.Sprintf("display_hint %q requires external_url with structured JSON data", req.DisplayHint),
+		})
+	}
+
+	return validationResult{
+		Valid:    len(errs) == 0,
+		Errors:   errs,
+		Warnings: warns,
+	}
+}
+
+// --- Weather validation ---
+
+type weatherDataValidation struct {
+	Current *struct {
+		TempC         *float64 `json:"temp_c"`
+		FeelsLikeC    *float64 `json:"feels_like_c"`
+		Humidity      *int     `json:"humidity"`
+		WindSpeedKmh  *float64 `json:"wind_speed_kmh"`
+		UVIndex       *float64 `json:"uv_index"`
+		IsDay         *bool    `json:"is_day"`
+		Condition     *string  `json:"condition"`
+		ConditionCode *int     `json:"condition_code"`
+	} `json:"current"`
+	Hourly   *json.RawMessage `json:"hourly"`
+	Daily    *json.RawMessage `json:"daily"`
+	Location *struct {
+		Latitude  *float64 `json:"latitude"`
+		Longitude *float64 `json:"longitude"`
+		Timezone  *string  `json:"timezone"`
+	} `json:"location"`
+}
+
+func validateWeatherData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var w weatherDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &w); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for weather hint"})
+		return
+	}
+
+	if w.Current == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.current", Code: "required", Message: "current weather data is required"})
+	} else {
+		if w.Current.TempC == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.current.temp_c", Code: "required", Message: "current temp_c is required"})
+		}
+		if w.Current.FeelsLikeC == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.current.feels_like_c", Code: "required", Message: "current feels_like_c is required"})
+		}
+		if w.Current.Humidity == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.current.humidity", Code: "required", Message: "current humidity is required"})
+		}
+		if w.Current.WindSpeedKmh == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.current.wind_speed_kmh", Code: "required", Message: "current wind_speed_kmh is required"})
+		}
+		if w.Current.UVIndex == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.current.uv_index", Code: "required", Message: "current uv_index is required"})
+		}
+		if w.Current.IsDay == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.current.is_day", Code: "required", Message: "current is_day is required"})
+		}
+		if w.Current.Condition == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.current.condition", Code: "required", Message: "current condition is required"})
+		}
+		if w.Current.ConditionCode == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.current.condition_code", Code: "required", Message: "current condition_code is required"})
+		}
+	}
+
+	if w.Hourly == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.hourly", Code: "required", Message: "hourly forecast array is required"})
+	}
+	if w.Daily == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.daily", Code: "required", Message: "daily forecast array is required"})
+	}
+	if w.Location == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.location", Code: "required", Message: "location data is required"})
+	} else {
+		if w.Location.Latitude == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.location.latitude", Code: "required", Message: "location latitude is required"})
+		}
+		if w.Location.Longitude == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.location.longitude", Code: "required", Message: "location longitude is required"})
+		}
+		if w.Location.Timezone == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.location.timezone", Code: "required", Message: "location timezone is required"})
+		}
+	}
+}
+
+// --- Game data validation (scoreboard/matchup) ---
+
+type gameDataValidation struct {
+	Sport    *string `json:"sport"`
+	Status   *string `json:"status"`
+	GameTime *string `json:"gameTime"`
+	Home     *struct {
+		Name *string `json:"name"`
+		Abbr *string `json:"abbr"`
+	} `json:"home"`
+	Away *struct {
+		Name *string `json:"name"`
+		Abbr *string `json:"abbr"`
+	} `json:"away"`
+}
+
+func validateGameData(externalURL string, hint string, errs *[]validationIssue, warns *[]validationIssue) {
+	var g gameDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &g); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: fmt.Sprintf("external_url must be valid JSON for %s hint", hint)})
+		return
+	}
+
+	if g.Status == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.status", Code: "required", Message: "game status is required"})
+	}
+	if g.Home == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.home", Code: "required", Message: "home team is required"})
+	} else {
+		if g.Home.Name == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.home.name", Code: "required", Message: "home team name is required"})
+		}
+		if g.Home.Abbr == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.home.abbr", Code: "required", Message: "home team abbr is required"})
+		}
+	}
+	if g.Away == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.away", Code: "required", Message: "away team is required"})
+	} else {
+		if g.Away.Name == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.away.name", Code: "required", Message: "away team name is required"})
+		}
+		if g.Away.Abbr == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.away.abbr", Code: "required", Message: "away team abbr is required"})
+		}
+	}
+
+	// Warnings
+	if hint == "matchup" && g.GameTime == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.gameTime", Code: "missing", Message: "matchup without gameTime"})
+	}
+	if g.Sport == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.sport", Code: "missing", Message: "missing sport field on game data"})
+	}
+}
+
+// --- Standings data validation ---
+
+type standingsDataValidation struct {
+	League *string          `json:"league"`
+	Date   *string          `json:"date"`
+	Games  *json.RawMessage `json:"games"`
+}
+
+type standingsGameValidation struct {
+	Home      *string `json:"home"`
+	Away      *string `json:"away"`
+	HomeScore *int    `json:"homeScore"`
+	AwayScore *int    `json:"awayScore"`
+	Status    *string `json:"status"`
+}
+
+func validateStandingsData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var s standingsDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &s); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for standings hint"})
+		return
+	}
+
+	if s.League == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.league", Code: "required", Message: "league is required"})
+	}
+	if s.Date == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.date", Code: "required", Message: "date is required"})
+	}
+	if s.Games == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.games", Code: "required", Message: "games array is required"})
+	} else {
+		var games []standingsGameValidation
+		if err := json.Unmarshal(*s.Games, &games); err != nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.games", Code: "invalid_json", Message: "games must be a valid JSON array"})
+		} else {
+			for i, g := range games {
+				prefix := fmt.Sprintf("external_url.games[%d]", i)
+				if g.Home == nil {
+					*errs = append(*errs, validationIssue{Field: prefix + ".home", Code: "required", Message: fmt.Sprintf("game %d home team is required", i)})
+				}
+				if g.Away == nil {
+					*errs = append(*errs, validationIssue{Field: prefix + ".away", Code: "required", Message: fmt.Sprintf("game %d away team is required", i)})
+				}
+				if g.HomeScore == nil {
+					*errs = append(*errs, validationIssue{Field: prefix + ".homeScore", Code: "required", Message: fmt.Sprintf("game %d homeScore is required", i)})
+				}
+				if g.AwayScore == nil {
+					*errs = append(*errs, validationIssue{Field: prefix + ".awayScore", Code: "required", Message: fmt.Sprintf("game %d awayScore is required", i)})
+				}
+				if g.Status == nil {
+					*errs = append(*errs, validationIssue{Field: prefix + ".status", Code: "required", Message: fmt.Sprintf("game %d status is required", i)})
+				}
+			}
+		}
+	}
+}
+
+// --- Handlers ---
 
 func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	agentID := middleware.AgentIDFromContext(r.Context())
@@ -60,27 +406,13 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Title == "" || req.Body == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "title and body are required"})
+	result := validatePost(&req)
+	if !result.Valid {
+		writeJSON(w, http.StatusBadRequest, result)
 		return
 	}
 
-	if req.PostType == "" {
-		req.PostType = "discovery"
-	}
-	if !validPostTypes[req.PostType] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid post_type: must be event, place, discovery, article, or video"})
-		return
-	}
-
-	if req.Visibility == "" {
-		req.Visibility = "public"
-	}
-	if !validVisibility[req.Visibility] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid visibility: must be public, personal, or private"})
-		return
-	}
-
+	// Truncate labels if needed (warning was already issued)
 	if len(req.Labels) > 20 {
 		req.Labels = req.Labels[:20]
 	}
@@ -115,6 +447,17 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(post)
+}
+
+func (h *PostHandler) LintPost(w http.ResponseWriter, r *http.Request) {
+	var req createPostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	result := validatePost(&req)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {

@@ -41,7 +41,8 @@ class APIService {
         }
 
         let decoder = JSONDecoder()
-        return try decoder.decode([Post].self, from: data)
+        let safePosts = try decoder.decode([SafeDecodable<Post>].self, from: data)
+        return safePosts.compactMap { $0.value }
     }
 
     // MARK: - Multi-feed with pagination

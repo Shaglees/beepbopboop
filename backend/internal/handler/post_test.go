@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"testing"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
@@ -602,4 +603,438 @@ func TestPostHandler_MissingTitle(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", rec.Code)
 	}
+}
+
+// ============================================================================
+// Lint endpoint tests
+// ============================================================================
+
+// lintCall is a helper that POSTs to /posts/lint and returns the parsed response.
+func lintCall(t *testing.T, h *handler.PostHandler, body string) (int, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/posts/lint", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithAgentID(req.Context(), "lint-agent"))
+	rec := httptest.NewRecorder()
+	h.LintPost(rec, req)
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	return rec.Code, resp
+}
+
+func lintErrors(resp map[string]any) []any {
+	if e, ok := resp["errors"].([]any); ok {
+		return e
+	}
+	return nil
+}
+
+func lintWarnings(resp map[string]any) []any {
+	if w, ok := resp["warnings"].([]any); ok {
+		return w
+	}
+	return nil
+}
+
+func hasFieldError(issues []any, field string) bool {
+	for _, i := range issues {
+		m := i.(map[string]any)
+		if m["field"] == field {
+			return true
+		}
+	}
+	return false
+}
+
+func TestLintPost_MissingTitleAndBody(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	code, resp := lintCall(t, h, `{}`)
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if resp["valid"] != false {
+		t.Error("expected valid=false")
+	}
+	errs := lintErrors(resp)
+	if !hasFieldError(errs, "title") {
+		t.Error("expected error for missing title")
+	}
+	if !hasFieldError(errs, "body") {
+		t.Error("expected error for missing body")
+	}
+}
+
+func TestLintPost_ValidMinimal(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	code, resp := lintCall(t, h, `{"title":"test","body":"hello"}`)
+	if code != 200 {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if resp["valid"] != true {
+		t.Errorf("expected valid=true, got errors: %v", lintErrors(resp))
+	}
+	// Should still have warnings (no labels, no locality)
+	warns := lintWarnings(resp)
+	if !hasFieldError(warns, "labels") {
+		t.Error("expected warning for missing labels")
+	}
+}
+
+func TestLintPost_InvalidPostType(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	_, resp := lintCall(t, h, `{"title":"t","body":"b","post_type":"bogus"}`)
+	if resp["valid"] != false {
+		t.Error("expected valid=false for bad post_type")
+	}
+	if !hasFieldError(lintErrors(resp), "post_type") {
+		t.Error("expected error for invalid post_type")
+	}
+}
+
+func TestLintPost_InvalidVisibility(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	_, resp := lintCall(t, h, `{"title":"t","body":"b","visibility":"secret"}`)
+	if resp["valid"] != false {
+		t.Error("expected valid=false")
+	}
+	if !hasFieldError(lintErrors(resp), "visibility") {
+		t.Error("expected error for invalid visibility")
+	}
+}
+
+func TestLintPost_InvalidDisplayHint(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	_, resp := lintCall(t, h, `{"title":"t","body":"b","display_hint":"foobar"}`)
+	if resp["valid"] != false {
+		t.Error("expected valid=false for unknown display_hint")
+	}
+	if !hasFieldError(lintErrors(resp), "display_hint") {
+		t.Error("expected error for invalid display_hint")
+	}
+}
+
+func TestLintPost_ScoreboardMissingExternalURL(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	_, resp := lintCall(t, h, `{"title":"t","body":"b","display_hint":"scoreboard"}`)
+	if resp["valid"] != false {
+		t.Error("expected valid=false")
+	}
+	if !hasFieldError(lintErrors(resp), "external_url") {
+		t.Error("expected error for missing external_url on scoreboard")
+	}
+}
+
+func TestLintPost_ScoreboardBadJSON(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	_, resp := lintCall(t, h, `{"title":"t","body":"b","display_hint":"scoreboard","external_url":"{}"}`)
+	if resp["valid"] != false {
+		t.Error("expected valid=false for empty scoreboard data")
+	}
+	errs := lintErrors(resp)
+	if !hasFieldError(errs, "external_url.status") {
+		t.Error("expected error for missing status")
+	}
+	if !hasFieldError(errs, "external_url.home") {
+		t.Error("expected error for missing home")
+	}
+	if !hasFieldError(errs, "external_url.away") {
+		t.Error("expected error for missing away")
+	}
+}
+
+func TestLintPost_ScoreboardValid(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	gameJSON := `{"status":"Final","home":{"name":"Lakers","abbr":"LAL","score":110},"away":{"name":"Celtics","abbr":"BOS","score":105},"sport":"NBA"}`
+	body := `{"title":"t","body":"b","display_hint":"scoreboard","external_url":` + jsonString(gameJSON) + `,"labels":["nba"]}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != true {
+		t.Errorf("expected valid=true for good scoreboard, errors: %v", lintErrors(resp))
+	}
+}
+
+func TestLintPost_MatchupMissingGameTimeWarning(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	gameJSON := `{"status":"Scheduled","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"}}`
+	body := `{"title":"t","body":"b","display_hint":"matchup","external_url":` + jsonString(gameJSON) + `,"labels":["nba"]}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != true {
+		t.Errorf("expected valid=true, errors: %v", lintErrors(resp))
+	}
+	warns := lintWarnings(resp)
+	if !hasFieldError(warns, "external_url.gameTime") {
+		t.Error("expected warning for missing gameTime on matchup")
+	}
+	if !hasFieldError(warns, "external_url.sport") {
+		t.Error("expected warning for missing sport")
+	}
+}
+
+func TestLintPost_WeatherMissingFields(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	// Weather with empty current object — should flag all required fields
+	weatherJSON := `{"current":{},"location":{}}`
+	body := `{"title":"t","body":"b","display_hint":"weather","external_url":` + jsonString(weatherJSON) + `,"labels":["weather"]}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != false {
+		t.Error("expected valid=false for incomplete weather data")
+	}
+	errs := lintErrors(resp)
+	if !hasFieldError(errs, "external_url.current.temp_c") {
+		t.Error("expected error for missing temp_c")
+	}
+	if !hasFieldError(errs, "external_url.hourly") {
+		t.Error("expected error for missing hourly")
+	}
+	if !hasFieldError(errs, "external_url.daily") {
+		t.Error("expected error for missing daily")
+	}
+	if !hasFieldError(errs, "external_url.location.latitude") {
+		t.Error("expected error for missing location.latitude")
+	}
+}
+
+func TestLintPost_StandingsValid(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	standingsJSON := `{"league":"NBA","date":"2026-04-16","games":[{"home":"LAL","away":"BOS","homeScore":110,"awayScore":105,"status":"Final"}]}`
+	body := `{"title":"t","body":"b","display_hint":"standings","external_url":` + jsonString(standingsJSON) + `,"labels":["nba"]}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != true {
+		t.Errorf("expected valid=true for good standings, errors: %v", lintErrors(resp))
+	}
+}
+
+func TestLintPost_StandingsMissingGameFields(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	standingsJSON := `{"league":"NBA","date":"2026-04-16","games":[{}]}`
+	body := `{"title":"t","body":"b","display_hint":"standings","external_url":` + jsonString(standingsJSON) + `,"labels":["nba"]}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != false {
+		t.Error("expected valid=false for standings with empty game")
+	}
+	errs := lintErrors(resp)
+	if !hasFieldError(errs, "external_url.games[0].home") {
+		t.Error("expected error for missing home in game 0")
+	}
+	if !hasFieldError(errs, "external_url.games[0].status") {
+		t.Error("expected error for missing status in game 0")
+	}
+}
+
+func TestLintPost_ImagesNoURL(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	body := `{"title":"t","body":"b","images":[{"role":"hero"}],"labels":["test"]}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != false {
+		t.Error("expected valid=false for image without url")
+	}
+	if !hasFieldError(lintErrors(resp), "images[0].url") {
+		t.Error("expected error for missing image url")
+	}
+}
+
+func TestLintPost_UnknownImageRoleWarning(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	body := `{"title":"t","body":"b","images":[{"url":"https://example.com/img.jpg","role":"thumbnail"}],"labels":["test"]}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != true {
+		t.Errorf("unknown image role should be warning not error, errors: %v", lintErrors(resp))
+	}
+	if !hasFieldError(lintWarnings(resp), "images[0].role") {
+		t.Error("expected warning for unknown image role")
+	}
+}
+
+func TestLintPost_LabelsWarningTooMany(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	// 21 labels
+	labels := `["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u"]`
+	body := `{"title":"t","body":"b","labels":` + labels + `}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != true {
+		t.Errorf("too many labels should be warning not error, errors: %v", lintErrors(resp))
+	}
+	if !hasFieldError(lintWarnings(resp), "labels") {
+		t.Error("expected warning for >20 labels")
+	}
+}
+
+func TestLintPost_CreatePostRejectsInvalid(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	// Scoreboard with no external_url should be rejected with structured errors
+	body := `{"title":"t","body":"b","display_hint":"scoreboard"}`
+	req := httptest.NewRequest("POST", "/posts", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithAgentID(req.Context(), "some-agent"))
+	rec := httptest.NewRecorder()
+	h.CreatePost(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["valid"] != false {
+		t.Error("expected valid=false in rejection response")
+	}
+	if !hasFieldError(lintErrors(resp), "external_url") {
+		t.Error("expected structured error for missing external_url")
+	}
+}
+
+// ============================================================================
+// Sync tests — ensure the lookup maps stay in sync with what tests cover
+// ============================================================================
+
+// TestValidPostTypes_AllTestedViaLint verifies every value in ValidPostTypes
+// is accepted by lint (and that invalid values are rejected).
+func TestValidPostTypes_AllTestedViaLint(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	for pt := range handler.ValidPostTypes {
+		body := `{"title":"t","body":"b","post_type":"` + pt + `","labels":["sync-test"]}`
+		_, resp := lintCall(t, h, body)
+		if resp["valid"] != true {
+			t.Errorf("ValidPostTypes contains %q but lint rejects it: %v", pt, lintErrors(resp))
+		}
+	}
+
+	// Confirm an unknown value is rejected
+	body := `{"title":"t","body":"b","post_type":"unknown_type","labels":["sync-test"]}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != false {
+		t.Error("expected invalid post_type to be rejected")
+	}
+}
+
+// TestValidVisibility_AllTestedViaLint verifies every value in ValidVisibility
+// is accepted by lint.
+func TestValidVisibility_AllTestedViaLint(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	for vis := range handler.ValidVisibility {
+		body := `{"title":"t","body":"b","visibility":"` + vis + `","labels":["sync-test"]}`
+		_, resp := lintCall(t, h, body)
+		if resp["valid"] != true {
+			t.Errorf("ValidVisibility contains %q but lint rejects it: %v", vis, lintErrors(resp))
+		}
+	}
+}
+
+// TestValidDisplayHints_AllTestedViaLint verifies every value in ValidDisplayHints
+// is accepted by lint (without requiring external_url for non-structured hints).
+func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	// Hints that need structured external_url
+	structuredHints := map[string]string{
+		"weather":    `{"current":{"temp_c":20,"feels_like_c":18,"humidity":60,"wind_speed_kmh":10,"uv_index":5,"is_day":true,"condition":"Sunny","condition_code":1000},"hourly":[],"daily":[],"location":{"latitude":53.3,"longitude":-6.2,"timezone":"Europe/Dublin"}}`,
+		"scoreboard": `{"status":"Final","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA"}`,
+		"matchup":    `{"status":"Scheduled","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA","gameTime":"2026-04-16T19:00:00Z"}`,
+		"standings":  `{"league":"NBA","date":"2026-04-16","games":[{"home":"LAL","away":"BOS","homeScore":110,"awayScore":105,"status":"Final"}]}`,
+	}
+
+	for hint := range handler.ValidDisplayHints {
+		var body string
+		if extURL, ok := structuredHints[hint]; ok {
+			body = `{"title":"t","body":"b","display_hint":"` + hint + `","external_url":` + jsonString(extURL) + `,"labels":["sync-test"]}`
+		} else {
+			body = `{"title":"t","body":"b","display_hint":"` + hint + `","labels":["sync-test"]}`
+		}
+		_, resp := lintCall(t, h, body)
+		if resp["valid"] != true {
+			t.Errorf("ValidDisplayHints contains %q but lint rejects it: %v", hint, lintErrors(resp))
+		}
+	}
+}
+
+// TestValidImageRoles_AllTestedViaLint verifies known image roles don't produce warnings.
+func TestValidImageRoles_AllTestedViaLint(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	for role := range handler.ValidImageRoles {
+		body := `{"title":"t","body":"b","images":[{"url":"https://example.com/img.jpg","role":"` + role + `"}],"labels":["sync-test"]}`
+		_, resp := lintCall(t, h, body)
+		if resp["valid"] != true {
+			t.Errorf("ValidImageRoles contains %q but lint rejects it: %v", role, lintErrors(resp))
+		}
+		// Should NOT have a warning for this role
+		for _, w := range lintWarnings(resp) {
+			m := w.(map[string]any)
+			if m["field"] == "images[0].role" {
+				t.Errorf("ValidImageRoles contains %q but lint warns about it", role)
+			}
+		}
+	}
+}
+
+// TestValidationMaps_Sorted ensures the maps have deterministic iteration
+// by checking they contain the expected values (catches accidental deletions).
+func TestValidationMaps_Sorted(t *testing.T) {
+	expectedPostTypes := []string{"article", "discovery", "event", "place", "video"}
+	expectedVisibility := []string{"personal", "private", "public"}
+	expectedHints := []string{"article", "brief", "calendar", "card", "comparison", "deal", "digest", "event", "matchup", "outfit", "place", "scoreboard", "standings", "weather"}
+	expectedRoles := []string{"detail", "hero", "product"}
+
+	checkMap := func(name string, m map[string]bool, expected []string) {
+		var keys []string
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		if len(keys) != len(expected) {
+			t.Errorf("%s: expected %d entries, got %d: %v", name, len(expected), len(keys), keys)
+			return
+		}
+		for i, k := range keys {
+			if k != expected[i] {
+				t.Errorf("%s[%d]: expected %q, got %q", name, i, expected[i], k)
+			}
+		}
+	}
+
+	checkMap("ValidPostTypes", handler.ValidPostTypes, expectedPostTypes)
+	checkMap("ValidVisibility", handler.ValidVisibility, expectedVisibility)
+	checkMap("ValidDisplayHints", handler.ValidDisplayHints, expectedHints)
+	checkMap("ValidImageRoles", handler.ValidImageRoles, expectedRoles)
+}
+
+// jsonString returns a JSON-encoded string value (with escaping).
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }

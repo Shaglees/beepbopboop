@@ -1,6 +1,20 @@
 import Foundation
 import SwiftUI
 
+/// Wraps individual element decoding so one bad item doesn't kill the whole array.
+struct SafeDecodable<T: Decodable>: Decodable {
+    let value: T?
+
+    init(from decoder: Decoder) throws {
+        do {
+            value = try T(from: decoder)
+        } catch {
+            print("[SafeDecodable] skipping bad element: \(error)")
+            value = nil
+        }
+    }
+}
+
 struct FeedResponse: Codable {
     let posts: [Post]
     let nextCursor: String?
@@ -8,6 +22,13 @@ struct FeedResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case posts
         case nextCursor = "next_cursor"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let safePosts = try container.decode([SafeDecodable<Post>].self, forKey: .posts)
+        self.posts = safePosts.compactMap { $0.value }
+        self.nextCursor = try container.decodeIfPresent(String.self, forKey: .nextCursor)
     }
 }
 

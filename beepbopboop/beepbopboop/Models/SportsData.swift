@@ -113,7 +113,7 @@ extension GameData {
     }
 
     /// Parse game time ISO-8601 string into a Date.
-    private var gameDate: Date? {
+    var gameDate: Date? {
         guard let gt = gameTime else { return nil }
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

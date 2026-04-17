@@ -21,7 +21,13 @@ class FeedListViewModel: ObservableObject {
 
     private var pollingTask: Task<Void, Never>?
     private static let livePollingInterval: TimeInterval = 30
-    private static let scheduledPollingInterval: TimeInterval = 120
+    private static let nearGamePollingInterval: TimeInterval = 30
+    private static let approachingGamePollingInterval: TimeInterval = 120
+
+    /// Time before game start to begin fast polling (15 minutes).
+    private static let pregameWindow: TimeInterval = 15 * 60
+    /// Time before game start to begin slow polling (2 hours).
+    private static let approachingWindow: TimeInterval = 2 * 60 * 60
 
     /// Whether any post in the feed has a live game.
     var hasLiveGames: Bool {
@@ -31,12 +37,21 @@ class FeedListViewModel: ObservableObject {
         }
     }
 
+    /// Earliest upcoming game date across all posts in the feed.
+    private var earliestScheduledGameDate: Date? {
+        let now = Date()
+        return posts.compactMap { post -> Date? in
+            guard let game = post.gameData,
+                  !game.isFinal && !game.isLive,
+                  let date = game.gameDate,
+                  date > now else { return nil }
+            return date
+        }.min()
+    }
+
     /// Whether any post in the feed has a scheduled (upcoming) game.
     private var hasScheduledGames: Bool {
-        posts.contains { post in
-            if let game = post.gameData { return !game.isFinal && !game.isLive }
-            return false
-        }
+        earliestScheduledGameDate != nil
     }
 
     init(feedType: FeedType, apiService: APIService) {
@@ -144,18 +159,46 @@ class FeedListViewModel: ObservableObject {
     // MARK: - Live Score Polling
 
     /// Start or restart polling based on current feed state.
+    ///
+    /// Polling tiers (from most to least urgent):
+    /// 1. **Live game** → poll every 30s for score updates.
+    /// 2. **Game starting within 15 min** → poll every 30s (about to go live).
+    /// 3. **Game starting within 2 hours** → poll every 2 min.
+    /// 4. **Game more than 2 hours away** → sleep until 15 min before the
+    ///    earliest game, then re-evaluate (no wasted network requests).
+    /// 5. **All games final / no sports posts** → stop polling entirely.
     func restartPollingIfNeeded() {
         pollingTask?.cancel()
         pollingTask = nil
 
         if hasLiveGames {
+            // Tier 1: live game — fast polling
             isPollingLive = true
             startPolling(interval: Self.livePollingInterval)
-        } else if hasScheduledGames {
+            return
+        }
+
+        guard let earliest = earliestScheduledGameDate else {
+            // Tier 5: nothing upcoming — stop
             isPollingLive = false
-            startPolling(interval: Self.scheduledPollingInterval)
+            return
+        }
+
+        let timeUntilGame = earliest.timeIntervalSince(Date())
+
+        if timeUntilGame <= Self.pregameWindow {
+            // Tier 2: game imminent — fast polling (it may flip to "Live" any moment)
+            isPollingLive = false
+            startPolling(interval: Self.nearGamePollingInterval)
+        } else if timeUntilGame <= Self.approachingWindow {
+            // Tier 3: game within 2 hours — moderate polling
+            isPollingLive = false
+            startPolling(interval: Self.approachingGamePollingInterval)
         } else {
+            // Tier 4: game is far away — sleep until the pregame window, then re-evaluate
             isPollingLive = false
+            let sleepUntil = timeUntilGame - Self.pregameWindow
+            scheduleWakeUp(after: sleepUntil)
         }
     }
 
@@ -173,6 +216,16 @@ class FeedListViewModel: ObservableObject {
                 guard !Task.isCancelled else { break }
                 await self?.refreshSportsPosts()
             }
+        }
+    }
+
+    /// Sleep for `delay` seconds, then do a single refresh and re-evaluate polling tier.
+    /// Used when the next game is far away — avoids polling every 2 min for hours.
+    private func scheduleWakeUp(after delay: TimeInterval) {
+        pollingTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.refreshSportsPosts()
         }
     }
 

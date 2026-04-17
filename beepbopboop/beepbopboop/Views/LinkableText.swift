@@ -33,11 +33,14 @@ struct LinkableText: UIViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
-        let maxWidth = UIScreen.main.bounds.width
-        let proposedWidth = proposal.width ?? maxWidth
-        // Clamp to screen width to prevent overflow in ScrollView/sheet contexts
-        let width = min(proposedWidth, maxWidth)
-        let fittingSize = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
-        return CGSize(width: width, height: fittingSize.height)
+        // Use proposed width when available; never exceed it to prevent overflow
+        guard let proposedWidth = proposal.width, proposedWidth > 0, proposedWidth < .infinity else {
+            // No valid width proposed — let SwiftUI figure it out
+            let fallback = UIScreen.main.bounds.width - 32
+            let fittingSize = uiView.sizeThatFits(CGSize(width: fallback, height: CGFloat.greatestFiniteMagnitude))
+            return CGSize(width: fallback, height: fittingSize.height)
+        }
+        let fittingSize = uiView.sizeThatFits(CGSize(width: proposedWidth, height: CGFloat.greatestFiniteMagnitude))
+        return CGSize(width: proposedWidth, height: fittingSize.height)
     }
 }

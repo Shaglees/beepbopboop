@@ -289,22 +289,21 @@ struct ReactionPicker: View {
         }
     }
 
-    // MARK: Detail Layout (always-visible inline pills)
+    // MARK: Detail Layout (always-visible inline circles)
 
     private var detailLayout: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             ForEach(Self.reactionDefs) { reaction in
                 let isActive = activeReaction == reaction.key
                 Button {
                     selectReaction(reaction)
                 } label: {
-                    Label(reaction.label, systemImage: isActive ? reaction.icon + ".fill" : reaction.icon)
-                        .font(.subheadline.weight(.medium))
+                    Image(systemName: isActive ? reaction.icon + ".fill" : reaction.icon)
+                        .font(.subheadline)
                         .foregroundColor(isActive ? .white : reaction.color)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .frame(width: 34, height: 34)
                         .background(isActive ? reaction.color : reaction.color.opacity(style.isDark ? 0.15 : 0.1))
-                        .clipShape(Capsule())
+                        .clipShape(Circle())
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.plain)

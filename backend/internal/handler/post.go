@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
+
+const maxURLLength = 2048
 
 var ValidPostTypes = map[string]bool{
 	"event":     true,
@@ -91,6 +94,25 @@ type validationResult struct {
 	Warnings []validationIssue `json:"warnings"`
 }
 
+// validateURL checks that a string is a well-formed http(s) URL within length limits.
+// Returns an error message or "" if valid.
+func validateURL(raw string) string {
+	if len(raw) > maxURLLength {
+		return fmt.Sprintf("URL exceeds maximum length of %d characters", maxURLLength)
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Sprintf("malformed URL: %v", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Sprintf("URL scheme must be http or https, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return "URL must have a host"
+	}
+	return ""
+}
+
 // validatePost checks a createPostRequest and returns structured errors/warnings.
 // Pure function — no DB access.
 func validatePost(req *createPostRequest) validationResult {
@@ -136,6 +158,24 @@ func validatePost(req *createPostRequest) validationResult {
 		})
 	}
 
+	// --- URL validation ---
+	if req.ImageURL != "" {
+		if msg := validateURL(req.ImageURL); msg != "" {
+			errs = append(errs, validationIssue{Field: "image_url", Code: "invalid_url", Message: msg})
+		}
+	}
+
+	// external_url is validated as a URL only when the display_hint does NOT
+	// expect structured JSON (weather, scoreboard, matchup, standings store
+	// JSON payloads in this field, not actual URLs).
+	structuredHint := req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" ||
+		req.DisplayHint == "matchup" || req.DisplayHint == "standings"
+	if req.ExternalURL != "" && !structuredHint {
+		if msg := validateURL(req.ExternalURL); msg != "" {
+			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
+		}
+	}
+
 	// Labels
 	if len(req.Labels) > 20 {
 		warns = append(warns, validationIssue{Field: "labels", Code: "truncated", Message: "more than 20 labels; will be truncated to 20"})
@@ -152,12 +192,20 @@ func validatePost(req *createPostRequest) validationResult {
 		} else {
 			for i, img := range images {
 				prefix := fmt.Sprintf("images[%d]", i)
-				if _, ok := img["url"]; !ok {
+				if urlVal, ok := img["url"]; !ok {
 					errs = append(errs, validationIssue{
 						Field:   prefix + ".url",
 						Code:    "required",
 						Message: fmt.Sprintf("image %d must have a url", i),
 					})
+				} else if urlStr, ok := urlVal.(string); ok {
+					if msg := validateURL(urlStr); msg != "" {
+						errs = append(errs, validationIssue{
+							Field:   prefix + ".url",
+							Code:    "invalid_url",
+							Message: fmt.Sprintf("image %d url: %s", i, msg),
+						})
+					}
 				}
 				if role, ok := img["role"].(string); ok && !ValidImageRoles[role] {
 					warns = append(warns, validationIssue{

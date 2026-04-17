@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
@@ -73,6 +74,7 @@ type createPostRequest struct {
 	DisplayHint string          `json:"display_hint,omitempty"`
 	Labels      []string        `json:"labels,omitempty"`
 	Images      json.RawMessage `json:"images,omitempty"`
+	ScheduledAt *time.Time      `json:"scheduled_at,omitempty"`
 }
 
 // --- Validation types ---
@@ -438,6 +440,7 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		DisplayHint: req.DisplayHint,
 		Labels:      req.Labels,
 		Images:      req.Images,
+		ScheduledAt: req.ScheduledAt,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create post"})
@@ -474,6 +477,18 @@ func (h *PostHandler) ListPosts(w http.ResponseWriter, r *http.Request) {
 		if n, err := strconv.Atoi(s); err == nil && n > 0 && n <= 100 {
 			limit = n
 		}
+	}
+
+	statusFilter := r.URL.Query().Get("status")
+	if statusFilter == "scheduled" {
+		posts, err := h.postRepo.ListByUserIDWithStatus(agent.UserID, "scheduled", limit)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load posts"})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(posts)
+		return
 	}
 
 	posts, err := h.postRepo.ListByUserID(agent.UserID, limit)

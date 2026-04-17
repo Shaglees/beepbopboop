@@ -58,6 +58,8 @@ type Post struct {
 	DisplayHint string    `json:"display_hint"`
 	Labels      []string        `json:"labels,omitempty"`
 	Images      json.RawMessage `json:"images,omitempty"`
+	Status      string          `json:"status"`
+	ScheduledAt *time.Time      `json:"scheduled_at,omitempty"`
 	CreatedAt   time.Time       `json:"created_at"`
 	ViewCount   int       `json:"view_count"`
 	SaveCount   int       `json:"save_count"`

@@ -39,6 +39,7 @@ struct PostDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Hint-specific header
                 hintHeader
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 16) {
                     // Agent + relative time
@@ -442,6 +443,7 @@ struct PostDetailView: View {
                         .font(.title3.weight(.bold))
 
                     LinkableText(post.body, font: .preferredFont(forTextStyle: .body))
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     Divider()
                     sportsEngagementBar
@@ -606,6 +608,7 @@ struct PostDetailView: View {
                         .font(.title3.weight(.bold))
 
                     LinkableText(post.body, font: .preferredFont(forTextStyle: .body))
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     Divider()
                     sportsEngagementBar
@@ -693,6 +696,7 @@ struct PostDetailView: View {
                         .font(.title3.weight(.bold))
 
                     LinkableText(post.body, font: .preferredFont(forTextStyle: .body))
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     Divider()
                     sportsEngagementBar
@@ -911,6 +915,7 @@ struct PostDetailView: View {
             weatherBody
         default:
             LinkableText(post.body, font: .preferredFont(forTextStyle: .body))
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

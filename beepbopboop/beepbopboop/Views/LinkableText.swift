@@ -21,6 +21,7 @@ struct LinkableText: UIViewRepresentable {
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textView.setContentHuggingPriority(.defaultHigh, for: .vertical)
         return textView
     }
@@ -32,7 +33,10 @@ struct LinkableText: UIViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
-        let width = proposal.width ?? UIScreen.main.bounds.width
+        let maxWidth = UIScreen.main.bounds.width
+        let proposedWidth = proposal.width ?? maxWidth
+        // Clamp to screen width to prevent overflow in ScrollView/sheet contexts
+        let width = min(proposedWidth, maxWidth)
         let fittingSize = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
         return CGSize(width: width, height: fittingSize.height)
     }

@@ -40,11 +40,11 @@ var ValidDisplayHints = map[string]bool{
 	"brief":       true,
 	"comparison":  true,
 	"event":       true,
-	"outfit":      true,
-	"scoreboard":  true,
-	"matchup":     true,
-	"standings":        true,
+	"outfit":           true,
 	"player_spotlight": true,
+	"scoreboard":       true,
+	"matchup":          true,
+	"standings":        true,
 }
 
 var ValidImageRoles = map[string]bool{

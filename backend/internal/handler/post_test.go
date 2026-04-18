@@ -1007,11 +1007,12 @@ func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
 
 	// Hints that need structured external_url
 	structuredHints := map[string]string{
-		"weather":    `{"current":{"temp_c":20,"feels_like_c":18,"humidity":60,"wind_speed_kmh":10,"uv_index":5,"is_day":true,"condition":"Sunny","condition_code":1000},"hourly":[],"daily":[],"location":{"latitude":53.3,"longitude":-6.2,"timezone":"Europe/Dublin"}}`,
-		"scoreboard": `{"status":"Final","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA"}`,
-		"matchup":    `{"status":"Scheduled","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA","gameTime":"2026-04-16T19:00:00Z"}`,
+		"weather":       `{"current":{"temp_c":20,"feels_like_c":18,"humidity":60,"wind_speed_kmh":10,"uv_index":5,"is_day":true,"condition":"Sunny","condition_code":1000},"hourly":[],"daily":[],"location":{"latitude":53.3,"longitude":-6.2,"timezone":"Europe/Dublin"}}`,
+		"scoreboard":    `{"status":"Final","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA"}`,
+		"matchup":       `{"status":"Scheduled","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA","gameTime":"2026-04-16T19:00:00Z"}`,
 		"standings":     `{"league":"NBA","date":"2026-04-16","games":[{"home":"LAL","away":"BOS","homeScore":110,"awayScore":105,"status":"Final"}]}`,
 		"entertainment": `{"subject":"Zendaya","headline":"Zendaya Named TIME Entertainer of the Year","source":"People","category":"award","tags":["entertainment"]}`,
+		"pet_spotlight": `{"type":"adoption","name":"Biscuit","species":"dog","breed":"Labrador Mix","age":"Young","gender":"Male","shelterName":"SF SPCA","shelterCity":"San Francisco","petfinderUrl":"https://www.petfinder.com/dog/biscuit-12345678"}`,
 	}
 
 	for hint := range handler.ValidDisplayHints {
@@ -1054,7 +1055,7 @@ func TestValidImageRoles_AllTestedViaLint(t *testing.T) {
 func TestValidationMaps_Sorted(t *testing.T) {
 	expectedPostTypes := []string{"article", "discovery", "event", "place", "video"}
 	expectedVisibility := []string{"personal", "private", "public"}
-	expectedHints := []string{"article", "brief", "calendar", "card", "comparison", "deal", "digest", "entertainment", "event", "matchup", "outfit", "place", "player_spotlight", "scoreboard", "standings", "weather"}
+	expectedHints := []string{"article", "brief", "calendar", "card", "comparison", "deal", "digest", "entertainment", "event", "matchup", "outfit", "pet_spotlight", "place", "player_spotlight", "scoreboard", "standings", "weather"}
 	expectedRoles := []string{"detail", "hero", "product"}
 
 	checkMap := func(name string, m map[string]bool, expected []string) {

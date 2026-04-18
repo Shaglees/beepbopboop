@@ -185,6 +185,7 @@ struct Post: Codable, Identifiable {
         case gameRelease, gameReview
         case restaurant
         case destination
+        case science
     }
 
     var displayHintValue: DisplayHintValue {
@@ -212,6 +213,7 @@ struct Post: Codable, Identifiable {
         case "game_review": return .gameReview
         case "restaurant": return .restaurant
         case "destination": return .destination
+        case "science": return .science
         default: return .card
         }
     }
@@ -285,16 +287,12 @@ struct Post: Codable, Identifiable {
         case .show: return Color(red: 0.957, green: 0.62, blue: 0.043)
         case .playerSpotlight: return Color(red: 0.0, green: 0.478, blue: 0.757)
         case .entertainment: return Color(hexString: "#F59E0B")
-<<<<<<< ours
         case .album: return Color(red: 0.459, green: 0.176, blue: 0.902)
         case .concert: return Color(red: 0.984, green: 0.729, blue: 0.012)
         case .gameRelease: return Color(red: 0.96, green: 0.62, blue: 0.04)
         case .gameReview: return Color(red: 0.58, green: 0.27, blue: 0.96)
         case .restaurant: return Color(red: 0.937, green: 0.267, blue: 0.267)
-||||||| base
-=======
-        case .destination: return Color(hex: 0x06B6D4)
->>>>>>> theirs
+        case .science: return Color(red: 0.388, green: 0.671, blue: 0.937)
         }
     }
 
@@ -318,16 +316,12 @@ struct Post: Codable, Identifiable {
         case .show: return "tv"
         case .playerSpotlight: return playerData?.sportIcon ?? "figure.basketball"
         case .entertainment: return "star.fill"
-<<<<<<< ours
         case .album: return "music.note"
         case .concert: return "music.mic"
         case .gameRelease: return "calendar.badge.clock"
         case .gameReview: return "gamecontroller"
         case .restaurant: return "fork.knife"
-||||||| base
-=======
-        case .destination: return "airplane"
->>>>>>> theirs
+        case .science: return "moon.stars.fill"
         }
     }
 
@@ -351,16 +345,12 @@ struct Post: Codable, Identifiable {
         case .show: return "TV Show"
         case .playerSpotlight: return "Player"
         case .entertainment: return "Entertainment"
-<<<<<<< ours
         case .album: return "Album"
         case .concert: return "Concert"
         case .gameRelease: return "Release"
         case .gameReview: return "Review"
         case .restaurant: return "Restaurant"
-||||||| base
-=======
-        case .destination: return "Destination"
->>>>>>> theirs
+        case .science: return "Science"
         }
     }
 
@@ -469,6 +459,12 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(TravelData.self, from: data)
+    /// Parsed science data from externalURL (for science display_hint posts).
+    var scienceData: ScienceData? {
+        guard displayHintValue == .science,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ScienceData.self, from: data)
     }
 
     /// Parsed standings data from externalURL (for standings display_hint posts).

@@ -142,6 +142,20 @@ private struct CardFooter: View {
                 style: .feedCompact
             )
 
+            ShareLink(
+                item: post.shareURL,
+                subject: Text(post.title),
+                message: Text(post.body.prefix(100))
+            ) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(TapGesture().onEnded {
+                Task { await apiService.trackEvent(postID: post.id, type: "share") }
+            })
+
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()

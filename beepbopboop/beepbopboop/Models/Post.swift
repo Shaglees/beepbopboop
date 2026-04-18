@@ -324,6 +324,16 @@ struct Post: Codable, Identifiable {
         return typeLabel
     }
 
+    // MARK: - Share URL
+
+    var shareURL: URL {
+        if let raw = externalURL, !raw.isEmpty,
+           let url = URL(string: raw), url.scheme?.hasPrefix("http") == true {
+            return url
+        }
+        return URL(string: "https://beepbopboop.app/posts/\(id)")!
+    }
+
     // MARK: - Relative Time
 
     var relativeTime: String {

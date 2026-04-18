@@ -814,20 +814,22 @@ struct PostDetailView: View {
 
             Spacer()
 
-            ShareLink(item: sportsShareText) {
+            ShareLink(
+                item: post.shareURL,
+                subject: Text(post.title),
+                message: Text(post.body.prefix(100))
+            ) {
                 Label("Share", systemImage: "square.and.arrow.up")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
+            .simultaneousGesture(TapGesture().onEnded {
+                Task { await apiService.trackEvent(postID: post.id, type: "share") }
+            })
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
-    }
-
-    /// Share text for sports posts — excludes external_url since it's JSON, not a link.
-    private var sportsShareText: String {
-        post.title + "\n\n" + post.body
     }
 
     private var closeButton: some ToolbarContent {
@@ -1257,11 +1259,18 @@ struct PostDetailView: View {
 
             Spacer()
 
-            ShareLink(item: shareText) {
+            ShareLink(
+                item: post.shareURL,
+                subject: Text(post.title),
+                message: Text(post.body.prefix(100))
+            ) {
                 Label("Share", systemImage: "square.and.arrow.up")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
+            .simultaneousGesture(TapGesture().onEnded {
+                Task { await apiService.trackEvent(postID: post.id, type: "share") }
+            })
 
             if let externalURL = post.externalURL, !externalURL.isEmpty, let url = URL(string: externalURL) {
                 Link(destination: url) {
@@ -1295,14 +1304,6 @@ struct PostDetailView: View {
                     .frame(maxWidth: .infinity)
             }
         }
-    }
-
-    private var shareText: String {
-        var text = post.title + "\n\n" + post.body
-        if let url = post.externalURL, !url.isEmpty {
-            text += "\n\n" + url
-        }
-        return text
     }
 
     private var formattedDate: String {

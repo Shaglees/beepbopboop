@@ -3,8 +3,16 @@ import MapKit
 
 struct FeedItemView: View {
     let post: Post
+    @EnvironmentObject private var eventTracker: EventTracker
 
     var body: some View {
+        styledContent
+            .onAppear { eventTracker.cardAppeared(postID: post.id) }
+            .onDisappear { eventTracker.cardDisappeared(postID: post.id) }
+    }
+
+    @ViewBuilder
+    private var styledContent: some View {
         if [.outfit, .weather, .scoreboard, .matchup, .standings, .playerSpotlight, .entertainment].contains(post.displayHintValue) {
             cardContent
                 .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -109,6 +117,7 @@ private struct CardFooter: View {
     @AppStorage var isBookmarked: Bool
     @State private var activeReaction: String?
     @EnvironmentObject private var apiService: APIService
+    @EnvironmentObject private var eventTracker: EventTracker
 
     init(post: Post) {
         self.post = post
@@ -939,6 +948,7 @@ private struct OutfitBookmarkButton: View {
     let post: Post
     let tintColor: Color
     @AppStorage var isBookmarked: Bool
+    @EnvironmentObject private var eventTracker: EventTracker
     @EnvironmentObject private var apiService: APIService
 
     init(post: Post, tintColor: Color) {

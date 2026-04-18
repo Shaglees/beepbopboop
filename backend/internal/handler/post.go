@@ -554,6 +554,23 @@ func validateFoodData(externalURL string, errs *[]validationIssue, warns *[]vali
 	}
 }
 
+// --- Fitness data validation ---
+
+type fitnessDataValidation struct {
+	Activity *string `json:"activity"`
+}
+
+func validateFitnessData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var f fitnessDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &f); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "fitness external_url must be valid JSON"})
+		return
+	}
+	if f.Activity == nil || *f.Activity == "" {
+		*warns = append(*warns, validationIssue{Field: "external_url.activity", Code: "missing", Message: "fitness data missing activity"})
+	}
+}
+
 // --- Handlers ---
 
 func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {

@@ -256,49 +256,45 @@ func TestListCommunity_RankedByScore(t *testing.T) {
 	agent, _ := agentRepo.Create(user.ID, "Agent")
 
 	postRepo := repository.NewPostRepo(db)
-	reactionRepo := repository.NewReactionRepo(db)
+	lat, lon := 53.35, -6.26
 
-	userLat, userLon := 53.35, -6.26
-
-	// Post A: old (6h) but with engagement
-	lat1, lon1 := 53.35, -6.26
-	postA, _ := postRepo.Create(repository.CreatePostParams{
-		AgentID: agent.ID, UserID: user.ID,
-		Title: "Post A - old with engagement", Body: "body",
-		Latitude: &lat1, Longitude: &lon1, Visibility: "public",
+	// NEWER: 1h old, no engagement — chronologically first but scored second
+	newer, err := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user.ID, Title: "Newer no engagement", Body: "body",
+		Latitude: &lat, Longitude: &lon, Visibility: "public",
 	})
-	// Backdate post A to 6 hours ago
-	db.Exec(`UPDATE posts SET created_at = NOW() - INTERVAL '6 hours' WHERE id = $1`, postA.ID)
-	if _, err := reactionRepo.Upsert(postA.ID, user.ID, "more"); err != nil {
-		t.Fatalf("upsert reaction: %v", err)
+	if err != nil {
+		t.Fatalf("create newer: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE posts SET created_at = NOW() - INTERVAL '1 hour' WHERE id = $1`, newer.ID); err != nil {
+		t.Fatalf("backdate newer: %v", err)
 	}
 
-	// Post B: very fresh (just created), no engagement
-	lat2, lon2 := 53.35, -6.26
-	postB, _ := postRepo.Create(repository.CreatePostParams{
-		AgentID: agent.ID, UserID: user.ID,
-		Title: "Post B - fresh no engagement", Body: "body",
-		Latitude: &lat2, Longitude: &lon2, Visibility: "public",
+	// OLDER_ENGAGED: 3h old, save_count=12 — chronologically second but scored first
+	olderEngaged, err := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user.ID, Title: "Older with engagement", Body: "body",
+		Latitude: &lat, Longitude: &lon, Visibility: "public",
 	})
-
-	// Post C: very old (25h), higher engagement — should be suppressed by recency
-	lat3, lon3 := 53.35, -6.26
-	postC, _ := postRepo.Create(repository.CreatePostParams{
-		AgentID: agent.ID, UserID: user.ID,
-		Title: "Post C - very old", Body: "body",
-		Latitude: &lat3, Longitude: &lon3, Visibility: "public",
-	})
-	db.Exec(`UPDATE posts SET created_at = NOW() - INTERVAL '25 hours' WHERE id = $1`, postC.ID)
-	user2, _ := userRepo.FindOrCreateByFirebaseUID("firebase-ranking-user2")
-	user3, _ := userRepo.FindOrCreateByFirebaseUID("firebase-ranking-user3")
-	if _, err := reactionRepo.Upsert(postC.ID, user2.ID, "more"); err != nil {
-		t.Fatalf("upsert reaction: %v", err)
+	if err != nil {
+		t.Fatalf("create olderEngaged: %v", err)
 	}
-	if _, err := reactionRepo.Upsert(postC.ID, user3.ID, "more"); err != nil {
-		t.Fatalf("upsert reaction: %v", err)
+	if _, err := db.Exec(`UPDATE posts SET created_at = NOW() - INTERVAL '3 hours', save_count = 12 WHERE id = $1`, olderEngaged.ID); err != nil {
+		t.Fatalf("backdate+save olderEngaged: %v", err)
 	}
 
-	posts, _, err := postRepo.ListCommunity(userLat, userLon, 10.0, "", 20)
+	// STALE: 24h old, no engagement — last in both orders
+	stale, err := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user.ID, Title: "Stale post", Body: "body",
+		Latitude: &lat, Longitude: &lon, Visibility: "public",
+	})
+	if err != nil {
+		t.Fatalf("create stale: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE posts SET created_at = NOW() - INTERVAL '24 hours' WHERE id = $1`, stale.ID); err != nil {
+		t.Fatalf("backdate stale: %v", err)
+	}
+
+	posts, _, err := postRepo.ListCommunity(lat, lon, 10.0, "", 20)
 	if err != nil {
 		t.Fatalf("ListCommunity: %v", err)
 	}
@@ -306,13 +302,13 @@ func TestListCommunity_RankedByScore(t *testing.T) {
 		t.Fatalf("expected 3 posts, got %d", len(posts))
 	}
 
-	// Post B (fresh) should be first
-	if posts[0].ID != postB.ID {
-		t.Errorf("expected post B (fresh) first, got title=%q", posts[0].Title)
+	// OLDER_ENGAGED should rank first (engagement lifts it above the 1h-newer post)
+	if posts[0].ID != olderEngaged.ID {
+		t.Errorf("expected older+engaged post first (engagement > recency diff), got %q", posts[0].Title)
 	}
-	// Post C (25h old) should be last
-	if posts[len(posts)-1].ID != postC.ID {
-		t.Errorf("expected post C (very old) last, got title=%q", posts[len(posts)-1].Title)
+	// STALE should rank last (24h old)
+	if posts[len(posts)-1].ID != stale.ID {
+		t.Errorf("expected stale post last, got %q", posts[len(posts)-1].Title)
 	}
 }
 

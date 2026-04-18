@@ -6,13 +6,43 @@ struct SettingsView: View {
     @StateObject private var viewModel: SettingsViewModel
     @Environment(\.dismiss) private var dismiss
 
-    init(apiService: APIService) {
-        _viewModel = StateObject(wrappedValue: SettingsViewModel(apiService: apiService))
+    init(apiService: APIService, notificationService: NotificationService? = nil) {
+        _viewModel = StateObject(wrappedValue: SettingsViewModel(
+            apiService: apiService,
+            notificationService: notificationService
+        ))
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Your Feed") {
+                    if let summary = viewModel.weightsSummary {
+                        if summary.dataPoints < 10 {
+                            Label("Still learning — keep scrolling and react to posts", systemImage: "brain")
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                        } else {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("You engage most with:")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(summary.topLabels.prefix(3).joined(separator: " · "))
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                            }
+                            .padding(.vertical, 2)
+                            Text("Based on \(summary.dataPoints) interactions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text("Reacting to posts helps your feed improve")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section("Location") {
                     TextField("Search for a city or place", text: $viewModel.searchText)
                         .textContentType(.addressCity)
@@ -53,6 +83,93 @@ struct SettingsView: View {
                         Text("100 km").tag(100.0)
                     }
                     .pickerStyle(.segmented)
+                }
+
+                Section("Sports") {
+                    NavigationLink("Sports & Teams") {
+                        SportsSettingsView(followedTeams: $viewModel.followedTeams)
+                    }
+                }
+
+                Section("Tune your feed") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("📍")
+                            Text("More local")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("More global")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("🌍")
+                        }
+                        Slider(value: $viewModel.geoBias, in: 0...1) { editing in
+                            if !editing { viewModel.scheduleWeightsSave() }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("⚡")
+                            Text("Live & timely")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("Evergreen")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("📚")
+                        }
+                        Slider(value: $viewModel.freshnessBias, in: 0...1) { editing in
+                            if !editing { viewModel.scheduleWeightsSave() }
+                        }
+                    }
+
+                    HStack {
+                        Button("Reset to defaults") {
+                            viewModel.resetWeightsToDefaults()
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        if viewModel.feedUpdated {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                    .font(.caption)
+                                Text("Feed updated")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                            }
+                            .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.feedUpdated)
+                }
+
+                Section("Notifications") {
+                    Toggle("Daily digest", isOn: $viewModel.notificationsEnabled)
+
+                    if viewModel.notificationsEnabled {
+                        Picker("Delivery time", selection: $viewModel.digestHour) {
+                            ForEach(0..<24, id: \.self) { hour in
+                                Text(hourLabel(hour)).tag(hour)
+                            }
+                        }
+
+                        if viewModel.notificationsDenied {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .foregroundStyle(.orange)
+                                Text("Allow notifications in Settings to receive digests.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
 
                 Section {
@@ -99,6 +216,18 @@ struct SettingsView: View {
             .task { await viewModel.loadSettings() }
         }
     }
+
+    private func hourLabel(_ hour: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h a"
+        var components = DateComponents()
+        components.hour = hour
+        components.minute = 0
+        if let date = Calendar.current.date(from: components) {
+            return formatter.string(from: date)
+        }
+        return "\(hour):00"
+    }
 }
 
 @MainActor
@@ -111,16 +240,29 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     @Published var selectedLatitude: Double?
     @Published var selectedLongitude: Double?
     @Published var selectedRadius: Double = 25.0
+    @Published var notificationsEnabled: Bool = true
+    @Published var digestHour: Int = 8
+    @Published var notificationsDenied: Bool = false
     @Published var isSaving = false
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var didSave = false
+    @Published var weightsSummary: WeightsSummary?
+    @Published var followedTeams: Set<String> = []
+    @Published var geoBias: Double = 0.5
+    @Published var freshnessBias: Double = 0.8
+    @Published var feedUpdated = false
 
+    private var weightsSaveTask: Task<Void, Never>?
+    private var badgeTask: Task<Void, Never>?
+    private var cachedWeights: FeedWeights = .defaults
     private let apiService: APIService
+    private let notificationService: NotificationService?
     private let completer = MKLocalSearchCompleter()
 
-    init(apiService: APIService) {
+    init(apiService: APIService, notificationService: NotificationService? = nil) {
         self.apiService = apiService
+        self.notificationService = notificationService
         super.init()
         completer.delegate = self
         completer.resultTypes = .address
@@ -128,6 +270,13 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
 
     func loadSettings() async {
         isLoading = true
+        async let settingsLoad: () = loadSettingsOnly()
+        async let weightsLoad: () = loadWeights()
+        _ = await (settingsLoad, weightsLoad)
+        isLoading = false
+    }
+
+    private func loadSettingsOnly() async {
         do {
             let settings = try await apiService.getSettings()
             selectedLocationName = settings.locationName
@@ -135,10 +284,17 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             selectedLongitude = settings.longitude
             selectedRadius = settings.radiusKm
             if selectedRadius <= 0 { selectedRadius = 25.0 }
+            followedTeams = Set(settings.followedTeams ?? [])
+            notificationsEnabled = settings.notificationsEnabled
+            digestHour = settings.digestHour
         } catch {
             // First time — use defaults
         }
-        isLoading = false
+        weightsSummary = try? await apiService.getWeightsSummary()
+        if let ns = notificationService {
+            await ns.checkStatus()
+            notificationsDenied = ns.authorizationStatus == .denied
+        }
     }
 
     func selectSearchResult(_ result: MKLocalSearchCompletion) async {
@@ -174,7 +330,10 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             locationName: selectedLocationName,
             latitude: selectedLatitude,
             longitude: selectedLongitude,
-            radiusKm: selectedRadius
+            radiusKm: selectedRadius,
+            followedTeams: followedTeams.isEmpty ? nil : Array(followedTeams),
+            notificationsEnabled: notificationsEnabled,
+            digestHour: digestHour
         )
 
         do {
@@ -183,12 +342,26 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             selectedLatitude = saved.latitude
             selectedLongitude = saved.longitude
             selectedRadius = saved.radiusKm
+            followedTeams = Set(saved.followedTeams ?? [])
+            notificationsEnabled = saved.notificationsEnabled
+            digestHour = saved.digestHour
 
             // Cache in UserDefaults for quick access
             UserDefaults.standard.set(saved.locationName, forKey: "settings_locationName")
             if let lat = saved.latitude { UserDefaults.standard.set(lat, forKey: "settings_latitude") }
             if let lon = saved.longitude { UserDefaults.standard.set(lon, forKey: "settings_longitude") }
             UserDefaults.standard.set(saved.radiusKm, forKey: "settings_radiusKm")
+            UserDefaults.standard.set(saved.notificationsEnabled, forKey: "settings_notificationsEnabled")
+            UserDefaults.standard.set(saved.digestHour, forKey: "settings_digestHour")
+
+            if let ns = notificationService {
+                if saved.notificationsEnabled {
+                    _ = await ns.requestAuthorization()
+                    notificationsDenied = ns.authorizationStatus == .denied
+                } else {
+                    ns.cancelDailyDigest()
+                }
+            }
 
             didSave = true
         } catch {
@@ -196,6 +369,60 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
         }
 
         isSaving = false
+    }
+
+    private func loadWeights() async {
+        do {
+            let weights = try await apiService.getWeights()
+            cachedWeights = weights
+            geoBias = weights.geoBias
+            freshnessBias = weights.freshnessBias
+        } catch {
+            // Use defaults on failure
+        }
+    }
+
+    func scheduleWeightsSave() {
+        weightsSaveTask?.cancel()
+        let geo = geoBias
+        let fresh = freshnessBias
+        weightsSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled, let self else { return }
+            await self.saveWeights(geo: geo, freshness: fresh)
+        }
+    }
+
+    func resetWeightsToDefaults() {
+        geoBias = FeedWeights.defaults.geoBias
+        freshnessBias = FeedWeights.defaults.freshnessBias
+        scheduleWeightsSave()
+    }
+
+    private func saveWeights(geo: Double, freshness: Double) async {
+        let weights = FeedWeights(
+            labelWeights: cachedWeights.labelWeights,
+            typeWeights: cachedWeights.typeWeights,
+            freshnessBias: freshness,
+            geoBias: geo
+        )
+        do {
+            try await apiService.updateWeights(weights)
+            cachedWeights = weights
+            await showFeedUpdatedBadge()
+        } catch {
+            // Silent — feed won't update until next adjustment
+        }
+    }
+
+    private func showFeedUpdatedBadge() async {
+        feedUpdated = true
+        badgeTask?.cancel()
+        badgeTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            feedUpdated = false
+        }
     }
 
     // MARK: - MKLocalSearchCompleterDelegate

@@ -48,10 +48,13 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateSettingsRequest struct {
-	LocationName string   `json:"location_name"`
-	Latitude     *float64 `json:"latitude"`
-	Longitude    *float64 `json:"longitude"`
-	RadiusKm     float64  `json:"radius_km"`
+	LocationName         string   `json:"location_name"`
+	Latitude             *float64 `json:"latitude"`
+	Longitude            *float64 `json:"longitude"`
+	RadiusKm             float64  `json:"radius_km"`
+	FollowedTeams        []string `json:"followed_teams"`
+	NotificationsEnabled *bool    `json:"notifications_enabled"`
+	DigestHour           *int     `json:"digest_hour"`
 }
 
 func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +79,20 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 		req.RadiusKm = 100
 	}
 
-	settings, err := h.userSettingsRepo.Upsert(user.ID, req.LocationName, req.Latitude, req.Longitude, req.RadiusKm)
+	notificationsEnabled := true
+	if req.NotificationsEnabled != nil {
+		notificationsEnabled = *req.NotificationsEnabled
+	}
+
+	digestHour := 8
+	if req.DigestHour != nil {
+		digestHour = *req.DigestHour
+		if digestHour < 0 || digestHour > 23 {
+			digestHour = 8
+		}
+	}
+
+	settings, err := h.userSettingsRepo.Upsert(user.ID, req.LocationName, req.Latitude, req.Longitude, req.RadiusKm, req.FollowedTeams, notificationsEnabled, digestHour)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save settings"})
 		return

@@ -42,6 +42,8 @@ func Open(url string) (*sql.DB, error) {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
 
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS followed_teams JSONB")
+
 	// Geo index for community feed queries
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_geo ON posts(visibility, latitude, longitude, created_at DESC)")
 
@@ -80,9 +82,10 @@ func Open(url string) (*sql.DB, error) {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
 
-	// System user + weather agent for server-generated posts.
+	// System user + worker agents for server-generated posts.
 	db.Exec("INSERT INTO users (id, firebase_uid) VALUES ('system', 'system') ON CONFLICT DO NOTHING")
 	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('weather-bot', 'system', 'Weather', 'active') ON CONFLICT DO NOTHING")
+	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('sports-bot', 'system', 'Sports', 'active') ON CONFLICT DO NOTHING")
 
 	// Post scheduling: status tracks published vs scheduled, scheduled_at holds publish time
 	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'published'")
@@ -99,6 +102,24 @@ func Open(url string) (*sql.DB, error) {
 		PRIMARY KEY (post_id, user_id)
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_reactions_user ON post_reactions(user_id, updated_at DESC)")
+
+	// Denormalized engagement counts for feed ranking (avoids JOIN/subquery at query time)
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS view_count INT NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS save_count INT NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS reaction_count INT NOT NULL DEFAULT 0")
+
+	// Push notification tokens (APNs device tokens from iOS)
+	db.Exec(`CREATE TABLE IF NOT EXISTS push_tokens (
+		user_id    TEXT NOT NULL REFERENCES users(id),
+		token      TEXT NOT NULL,
+		platform   TEXT NOT NULL DEFAULT 'apns',
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, token)
+	)`)
+
+	// Notification preferences in user_settings
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS digest_hour INT NOT NULL DEFAULT 8")
 
 	return db, nil
 }

@@ -2,13 +2,14 @@ import Combine
 import Foundation
 
 enum FeedType {
-    case forYou, community, personal
+    case forYou, community, personal, saved
 
     var path: String {
         switch self {
         case .forYou: return "/feeds/foryou"
         case .community: return "/feeds/community"
         case .personal: return "/feeds/personal"
+        case .saved: return "/posts/saved"
         }
     }
 }
@@ -103,6 +104,22 @@ class APIService: ObservableObject {
     }
 
     @MainActor
+    func getWeightsSummary() async throws -> WeightsSummary {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/weights/summary") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        return try JSONDecoder().decode(WeightsSummary.self, from: data)
+    }
+
+    @MainActor
     func updateSettings(_ settings: UserSettings) async throws -> UserSettings {
         let token = authService.getToken()
         guard let url = URL(string: "\(baseURL)/user/settings") else {
@@ -122,6 +139,70 @@ class APIService: ObservableObject {
             throw APIError.httpError(httpResponse.statusCode)
         }
         return try JSONDecoder().decode(UserSettings.self, from: data)
+    }
+
+    // MARK: - Feed weights
+
+    @MainActor
+    func getWeights() async throws -> FeedWeights {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/weights") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+        let envelope = try JSONDecoder().decode(UserWeightsResponse.self, from: data)
+        return envelope.weights ?? .defaults
+    }
+
+    @MainActor
+    func updateWeights(_ weights: FeedWeights) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/weights") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(weights)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+    }
+
+    // MARK: - Push Notifications
+
+    @MainActor
+    func registerPushToken(_ token: String, platform: String = "apns") async throws {
+        let authToken = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/push-token") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["token": token, "platform": platform])
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
     }
 
     // MARK: - Reactions
@@ -182,6 +263,20 @@ class APIService: ObservableObject {
               (200...299).contains(httpResponse.statusCode) else {
             throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
         }
+    }
+
+    // MARK: - Events
+
+    @MainActor
+    func trackEvent(postID: String, eventType: String) async {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/posts/\(postID)/events") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode(["event_type": eventType])
+        _ = try? await URLSession.shared.data(for: request)
     }
 
     enum APIError: LocalizedError {

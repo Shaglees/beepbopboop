@@ -19,6 +19,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 	"github.com/shanegleeson/beepbopboop/backend/internal/scheduler"
+	"github.com/shanegleeson/beepbopboop/backend/internal/sports"
 	"github.com/shanegleeson/beepbopboop/backend/internal/weather"
 	"google.golang.org/api/option"
 )
@@ -65,6 +66,7 @@ func main() {
 	weightsRepo := repository.NewWeightsRepo(db)
 	templateRepo := repository.NewTemplateRepo(db)
 	reactionRepo := repository.NewReactionRepo(db)
+	pushTokenRepo := repository.NewPushTokenRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -75,10 +77,14 @@ func main() {
 	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo)
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
-	weightsH := handler.NewWeightsHandler(agentRepo, weightsRepo)
+	weightsH := handler.NewWeightsHandler(agentRepo, userRepo, weightsRepo)
+	weightsSummaryH := handler.NewWeightsSummaryHandler(userRepo, weightsRepo, eventRepo)
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
 	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
+	pushTokenH := handler.NewPushTokenHandler(userRepo, pushTokenRepo)
 	weatherSvc := weather.NewService()
+	sportsSvc := sports.NewService()
+	sportsH := handler.NewSportsHandler(sportsSvc)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -100,8 +106,12 @@ func main() {
 		r.Get("/feeds/personal", multiFeedH.GetPersonal)
 		r.Get("/feeds/community", multiFeedH.GetCommunity)
 		r.Get("/feeds/foryou", multiFeedH.GetForYou)
+		r.Get("/posts/saved", multiFeedH.GetSaved)
 		r.Get("/user/settings", settingsH.GetSettings)
 		r.Put("/user/settings", settingsH.UpdateSettings)
+		r.Get("/user/weights", weightsH.GetWeightsFirebase)
+		r.Put("/user/weights", weightsH.UpdateWeightsFirebase)
+		r.Put("/user/push-token", pushTokenH.RegisterPushToken)
 		r.Post("/agents", agentH.CreateAgent)
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
 		r.Post("/posts/{postID}/events", eventsH.TrackEvent)
@@ -109,6 +119,8 @@ func main() {
 		r.Put("/posts/{postID}/reaction", reactionsH.SetReaction)
 		r.Delete("/posts/{postID}/reaction", reactionsH.RemoveReaction)
 		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
+		r.Get("/user/weights/summary", weightsSummaryH.GetSummary)
+		r.Get("/sports/scores", sportsH.GetScores)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -130,6 +142,9 @@ func main() {
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	weatherWorker := weather.NewWorker(weatherSvc, postRepo, userSettingsRepo, 30*time.Minute)
 	go weatherWorker.Run(workerCtx)
+
+	sportsWorker := sports.NewWorker(sportsSvc, postRepo, 10*time.Minute)
+	go sportsWorker.Run(workerCtx)
 
 	schedulerWorker := scheduler.NewWorker(postRepo, 1*time.Minute)
 	go schedulerWorker.Run(workerCtx)

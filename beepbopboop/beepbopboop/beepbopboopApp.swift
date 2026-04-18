@@ -4,6 +4,7 @@ import SwiftUI
 struct beepbopboopApp: App {
     @StateObject private var authService = AuthService()
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var notificationService = NotificationService()
 
     var body: some Scene {
         WindowGroup {
@@ -14,7 +15,8 @@ struct beepbopboopApp: App {
                 }
                 FeedView(
                     authService: authService,
-                    apiService: api
+                    apiService: api,
+                    notificationService: notificationService
                 )
                 .environmentObject(api)
                 .environmentObject(tracker)

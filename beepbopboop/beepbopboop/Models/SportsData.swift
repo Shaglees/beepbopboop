@@ -14,6 +14,21 @@ struct GameData: Codable {
     let venue: String?
     let broadcast: String?
     let series: String?            // "Game 3 · Series tied 1-1"
+    // Soccer-specific fields (all optional for backward compatibility)
+    let leagueShortName: String?
+    let leagueColor: String?
+    let matchday: String?
+    let competition: String?
+    let goalScorers: [GoalScorer]?
+    let yellowCards: Int?
+    let redCards: Int?
+}
+
+struct GoalScorer: Codable {
+    let player: String
+    let team: String        // matches TeamInfo.abbr
+    let minute: Int
+    let assist: String?
 }
 
 struct TeamInfo: Codable {
@@ -95,12 +110,20 @@ extension GameData {
         let s = status.lowercased()
         return s.hasPrefix("live") || s.contains("period") || s.contains("quarter")
             || s.contains("half") || s.contains("inning")
+            || s == "ht" || s == "1h" || s == "2h" || s.hasPrefix("et")
     }
 
     /// Whether the game is finished.
     var isFinal: Bool {
         let s = status.lowercased()
         return s.hasPrefix("final") || s == "ft" || s == "full time"
+    }
+
+    /// League accent color for soccer branding strips.
+    var leagueAccentColor: Color {
+        guard let hex = leagueColor else { return .white.opacity(0.3) }
+        let c = Color(hexString: hex)
+        return c == .gray ? Color(red: 0.6, green: 0.6, blue: 0.9) : c
     }
 
     /// Status pill color.
@@ -159,4 +182,65 @@ extension GameData {
         if days < 7 { return "IN \(days) DAYS" }
         return nil
     }
+}
+
+// MARK: - Player Spotlight Data
+
+private let playerSpotlightFallbackColor = Color(red: 0.1, green: 0.3, blue: 0.7)
+
+struct PlayerData: Codable {
+    let type: String
+    let sport: String
+    let league: String
+    let playerId: String
+    let playerName: String
+    let playerHeadshotUrl: String?
+    let team: String
+    let teamAbbr: String
+    let teamColor: String?
+    let position: String?
+    let gameDate: String?          // ISO date string e.g. "2026-04-17" (raw String, unlike GameData.gameDate which is Date?)
+    let opponent: String?
+    let gameResult: String?
+    let lastGameStats: PlayerGameStats
+    let seasonAverages: PlayerSeasonStats
+    let seriesContext: String?
+    let storyline: String?
+
+    var teamSwiftUIColor: Color {
+        guard let hex = teamColor else { return playerSpotlightFallbackColor }
+        let c = Color(hexString: hex)
+        return c == .gray ? playerSpotlightFallbackColor : c
+    }
+
+    var sportIcon: String {
+        switch sport.lowercased() {
+        case "hockey":     return "figure.hockey"
+        case "baseball":   return "figure.baseball"
+        case "basketball": return "figure.basketball"
+        case "soccer", "football":
+                           return "figure.soccer"
+        case "mma":        return "figure.martial.arts"
+        case "golf":       return "figure.golf"
+        case "tennis":     return "figure.tennis"
+        default:           return "sportscourt"
+        }
+    }
+}
+
+struct PlayerGameStats: Codable {
+    let points: Int
+    let rebounds: Int
+    let assists: Int
+    let steals: Int?
+    let blocks: Int?
+    let fieldGoalPct: Double?
+    let threePointPct: Double?
+    let plusMinus: Int?
+}
+
+struct PlayerSeasonStats: Codable {
+    let points: Double
+    let rebounds: Double
+    let assists: Double
 }

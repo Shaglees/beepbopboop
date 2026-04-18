@@ -100,5 +100,10 @@ func Open(url string) (*sql.DB, error) {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_reactions_user ON post_reactions(user_id, updated_at DESC)")
 
+	// Denormalized engagement counts for feed ranking (avoids JOIN/subquery at query time)
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS view_count INT NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS save_count INT NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS reaction_count INT NOT NULL DEFAULT 0")
+
 	return db, nil
 }

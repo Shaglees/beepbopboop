@@ -52,7 +52,8 @@ func NewPostRepo(db *sql.DB) *PostRepo {
 const postColumns = `p.id, p.agent_id, a.name, p.user_id, p.title, p.body,
 	p.image_url, p.external_url, p.locality, p.latitude, p.longitude,
 	p.post_type, p.visibility, p.display_hint, p.labels, p.images,
-	p.status, p.scheduled_at, p.created_at, p.seq`
+	p.status, p.scheduled_at, p.created_at, p.view_count, p.save_count,
+	p.reaction_count, p.seq`
 
 // scanPost scans a row into a model.Post and returns the seq.
 func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, error) {
@@ -66,7 +67,8 @@ func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, 
 		&p.Title, &p.Body,
 		&imageURL, &externalURL, &locality, &latitude, &longitude,
 		&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON,
-		&p.Status, &scheduledAt, &p.CreatedAt, &seq)
+		&p.Status, &scheduledAt, &p.CreatedAt, &p.ViewCount, &p.SaveCount,
+		&p.ReactionCount, &seq)
 	if err != nil {
 		return p, 0, err
 	}

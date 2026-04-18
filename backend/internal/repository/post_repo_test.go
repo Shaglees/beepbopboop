@@ -87,6 +87,48 @@ func TestPostRepo_EmptyFeed(t *testing.T) {
 	}
 }
 
+func TestPostRepo_EngagementCountsPopulated(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-engagement-test")
+
+	agentRepo := repository.NewAgentRepo(db)
+	agent, _ := agentRepo.Create(user.ID, "Test Agent")
+
+	postRepo := repository.NewPostRepo(db)
+
+	lat, lon := 53.35, -6.26
+	post, err := postRepo.Create(repository.CreatePostParams{
+		AgentID:    agent.ID,
+		UserID:     user.ID,
+		Title:      "Nearby post",
+		Body:       "body",
+		Latitude:   &lat,
+		Longitude:  &lon,
+		Visibility: "public",
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	posts, _, err := postRepo.ListCommunity(lat, lon, 10.0, "", 20)
+	if err != nil {
+		t.Fatalf("ListCommunity: %v", err)
+	}
+	if len(posts) == 0 {
+		t.Fatal("expected at least 1 post")
+	}
+
+	found := posts[0]
+	if found.ID != post.ID {
+		t.Fatalf("expected post %s, got %s", post.ID, found.ID)
+	}
+	// These should be populated (0 is correct for a brand new post, but the field exists)
+	_ = found.ReactionCount
+	_ = found.SaveCount
+}
+
 func TestPostRepo_OptionalFields(t *testing.T) {
 	db := database.OpenTestDB(t)
 

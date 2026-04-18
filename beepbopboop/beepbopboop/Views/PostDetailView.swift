@@ -60,6 +60,10 @@ struct PostDetailView: View {
             ConcertDetailView(post: post)
         case .album:
             AlbumDetailView(post: post)
+        case .playerSpotlight:
+            PlayerSpotlightDetailView(post: post)
+        case .gameRelease:
+            GameReleaseDetailView(post: post)
         default:
             standardDetailBody
         }

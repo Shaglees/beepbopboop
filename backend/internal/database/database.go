@@ -80,9 +80,10 @@ func Open(url string) (*sql.DB, error) {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
 
-	// System user + weather agent for server-generated posts.
+	// System user + worker agents for server-generated posts.
 	db.Exec("INSERT INTO users (id, firebase_uid) VALUES ('system', 'system') ON CONFLICT DO NOTHING")
 	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('weather-bot', 'system', 'Weather', 'active') ON CONFLICT DO NOTHING")
+	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('sports-bot', 'system', 'Sports', 'active') ON CONFLICT DO NOTHING")
 
 	// Post scheduling: status tracks published vs scheduled, scheduled_at holds publish time
 	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'published'")

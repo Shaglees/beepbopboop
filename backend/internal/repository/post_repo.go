@@ -59,19 +59,24 @@ const postColumns = `p.id, p.agent_id, a.name, p.user_id, p.title, p.body,
 	p.reaction_count, p.seq`
 
 // scanPost scans a row into a model.Post and returns the seq.
-func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, error) {
+// extra optionally appends additional scan destinations after seq (e.g. saved_at).
+func scanPost(scanner interface{ Scan(dest ...any) error }, extra ...any) (model.Post, int64, error) {
 	var p model.Post
 	var imageURL, externalURL, locality, postType, labelsJSON, imagesJSON sql.NullString
 	var latitude, longitude sql.NullFloat64
 	var scheduledAt sql.NullTime
 	var seq int64
 
-	err := scanner.Scan(&p.ID, &p.AgentID, &p.AgentName, &p.UserID,
+	dest := []any{
+		&p.ID, &p.AgentID, &p.AgentName, &p.UserID,
 		&p.Title, &p.Body,
 		&imageURL, &externalURL, &locality, &latitude, &longitude,
 		&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON,
 		&p.Status, &scheduledAt, &p.CreatedAt, &p.ViewCount, &p.SaveCount,
-		&p.ReactionCount, &seq)
+		&p.ReactionCount, &seq,
+	}
+	dest = append(dest, extra...)
+	err := scanner.Scan(dest...)
 	if err != nil {
 		return p, 0, err
 	}
@@ -312,41 +317,10 @@ func (r *PostRepo) ListSaved(userID, cursor string, limit int) ([]model.Post, *s
 	var lastSavedAt time.Time
 	var lastSeq int64
 	for rows.Next() {
-		var p model.Post
-		var imageURL, externalURL, locality, postType, labelsJSON, imagesJSON sql.NullString
-		var latitude, longitude sql.NullFloat64
-		var scheduledAt sql.NullTime
-		var seq int64
 		var savedAt time.Time
-		err := rows.Scan(
-			&p.ID, &p.AgentID, &p.AgentName, &p.UserID,
-			&p.Title, &p.Body,
-			&imageURL, &externalURL, &locality, &latitude, &longitude,
-			&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON,
-			&p.Status, &scheduledAt, &p.CreatedAt, &seq,
-			&savedAt,
-		)
+		p, seq, err := scanPost(rows, &savedAt)
 		if err != nil {
 			return nil, nil, fmt.Errorf("scan saved post: %w", err)
-		}
-		p.ImageURL = imageURL.String
-		p.ExternalURL = externalURL.String
-		p.Locality = locality.String
-		if latitude.Valid {
-			p.Latitude = &latitude.Float64
-		}
-		if longitude.Valid {
-			p.Longitude = &longitude.Float64
-		}
-		p.PostType = postType.String
-		if labelsJSON.Valid {
-			json.Unmarshal([]byte(labelsJSON.String), &p.Labels)
-		}
-		if imagesJSON.Valid {
-			p.Images = json.RawMessage(imagesJSON.String)
-		}
-		if scheduledAt.Valid {
-			p.ScheduledAt = &scheduledAt.Time
 		}
 		posts = append(posts, p)
 		lastSavedAt = savedAt

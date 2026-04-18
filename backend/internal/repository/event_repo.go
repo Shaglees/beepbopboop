@@ -16,8 +16,35 @@ func NewEventRepo(db *sql.DB) *EventRepo {
 	return &EventRepo{db: db}
 }
 
-func (r *EventRepo) Create(postID, userID, eventType string, dwellMs *int) error {
+// syncSaveCount recomputes save_count for a post from the source of truth.
+// It uses DISTINCT ON to find each user's latest save/unsave event, then counts
+// those who ended on "save", so unsave events correctly decrement the count.
+func (r *EventRepo) syncSaveCount(postID string) error {
 	_, err := r.db.Exec(`
+		UPDATE posts SET save_count = (
+			SELECT COUNT(*)
+			FROM (
+				SELECT DISTINCT ON (user_id) event_type
+				FROM post_events
+				WHERE post_id = $1 AND event_type IN ('save', 'unsave')
+				ORDER BY user_id, created_at DESC
+			) latest
+			WHERE event_type = 'save'
+		) WHERE id = $1`, postID)
+	if err != nil {
+		return fmt.Errorf("sync save_count for post %s: %w", postID, err)
+	}
+	return nil
+}
+
+func (r *EventRepo) Create(postID, userID, eventType string, dwellMs *int) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`
 		INSERT INTO post_events (post_id, user_id, event_type, dwell_ms)
 		VALUES ($1, $2, $3, $4)`,
 		postID, userID, eventType, dwellMs,
@@ -25,7 +52,25 @@ func (r *EventRepo) Create(postID, userID, eventType string, dwellMs *int) error
 	if err != nil {
 		return fmt.Errorf("insert post_event: %w", err)
 	}
-	return nil
+
+	if eventType == "save" || eventType == "unsave" {
+		_, err = tx.Exec(`
+			UPDATE posts SET save_count = (
+				SELECT COUNT(*)
+				FROM (
+					SELECT DISTINCT ON (user_id) event_type
+					FROM post_events
+					WHERE post_id = $1 AND event_type IN ('save', 'unsave')
+					ORDER BY user_id, created_at DESC
+				) latest
+				WHERE event_type = 'save'
+			) WHERE id = $1`, postID)
+		if err != nil {
+			return fmt.Errorf("sync save_count for post %s: %w", postID, err)
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error {
@@ -49,6 +94,19 @@ func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error 
 	_, err := r.db.Exec(b.String(), args...)
 	if err != nil {
 		return fmt.Errorf("batch insert post_events: %w", err)
+	}
+
+	// Update denormalized save_count for any posts that received a save or unsave event.
+	synced := map[string]bool{}
+	for _, e := range events {
+		if e.EventType == "save" || e.EventType == "unsave" {
+			synced[e.PostID] = true
+		}
+	}
+	for postID := range synced {
+		if err := r.syncSaveCount(postID); err != nil {
+			return err
+		}
 	}
 	return nil
 }

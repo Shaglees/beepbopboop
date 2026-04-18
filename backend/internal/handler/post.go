@@ -45,6 +45,7 @@ var ValidDisplayHints = map[string]bool{
 	"scoreboard":       true,
 	"matchup":          true,
 	"standings":        true,
+	"entertainment":    true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -170,7 +171,7 @@ func validatePost(req *createPostRequest) validationResult {
 	// expect structured JSON (weather, scoreboard, matchup, standings store
 	// JSON payloads in this field, not actual URLs).
 	structuredHint := req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" ||
-		req.DisplayHint == "matchup" || req.DisplayHint == "standings"
+		req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -237,8 +238,10 @@ func validatePost(req *createPostRequest) validationResult {
 			validateGameData(req.ExternalURL, req.DisplayHint, &errs, &warns)
 		case "standings":
 			validateStandingsData(req.ExternalURL, &errs, &warns)
+		case "entertainment":
+			validateEntertainmentData(req.ExternalURL, &errs, &warns)
 		}
-	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" {
+	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",
@@ -443,6 +446,32 @@ func validateStandingsData(externalURL string, errs *[]validationIssue, warns *[
 				}
 			}
 		}
+	}
+}
+
+// --- Entertainment data validation ---
+
+type entertainmentDataValidation struct {
+	Subject  *string `json:"subject"`
+	Headline *string `json:"headline"`
+	Source   *string `json:"source"`
+}
+
+func validateEntertainmentData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var e entertainmentDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &e); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for entertainment hint"})
+		return
+	}
+
+	if e.Subject == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.subject", Code: "required", Message: "subject is required"})
+	}
+	if e.Headline == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.headline", Code: "required", Message: "headline is required"})
+	}
+	if e.Source == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.source", Code: "required", Message: "source is required"})
 	}
 }
 

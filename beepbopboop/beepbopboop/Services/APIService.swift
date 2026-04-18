@@ -127,7 +127,7 @@ class APIService: ObservableObject {
     // MARK: - Feed weights
 
     @MainActor
-    func getWeights() async throws -> FeedWeights? {
+    func getWeights() async throws -> FeedWeights {
         let token = authService.getToken()
         guard let url = URL(string: "\(baseURL)/user/weights") else {
             throw APIError.invalidURL
@@ -143,7 +143,7 @@ class APIService: ObservableObject {
             throw APIError.httpError(httpResponse.statusCode)
         }
         let envelope = try JSONDecoder().decode(UserWeightsResponse.self, from: data)
-        return envelope.weights
+        return envelope.weights ?? .defaults
     }
 
     @MainActor
@@ -159,9 +159,11 @@ class APIService: ObservableObject {
         request.httpBody = try JSONEncoder().encode(weights)
 
         let (_, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError(httpResponse.statusCode)
         }
     }
 

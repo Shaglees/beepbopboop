@@ -28,11 +28,11 @@ type AgentToken struct {
 }
 
 type UserSettings struct {
-	UserID       string   `json:"user_id"`
-	LocationName string   `json:"location_name,omitempty"`
-	Latitude     *float64 `json:"latitude,omitempty"`
-	Longitude    *float64 `json:"longitude,omitempty"`
-	RadiusKm     float64  `json:"radius_km"`
+	UserID       string    `json:"user_id"`
+	LocationName string    `json:"location_name,omitempty"`
+	Latitude     *float64  `json:"latitude,omitempty"`
+	Longitude    *float64  `json:"longitude,omitempty"`
+	RadiusKm     float64   `json:"radius_km"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
@@ -42,29 +42,29 @@ type FeedResponse struct {
 }
 
 type Post struct {
-	ID          string    `json:"id"`
-	AgentID     string    `json:"agent_id"`
-	AgentName   string    `json:"agent_name"`
-	UserID      string    `json:"user_id"`
-	Title       string    `json:"title"`
-	Body        string    `json:"body"`
-	ImageURL    string    `json:"image_url,omitempty"`
-	ExternalURL string    `json:"external_url,omitempty"`
-	Locality    string    `json:"locality,omitempty"`
-	Latitude    *float64  `json:"latitude,omitempty"`
-	Longitude   *float64  `json:"longitude,omitempty"`
-	PostType    string    `json:"post_type,omitempty"`
-	Visibility  string    `json:"visibility"`
-	DisplayHint string    `json:"display_hint"`
-	Labels      []string        `json:"labels,omitempty"`
-	Images      json.RawMessage `json:"images,omitempty"`
-	Status      string          `json:"status"`
-	ScheduledAt *time.Time      `json:"scheduled_at,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
-	ViewCount     int     `json:"view_count"`
-	SaveCount     int     `json:"save_count"`
-	ReactionCount int     `json:"reaction_count"`
-	MyReaction    *string `json:"my_reaction,omitempty"`
+	ID            string          `json:"id"`
+	AgentID       string          `json:"agent_id"`
+	AgentName     string          `json:"agent_name"`
+	UserID        string          `json:"user_id"`
+	Title         string          `json:"title"`
+	Body          string          `json:"body"`
+	ImageURL      string          `json:"image_url,omitempty"`
+	ExternalURL   string          `json:"external_url,omitempty"`
+	Locality      string          `json:"locality,omitempty"`
+	Latitude      *float64        `json:"latitude,omitempty"`
+	Longitude     *float64        `json:"longitude,omitempty"`
+	PostType      string          `json:"post_type,omitempty"`
+	Visibility    string          `json:"visibility"`
+	DisplayHint   string          `json:"display_hint"`
+	Labels        []string        `json:"labels,omitempty"`
+	Images        json.RawMessage `json:"images,omitempty"`
+	Status        string          `json:"status"`
+	ScheduledAt   *time.Time      `json:"scheduled_at,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	ViewCount     int             `json:"view_count"`
+	SaveCount     int             `json:"save_count"`
+	ReactionCount int             `json:"reaction_count"`
+	MyReaction    *string         `json:"my_reaction,omitempty"`
 }
 
 type DisplayTemplate struct {
@@ -95,11 +95,11 @@ type EventInput struct {
 }
 
 type LabelEngagement struct {
-	Label     string  `json:"label"`
-	Views     int     `json:"views"`
-	Saves     int     `json:"saves"`
-	Clicks    int     `json:"clicks"`
-	AvgDwell  float64 `json:"avg_dwell_ms"`
+	Label    string  `json:"label"`
+	Views    int     `json:"views"`
+	Saves    int     `json:"saves"`
+	Clicks   int     `json:"clicks"`
+	AvgDwell float64 `json:"avg_dwell_ms"`
 }
 
 type TypeEngagement struct {

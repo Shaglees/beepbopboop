@@ -124,9 +124,10 @@ func TestPostRepo_EngagementCountsPopulated(t *testing.T) {
 	if found.ID != post.ID {
 		t.Fatalf("expected post %s, got %s", post.ID, found.ID)
 	}
-	// These should be populated (0 is correct for a brand new post, but the field exists)
-	_ = found.ReactionCount
-	_ = found.SaveCount
+	if found.ViewCount != 0 || found.SaveCount != 0 || found.ReactionCount != 0 {
+		t.Errorf("new post should have zero engagement counts, got view=%d save=%d reaction=%d",
+			found.ViewCount, found.SaveCount, found.ReactionCount)
+	}
 }
 
 func TestPostRepo_OptionalFields(t *testing.T) {

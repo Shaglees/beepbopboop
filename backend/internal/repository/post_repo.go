@@ -341,6 +341,10 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 		posts = append(posts, candidates[i].post)
 	}
 
+	// The cursor is keyed on SQL row order (created_at DESC), not on composite score.
+	// Cross-page ranking continuity is not guaranteed: a post near the page boundary
+	// may appear on either page depending on which SQL window captures it. This is
+	// an accepted trade-off for cursor-based ranked feeds without a score cache.
 	var nextCursor *string
 	if rowsProcessed >= sqlLimit && len(posts) > 0 {
 		c := formatCursor(lastCreatedAt, lastSeq)

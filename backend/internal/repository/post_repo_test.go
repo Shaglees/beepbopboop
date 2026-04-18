@@ -256,7 +256,8 @@ func TestListCommunity_RankedByScore(t *testing.T) {
 	agent, _ := agentRepo.Create(user.ID, "Agent")
 
 	postRepo := repository.NewPostRepo(db)
-	lat, lon := 53.35, -6.26
+	// Use London coordinates — distinct from the Dublin (53.35, -6.26) used by other tests.
+	lat, lon := 51.50, -0.12
 
 	// NEWER: 1h old, no engagement — chronologically first but scored second
 	newer, err := postRepo.Create(repository.CreatePostParams{

@@ -8,6 +8,7 @@ struct PostDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var activeReaction: String?
     @EnvironmentObject private var apiService: APIService
+    @EnvironmentObject private var eventTracker: EventTracker
 
     init(post: Post) {
         self.post = post
@@ -20,6 +21,12 @@ struct PostDetailView: View {
     }
 
     var body: some View {
+        detailContent
+            .onAppear { eventTracker.fireEvent(postID: post.id, type: "expand") }
+    }
+
+    @ViewBuilder
+    private var detailContent: some View {
         switch post.displayHintValue {
         case .outfit:
             outfitDetailBody
@@ -784,6 +791,9 @@ struct PostDetailView: View {
             Button {
                 withAnimation(.bouncy) { isBookmarked.toggle() }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                if isBookmarked {
+                    eventTracker.fireEvent(postID: post.id, type: "save")
+                }
             } label: {
                 Label(
                     isBookmarked ? "Bookmarked" : "Bookmark",
@@ -1224,6 +1234,9 @@ struct PostDetailView: View {
                     isBookmarked.toggle()
                 }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                if isBookmarked {
+                    eventTracker.fireEvent(postID: post.id, type: "save")
+                }
             } label: {
                 Label(
                     isBookmarked ? "Bookmarked" : "Bookmark",

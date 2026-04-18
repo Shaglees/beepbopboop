@@ -3,8 +3,16 @@ import MapKit
 
 struct FeedItemView: View {
     let post: Post
+    @EnvironmentObject private var eventTracker: EventTracker
 
     var body: some View {
+        styledContent
+            .onAppear { eventTracker.cardAppeared(postID: post.id) }
+            .onDisappear { eventTracker.cardDisappeared(postID: post.id) }
+    }
+
+    @ViewBuilder
+    private var styledContent: some View {
         if [.outfit, .weather, .scoreboard, .matchup, .standings].contains(post.displayHintValue) {
             cardContent
                 .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -101,6 +109,7 @@ private struct CardFooter: View {
     @AppStorage var isBookmarked: Bool
     @State private var activeReaction: String?
     @EnvironmentObject private var apiService: APIService
+    @EnvironmentObject private var eventTracker: EventTracker
 
     init(post: Post) {
         self.post = post
@@ -128,6 +137,9 @@ private struct CardFooter: View {
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()
+                if isBookmarked {
+                    eventTracker.fireEvent(postID: post.id, type: "save")
+                }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)
@@ -929,6 +941,7 @@ private struct OutfitBookmarkButton: View {
     let post: Post
     let tintColor: Color
     @AppStorage var isBookmarked: Bool
+    @EnvironmentObject private var eventTracker: EventTracker
 
     init(post: Post, tintColor: Color) {
         self.post = post
@@ -940,6 +953,9 @@ private struct OutfitBookmarkButton: View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             isBookmarked.toggle()
+            if isBookmarked {
+                eventTracker.fireEvent(postID: post.id, type: "save")
+            }
         } label: {
             Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                 .font(.caption)

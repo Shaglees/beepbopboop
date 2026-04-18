@@ -16,6 +16,19 @@ func NewEventRepo(db *sql.DB) *EventRepo {
 	return &EventRepo{db: db}
 }
 
+// syncSaveCount recomputes save_count for a post from the source of truth.
+// It uses COUNT(DISTINCT user_id) so that multiple saves from one user count once.
+func (r *EventRepo) syncSaveCount(postID string) error {
+	_, err := r.db.Exec(`UPDATE posts SET save_count = (
+		SELECT COUNT(DISTINCT user_id) FROM post_events
+		WHERE post_id = $1 AND event_type = 'save'
+	) WHERE id = $1`, postID)
+	if err != nil {
+		return fmt.Errorf("sync save_count for post %s: %w", postID, err)
+	}
+	return nil
+}
+
 func (r *EventRepo) Create(postID, userID, eventType string, dwellMs *int) error {
 	_, err := r.db.Exec(`
 		INSERT INTO post_events (post_id, user_id, event_type, dwell_ms)
@@ -24,6 +37,11 @@ func (r *EventRepo) Create(postID, userID, eventType string, dwellMs *int) error
 	)
 	if err != nil {
 		return fmt.Errorf("insert post_event: %w", err)
+	}
+	if eventType == "save" {
+		if err := r.syncSaveCount(postID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -49,6 +67,19 @@ func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error 
 	_, err := r.db.Exec(b.String(), args...)
 	if err != nil {
 		return fmt.Errorf("batch insert post_events: %w", err)
+	}
+
+	// Update denormalized save_count for any posts that received a save event.
+	saved := map[string]bool{}
+	for _, e := range events {
+		if e.EventType == "save" {
+			saved[e.PostID] = true
+		}
+	}
+	for postID := range saved {
+		if err := r.syncSaveCount(postID); err != nil {
+			return err
+		}
 	}
 	return nil
 }

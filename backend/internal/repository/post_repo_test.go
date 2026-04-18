@@ -181,6 +181,35 @@ func TestPostRepo_ReactionCountMaintained(t *testing.T) {
 	}
 }
 
+func TestPostRepo_SaveCountMaintained(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-save-test")
+
+	agentRepo := repository.NewAgentRepo(db)
+	agent, _ := agentRepo.Create(user.ID, "Agent")
+
+	postRepo := repository.NewPostRepo(db)
+	lat, lon := 53.35, -6.26
+	post, _ := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user.ID,
+		Title: "Post", Body: "body", Latitude: &lat, Longitude: &lon, Visibility: "public",
+	})
+
+	eventRepo := repository.NewEventRepo(db)
+	if err := eventRepo.BatchCreate(user.ID, []model.EventInput{
+		{PostID: post.ID, EventType: "save"},
+	}); err != nil {
+		t.Fatalf("BatchCreate: %v", err)
+	}
+
+	posts, _, _ := postRepo.ListCommunity(lat, lon, 10.0, "", 20)
+	if posts[0].SaveCount != 1 {
+		t.Errorf("expected save_count 1, got %d", posts[0].SaveCount)
+	}
+}
+
 func TestPostRepo_OptionalFields(t *testing.T) {
 	db := database.OpenTestDB(t)
 

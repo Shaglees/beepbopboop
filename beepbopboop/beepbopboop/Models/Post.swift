@@ -180,7 +180,7 @@ struct Post: Codable, Identifiable {
 
     enum DisplayHintValue {
         case card, place, article, weather, calendar, deal, digest, brief, comparison, event, outfit
-        case scoreboard, matchup, standings
+        case scoreboard, matchup, standings, playerSpotlight
     }
 
     var displayHintValue: DisplayHintValue {
@@ -198,6 +198,7 @@ struct Post: Codable, Identifiable {
         case "scoreboard": return .scoreboard
         case "matchup": return .matchup
         case "standings": return .standings
+        case "player_spotlight": return .playerSpotlight
         default: return .card
         }
     }
@@ -267,6 +268,7 @@ struct Post: Codable, Identifiable {
         case .scoreboard: return .red
         case .matchup: return .indigo
         case .standings: return .secondary
+        case .playerSpotlight: return Color(red: 0.0, green: 0.478, blue: 0.757)
         }
     }
 
@@ -286,6 +288,7 @@ struct Post: Codable, Identifiable {
         case .scoreboard: return "sportscourt"
         case .matchup: return "clock"
         case .standings: return "list.number"
+        case .playerSpotlight: return "figure.basketball"
         }
     }
 
@@ -305,6 +308,7 @@ struct Post: Codable, Identifiable {
         case .scoreboard: return "Score"
         case .matchup: return "Matchup"
         case .standings: return "Scores"
+        case .playerSpotlight: return "Player"
         }
     }
 
@@ -403,6 +407,14 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(StandingsData.self, from: data)
+    }
+
+    /// Parsed player spotlight data from externalURL (for player_spotlight display_hint posts).
+    var playerData: PlayerData? {
+        guard displayHintValue == .playerSpotlight,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(PlayerData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

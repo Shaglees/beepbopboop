@@ -54,6 +54,8 @@ struct PostDetailView: View {
             RestaurantDetailView(post: post)
         case .movie:
             MovieDetailView(post: post)
+        case .playerSpotlight:
+            PlayerSpotlightDetailView(post: post)
         default:
             standardDetailBody
         }

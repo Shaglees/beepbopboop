@@ -46,6 +46,8 @@ struct PostDetailView: View {
             CalendarDetailView(post: post)
         case .place:
             PlaceDetailView(post: post)
+        case .entertainment:
+            EntertainmentDetailView(post: post)
         default:
             standardDetailBody
         }

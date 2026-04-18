@@ -265,17 +265,23 @@ class APIService: ObservableObject {
         }
     }
 
-    // MARK: - Events
+    // MARK: - Single event tracking (convenience wrapper around batch endpoint)
 
     @MainActor
     func trackEvent(postID: String, eventType: String) async {
+        await trackEvent(postID: postID, type: eventType)
+    }
+
+    @MainActor
+    func trackEvent(postID: String, type: String) async {
         let token = authService.getToken()
-        guard let url = URL(string: "\(baseURL)/posts/\(postID)/events") else { return }
+        guard let url = URL(string: "\(baseURL)/events/batch") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONEncoder().encode(["event_type": eventType])
+        let body: [String: Any] = ["events": [["post_id": postID, "type": type]]]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         _ = try? await URLSession.shared.data(for: request)
     }
 

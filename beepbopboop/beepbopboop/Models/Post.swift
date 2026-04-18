@@ -455,6 +455,7 @@ struct Post: Codable, Identifiable {
         return try? JSONDecoder().decode(EntertainmentData.self, from: data)
     }
 
+
     /// Images filtered by role, with fallback to imageURL
     func imagesByRole(_ role: String) -> [PostImage] {
         images?.filter { $0.role.lowercased() == role.lowercased() } ?? []

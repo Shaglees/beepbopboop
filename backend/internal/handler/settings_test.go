@@ -111,6 +111,10 @@ func TestSettingsHandler_UpdateSettings_ClearsFollowedTeams(t *testing.T) {
 	rec3 := httptest.NewRecorder()
 	h.GetSettings(rec3, req3)
 
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("GET expected 200, got %d: %s", rec3.Code, rec3.Body.String())
+	}
+
 	var settings map[string]any
 	json.NewDecoder(rec3.Body).Decode(&settings)
 	if _, exists := settings["followed_teams"]; exists {

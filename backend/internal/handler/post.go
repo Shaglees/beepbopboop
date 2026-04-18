@@ -44,6 +44,8 @@ var ValidDisplayHints = map[string]bool{
 	"scoreboard":  true,
 	"matchup":     true,
 	"standings":   true,
+	"movie":       true,
+	"show":        true,
 }
 
 var ValidImageRoles = map[string]bool{

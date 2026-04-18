@@ -181,6 +181,7 @@ struct Post: Codable, Identifiable {
     enum DisplayHintValue {
         case card, place, article, weather, calendar, deal, digest, brief, comparison, event, outfit
         case scoreboard, matchup, standings
+        case movie, show
     }
 
     var displayHintValue: DisplayHintValue {
@@ -198,6 +199,8 @@ struct Post: Codable, Identifiable {
         case "scoreboard": return .scoreboard
         case "matchup": return .matchup
         case "standings": return .standings
+        case "movie": return .movie
+        case "show": return .show
         default: return .card
         }
     }
@@ -267,6 +270,8 @@ struct Post: Codable, Identifiable {
         case .scoreboard: return .red
         case .matchup: return .indigo
         case .standings: return .secondary
+        case .movie: return Color(red: 0.957, green: 0.62, blue: 0.043)
+        case .show: return Color(red: 0.957, green: 0.62, blue: 0.043)
         }
     }
 
@@ -286,6 +291,8 @@ struct Post: Codable, Identifiable {
         case .scoreboard: return "sportscourt"
         case .matchup: return "clock"
         case .standings: return "list.number"
+        case .movie: return "film"
+        case .show: return "tv"
         }
     }
 
@@ -305,6 +312,8 @@ struct Post: Codable, Identifiable {
         case .scoreboard: return "Score"
         case .matchup: return "Matchup"
         case .standings: return "Scores"
+        case .movie: return "Movie"
+        case .show: return "TV Show"
         }
     }
 
@@ -403,6 +412,14 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(StandingsData.self, from: data)
+    }
+
+    /// Parsed media data from externalURL (for movie/show display_hint posts).
+    var mediaData: MediaData? {
+        guard displayHintValue == .movie || displayHintValue == .show,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(MediaData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

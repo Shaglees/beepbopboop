@@ -251,7 +251,9 @@ struct MatchupCard: View {
                         .foregroundStyle(.white.opacity(0.7))
                     }
                     Spacer()
-                    if let series = game.series {
+                    if game.sport?.lowercased() == "soccer", game.matchday != nil || game.leagueShortName != nil {
+                        SoccerMatchupHeader(game: game)
+                    } else if let series = game.series {
                         Text(series)
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.white)

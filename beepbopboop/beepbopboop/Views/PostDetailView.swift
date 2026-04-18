@@ -56,6 +56,8 @@ struct PostDetailView: View {
             MovieDetailView(post: post)
         case .playerSpotlight:
             PlayerSpotlightDetailView(post: post)
+        case .gameRelease:
+            GameReleaseDetailView(post: post)
         default:
             standardDetailBody
         }

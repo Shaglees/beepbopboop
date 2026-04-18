@@ -226,4 +226,3 @@ private struct WeatherStatCell: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 }
-

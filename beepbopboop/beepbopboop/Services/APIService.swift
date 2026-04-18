@@ -124,6 +124,27 @@ class APIService: ObservableObject {
         return try JSONDecoder().decode(UserSettings.self, from: data)
     }
 
+    // MARK: - User Weights
+
+    @MainActor
+    func updateWeights(_ weights: UserWeightsRequest) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/weights") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(weights)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
     // MARK: - Reactions
 
     @MainActor

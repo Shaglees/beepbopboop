@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct beepbopboopApp: App {
     @StateObject private var authService = AuthService()
+    @AppStorage("onboardingComplete") private var onboardingComplete = false
 
     var body: some Scene {
         WindowGroup {
@@ -13,6 +14,14 @@ struct beepbopboopApp: App {
                     apiService: api
                 )
                 .environmentObject(api)
+                .fullScreenCover(isPresented: Binding(
+                    get: { !onboardingComplete },
+                    set: { if !$0 { onboardingComplete = true } }
+                )) {
+                    OnboardingView(apiService: api) {
+                        onboardingComplete = true
+                    }
+                }
             } else {
                 LoginView(authService: authService)
             }

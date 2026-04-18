@@ -160,3 +160,48 @@ extension GameData {
         return nil
     }
 }
+
+// MARK: - Player Spotlight Data
+
+struct PlayerData: Codable {
+    let type: String
+    let sport: String
+    let league: String
+    let playerId: String
+    let playerName: String
+    let playerHeadshotUrl: String?
+    let team: String
+    let teamAbbr: String
+    let teamColor: String?
+    let position: String?
+    let gameDate: String?
+    let opponent: String?
+    let gameResult: String?
+    let lastGameStats: PlayerGameStats
+    let seasonAverages: PlayerSeasonStats
+    let seriesContext: String?
+    let storyline: String?
+
+    var teamSwiftUIColor: Color {
+        guard let hex = teamColor else { return Color(red: 0.1, green: 0.3, blue: 0.7) }
+        let c = Color(hexString: hex)
+        return c == .gray ? Color(red: 0.1, green: 0.3, blue: 0.7) : c
+    }
+}
+
+struct PlayerGameStats: Codable {
+    let points: Int
+    let rebounds: Int
+    let assists: Int
+    let steals: Int?
+    let blocks: Int?
+    let fieldGoalPct: Double?
+    let threePointPct: Double?
+    let plusMinus: Int?
+}
+
+struct PlayerSeasonStats: Codable {
+    let points: Double
+    let rebounds: Double
+    let assists: Double
+}

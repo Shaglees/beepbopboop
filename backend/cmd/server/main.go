@@ -19,6 +19,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 	"github.com/shanegleeson/beepbopboop/backend/internal/scheduler"
+	"github.com/shanegleeson/beepbopboop/backend/internal/sports"
 	"github.com/shanegleeson/beepbopboop/backend/internal/weather"
 	"google.golang.org/api/option"
 )
@@ -79,6 +80,8 @@ func main() {
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
 	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
 	weatherSvc := weather.NewService()
+	sportsSvc := sports.NewService()
+	sportsH := handler.NewSportsHandler(sportsSvc)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -109,6 +112,7 @@ func main() {
 		r.Put("/posts/{postID}/reaction", reactionsH.SetReaction)
 		r.Delete("/posts/{postID}/reaction", reactionsH.RemoveReaction)
 		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
+		r.Get("/sports/scores", sportsH.GetScores)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -130,6 +134,9 @@ func main() {
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	weatherWorker := weather.NewWorker(weatherSvc, postRepo, userSettingsRepo, 30*time.Minute)
 	go weatherWorker.Run(workerCtx)
+
+	sportsWorker := sports.NewWorker(sportsSvc, postRepo, 10*time.Minute)
+	go sportsWorker.Run(workerCtx)
 
 	schedulerWorker := scheduler.NewWorker(postRepo, 1*time.Minute)
 	go schedulerWorker.Run(workerCtx)

@@ -2,13 +2,14 @@ import Combine
 import Foundation
 
 enum FeedType {
-    case forYou, community, personal
+    case forYou, community, personal, saved
 
     var path: String {
         switch self {
         case .forYou: return "/feeds/foryou"
         case .community: return "/feeds/community"
         case .personal: return "/feeds/personal"
+        case .saved: return "/posts/saved"
         }
     }
 }
@@ -160,6 +161,20 @@ class APIService: ObservableObject {
               (200...299).contains(httpResponse.statusCode) else {
             throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
         }
+    }
+
+    // MARK: - Events
+
+    @MainActor
+    func trackEvent(postID: String, eventType: String) async {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/posts/\(postID)/events") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode(["event_type": eventType])
+        _ = try? await URLSession.shared.data(for: request)
     }
 
     enum APIError: LocalizedError {

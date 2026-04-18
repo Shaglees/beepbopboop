@@ -68,6 +68,7 @@ class FeedListViewModel: ObservableObject {
         case .personal: return "Your agent hasn't posted anything yet."
         case .community: return "No posts from your community yet."
         case .forYou: return "Nothing here yet. Check back soon!"
+        case .saved: return "Nothing saved yet — tap the bookmark icon on any post."
         }
     }
 

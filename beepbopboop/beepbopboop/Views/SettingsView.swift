@@ -5,8 +5,12 @@ import SwiftUI
 struct SettingsView: View {
     @StateObject private var viewModel: SettingsViewModel
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("onboardingComplete") private var onboardingComplete = false
+    @State private var showUpdateInterests = false
+    private let apiService: APIService
 
     init(apiService: APIService, notificationService: NotificationService? = nil) {
+        self.apiService = apiService
         _viewModel = StateObject(wrappedValue: SettingsViewModel(
             apiService: apiService,
             notificationService: notificationService
@@ -204,6 +208,8 @@ struct SettingsView: View {
                         }
                     }
                 }
+
+                interestsSection
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -214,6 +220,21 @@ struct SettingsView: View {
                 }
             }
             .task { await viewModel.loadSettings() }
+            .sheet(isPresented: $showUpdateInterests) {
+                OnboardingView(apiService: apiService) {
+                    showUpdateInterests = false
+                }
+            }
+        }
+    }
+
+    private var interestsSection: some View {
+        Section("Interests") {
+            Button {
+                showUpdateInterests = true
+            } label: {
+                Label("Update interests", systemImage: "sparkles")
+            }
         }
     }
 

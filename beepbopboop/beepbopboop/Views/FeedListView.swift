@@ -119,17 +119,22 @@ struct FeedListView: View {
         .padding()
     }
 
+    @ViewBuilder
     private var emptyView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "tray")
-                .font(.largeTitle)
-                .foregroundColor(.secondary)
-                .symbolEffect(.breathe, isActive: true)
-            Text("No posts yet")
-                .foregroundColor(.secondary)
-            Text(viewModel.emptyMessage)
-                .font(.caption)
-                .foregroundColor(.secondary)
+        if viewModel.feedType == .personal {
+            AgentEmptyStateView()
+        } else {
+            VStack(spacing: 12) {
+                Image(systemName: "tray")
+                    .font(.largeTitle)
+                    .foregroundColor(.secondary)
+                    .symbolEffect(.breathe, isActive: true)
+                Text("No posts yet")
+                    .foregroundColor(.secondary)
+                Text(viewModel.emptyMessage)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 }

@@ -128,6 +128,8 @@ private struct CardFooter: View {
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()
+                let eventType = isBookmarked ? "save" : "unsave"
+                Task { await apiService.trackEvent(postID: post.id, eventType: eventType) }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)
@@ -929,6 +931,7 @@ private struct OutfitBookmarkButton: View {
     let post: Post
     let tintColor: Color
     @AppStorage var isBookmarked: Bool
+    @EnvironmentObject private var apiService: APIService
 
     init(post: Post, tintColor: Color) {
         self.post = post
@@ -940,6 +943,8 @@ private struct OutfitBookmarkButton: View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             isBookmarked.toggle()
+            let eventType = isBookmarked ? "save" : "unsave"
+            Task { await apiService.trackEvent(postID: post.id, eventType: eventType) }
         } label: {
             Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                 .font(.caption)

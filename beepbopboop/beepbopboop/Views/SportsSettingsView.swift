@@ -69,7 +69,7 @@ struct SportsSettingsView: View {
         List {
             ForEach(allLeagues, id: \.id) { league in
                 Section(league.name) {
-                    ForEach(league.teams, id: \.abbr) { team in
+                    ForEach(league.teams, id: \.name) { team in
                         let key = "\(league.id):\(team.abbr)"
                         Button {
                             if followedTeams.contains(key) {

@@ -183,3 +183,64 @@ extension GameData {
         return nil
     }
 }
+
+// MARK: - Player Spotlight Data
+
+private let playerSpotlightFallbackColor = Color(red: 0.1, green: 0.3, blue: 0.7)
+
+struct PlayerData: Codable {
+    let type: String
+    let sport: String
+    let league: String
+    let playerId: String
+    let playerName: String
+    let playerHeadshotUrl: String?
+    let team: String
+    let teamAbbr: String
+    let teamColor: String?
+    let position: String?
+    let gameDate: String?          // ISO date string e.g. "2026-04-17" (raw String, unlike GameData.gameDate which is Date?)
+    let opponent: String?
+    let gameResult: String?
+    let lastGameStats: PlayerGameStats
+    let seasonAverages: PlayerSeasonStats
+    let seriesContext: String?
+    let storyline: String?
+
+    var teamSwiftUIColor: Color {
+        guard let hex = teamColor else { return playerSpotlightFallbackColor }
+        let c = Color(hexString: hex)
+        return c == .gray ? playerSpotlightFallbackColor : c
+    }
+
+    var sportIcon: String {
+        switch sport.lowercased() {
+        case "hockey":     return "figure.hockey"
+        case "baseball":   return "figure.baseball"
+        case "basketball": return "figure.basketball"
+        case "soccer", "football":
+                           return "figure.soccer"
+        case "mma":        return "figure.martial.arts"
+        case "golf":       return "figure.golf"
+        case "tennis":     return "figure.tennis"
+        default:           return "sportscourt"
+        }
+    }
+}
+
+struct PlayerGameStats: Codable {
+    let points: Int
+    let rebounds: Int
+    let assists: Int
+    let steals: Int?
+    let blocks: Int?
+    let fieldGoalPct: Double?
+    let threePointPct: Double?
+    let plusMinus: Int?
+}
+
+struct PlayerSeasonStats: Codable {
+    let points: Double
+    let rebounds: Double
+    let assists: Double
+}

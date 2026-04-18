@@ -40,7 +40,7 @@ var ValidDisplayHints = map[string]bool{
 	"brief":       true,
 	"comparison":  true,
 	"event":       true,
-	"outfit":      true,
+	"outfit":           true,
 	"scoreboard":       true,
 	"matchup":          true,
 	"standings":        true,

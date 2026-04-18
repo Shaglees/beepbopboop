@@ -28,13 +28,28 @@ type AgentToken struct {
 }
 
 type UserSettings struct {
-	UserID        string    `json:"user_id"`
-	LocationName  string    `json:"location_name,omitempty"`
-	Latitude      *float64  `json:"latitude,omitempty"`
-	Longitude     *float64  `json:"longitude,omitempty"`
-	RadiusKm      float64   `json:"radius_km"`
-	FollowedTeams []string  `json:"followed_teams,omitempty"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	UserID               string    `json:"user_id"`
+	LocationName         string    `json:"location_name,omitempty"`
+	Latitude             *float64  `json:"latitude,omitempty"`
+	Longitude            *float64  `json:"longitude,omitempty"`
+	RadiusKm             float64   `json:"radius_km"`
+	FollowedTeams        []string  `json:"followed_teams,omitempty"`
+	NotificationsEnabled bool      `json:"notifications_enabled"`
+	DigestHour           int       `json:"digest_hour"`
+	UpdatedAt            time.Time `json:"updated_at"`
+}
+
+type PushToken struct {
+	UserID    string    `json:"user_id"`
+	Token     string    `json:"token"`
+	Platform  string    `json:"platform"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type DigestPost struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
 }
 
 type FeedResponse struct {

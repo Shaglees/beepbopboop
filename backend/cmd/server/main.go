@@ -66,6 +66,7 @@ func main() {
 	weightsRepo := repository.NewWeightsRepo(db)
 	templateRepo := repository.NewTemplateRepo(db)
 	reactionRepo := repository.NewReactionRepo(db)
+	pushTokenRepo := repository.NewPushTokenRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -80,6 +81,7 @@ func main() {
 	weightsSummaryH := handler.NewWeightsSummaryHandler(userRepo, weightsRepo, eventRepo)
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
 	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
+	pushTokenH := handler.NewPushTokenHandler(userRepo, pushTokenRepo)
 	weatherSvc := weather.NewService()
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
@@ -109,6 +111,7 @@ func main() {
 		r.Put("/user/settings", settingsH.UpdateSettings)
 		r.Get("/user/weights", weightsH.GetWeightsFirebase)
 		r.Put("/user/weights", weightsH.UpdateWeightsFirebase)
+		r.Put("/user/push-token", pushTokenH.RegisterPushToken)
 		r.Post("/agents", agentH.CreateAgent)
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
 		r.Post("/posts/{postID}/events", eventsH.TrackEvent)

@@ -296,7 +296,7 @@ struct Post: Codable, Identifiable {
         case .standings: return "list.number"
         case .movie: return "film"
         case .show: return "tv"
-        case .playerSpotlight: return "figure.basketball"
+        case .playerSpotlight: return playerData?.sportIcon ?? "figure.basketball"
         case .entertainment: return "star.fill"
         }
     }
@@ -427,6 +427,14 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(MediaData.self, from: data)
+    }
+
+    /// Parsed player spotlight data from externalURL (for player_spotlight display_hint posts).
+    var playerData: PlayerData? {
+        guard displayHintValue == .playerSpotlight,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(PlayerData.self, from: data)
     }
 
     /// Parsed entertainment data from externalURL (for entertainment display_hint posts).

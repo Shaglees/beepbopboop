@@ -5,12 +5,122 @@
 //  Created by Shane Gleeson on 2026-03-15.
 //
 
+import Foundation
 import Testing
+@testable import beepbopboop
 
-struct beepbopboopTests {
+@MainActor
+struct EventTrackerTests {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
+    // MARK: - Buffer & batching
+
+    @Test func bufferAccumulatesEvents() async throws {
+        var flushed: [[EventTracker.PendingEvent]] = []
+        let tracker = EventTracker(flushThreshold: 10) { events in
+            flushed.append(events)
+        }
+
+        tracker.fireEvent(postID: "a", type: "expand")
+        tracker.fireEvent(postID: "b", type: "save")
+
+        #expect(tracker.buffer.count == 2)
+        #expect(flushed.isEmpty)
     }
 
+    @Test func autoFlushesAtThreshold() async throws {
+        var flushed: [[EventTracker.PendingEvent]] = []
+        let tracker = EventTracker(flushThreshold: 3) { events in
+            flushed.append(events)
+        }
+
+        tracker.fireEvent(postID: "a", type: "expand")
+        tracker.fireEvent(postID: "b", type: "save")
+        tracker.fireEvent(postID: "c", type: "view")
+
+        // Give the auto-flush Task a chance to run
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(flushed.count == 1)
+        #expect(flushed[0].count == 3)
+        #expect(tracker.buffer.isEmpty)
+    }
+
+    @Test func manualFlushDrainsBuffer() async throws {
+        var flushed: [[EventTracker.PendingEvent]] = []
+        let tracker = EventTracker(flushThreshold: 10) { events in
+            flushed.append(events)
+        }
+
+        tracker.fireEvent(postID: "x", type: "save")
+        await tracker.flush()
+
+        #expect(flushed.count == 1)
+        #expect(flushed[0].first?.eventType == "save")
+        #expect(tracker.buffer.isEmpty)
+    }
+
+    @Test func flushOnEmptyBufferIsNoop() async throws {
+        var callCount = 0
+        let tracker = EventTracker(flushThreshold: 10) { _ in callCount += 1 }
+        await tracker.flush()
+        #expect(callCount == 0)
+    }
+
+    // MARK: - View event deduplication
+
+    @Test func viewEventNotFiredTwiceForSamePost() async throws {
+        var flushed: [[EventTracker.PendingEvent]] = []
+        let tracker = EventTracker(flushThreshold: 10) { events in
+            flushed.append(events)
+        }
+
+        // Simulate appear → disappear after 1.1s → reappear
+        tracker.cardAppeared(postID: "post1")
+        try await Task.sleep(for: .milliseconds(1100))
+        tracker.cardDisappeared(postID: "post1")
+        tracker.cardAppeared(postID: "post1") // reappear — should not schedule another view event
+
+        try await Task.sleep(for: .milliseconds(1100))
+        tracker.cardDisappeared(postID: "post1")
+
+        let viewEvents = tracker.buffer.filter { $0.eventType == "view" }
+        #expect(viewEvents.count == 1)
+    }
+
+    // MARK: - Dwell thresholds
+
+    @Test func shortVisibilityFiresNoEvent() async throws {
+        let tracker = EventTracker(flushThreshold: 10) { _ in }
+
+        tracker.cardAppeared(postID: "fast")
+        try await Task.sleep(for: .milliseconds(100))
+        tracker.cardDisappeared(postID: "fast")
+
+        #expect(tracker.buffer.isEmpty)
+    }
+
+    @Test func dwellEventRequiresThreeSeconds() async throws {
+        let tracker = EventTracker(flushThreshold: 10) { _ in }
+
+        // Visible for ~600ms — above 500ms min but below 3s dwell threshold
+        tracker.cardAppeared(postID: "mid")
+        try await Task.sleep(for: .milliseconds(600))
+        tracker.cardDisappeared(postID: "mid")
+
+        // Should have no dwell event (< 3s), but view timer was cancelled so no view event either
+        let dwellEvents = tracker.buffer.filter { $0.eventType == "dwell" }
+        #expect(dwellEvents.isEmpty)
+    }
+
+    // MARK: - Event encoding
+
+    @Test func pendingEventEncodesCorrectly() throws {
+        let event = EventTracker.PendingEvent(postID: "abc", eventType: "dwell", dwellMs: 4200)
+        let data = try JSONEncoder().encode(event)
+        let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+        #expect(dict?["post_id"] as? String == "abc")
+        #expect(dict?["event_type"] as? String == "dwell")
+        #expect(dict?["dwell_ms"] as? Int == 4200)
+    }
 }

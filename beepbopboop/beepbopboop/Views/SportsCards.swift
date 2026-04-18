@@ -658,12 +658,12 @@ struct PlayerSpotlightCard: View {
                     // Shooting splits + +/-
                     HStack(spacing: 8) {
                         if let fgPct = player.lastGameStats.fieldGoalPct {
-                            Text("FG \(Int(fgPct * 100))%")
+                            Text("FG \(Int((fgPct * 100).rounded()))%")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.65))
                         }
                         if let threePct = player.lastGameStats.threePointPct {
-                            Text("· 3P \(Int(threePct * 100))%")
+                            Text("· 3P \(Int((threePct * 100).rounded()))%")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.65))
                         }
@@ -743,7 +743,7 @@ struct PlayerSpotlightCard: View {
             }
             .padding(16)
         }
-        .frame(height: 240)
+        .frame(height: 260)
     }
 
     private var playerHeadshotFallback: some View {
@@ -751,7 +751,7 @@ struct PlayerSpotlightCard: View {
             .fill(teamColor.opacity(0.3))
             .frame(width: 130, height: 130)
             .overlay(
-                Image(systemName: "figure.basketball")
+                Image(systemName: player.sportIcon)
                     .font(.system(size: 40, weight: .ultraLight))
                     .foregroundStyle(.white.opacity(0.4))
             )

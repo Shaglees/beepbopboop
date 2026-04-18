@@ -179,6 +179,8 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     @Published var feedUpdated = false
 
     private var weightsSaveTask: Task<Void, Never>?
+    private var badgeTask: Task<Void, Never>?
+    private var cachedWeights: FeedWeights = .defaults
     private let apiService: APIService
     private let completer = MKLocalSearchCompleter()
 
@@ -267,9 +269,10 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
         isSaving = false
     }
 
-    func loadWeights() async {
+    private func loadWeights() async {
         do {
             let weights = try await apiService.getWeights()
+            cachedWeights = weights
             geoBias = weights.geoBias
             freshnessBias = weights.freshnessBias
         } catch {
@@ -279,10 +282,12 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
 
     func scheduleWeightsSave() {
         weightsSaveTask?.cancel()
-        weightsSaveTask = Task {
+        let geo = geoBias
+        let fresh = freshnessBias
+        weightsSaveTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 500_000_000)
-            guard !Task.isCancelled else { return }
-            await saveWeights()
+            guard !Task.isCancelled, let self else { return }
+            await self.saveWeights(geo: geo, freshness: fresh)
         }
     }
 
@@ -292,15 +297,29 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
         scheduleWeightsSave()
     }
 
-    private func saveWeights() async {
-        let weights = FeedWeights(freshnessBias: freshnessBias, geoBias: geoBias)
+    private func saveWeights(geo: Double, freshness: Double) async {
+        let weights = FeedWeights(
+            labelWeights: cachedWeights.labelWeights,
+            typeWeights: cachedWeights.typeWeights,
+            freshnessBias: freshness,
+            geoBias: geo
+        )
         do {
             try await apiService.updateWeights(weights)
-            feedUpdated = true
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            feedUpdated = false
+            cachedWeights = weights
+            await showFeedUpdatedBadge()
         } catch {
-            // Silent — feed simply won't update until next manual adjustment
+            // Silent — feed won't update until next adjustment
+        }
+    }
+
+    private func showFeedUpdatedBadge() async {
+        feedUpdated = true
+        badgeTask?.cancel()
+        badgeTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            feedUpdated = false
         }
     }
 

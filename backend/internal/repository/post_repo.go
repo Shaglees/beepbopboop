@@ -906,6 +906,106 @@ func (r *PostRepo) UpsertSportsPost(gameID, title, body, league, gameDataJSON st
 	return err
 }
 
+// ListSaved returns posts the user has saved (via post_events), excluding
+// any that were later unsaved. Ordered by most-recent save first.
+func (r *PostRepo) ListSaved(userID, cursor string, limit int) ([]model.Post, *string, error) {
+	args := []any{userID}
+	cursorClause := ""
+	argIdx := 2
+
+	if cursor != "" {
+		t, seq, err := parseCursorString(cursor)
+		if err != nil {
+			return nil, nil, err
+		}
+		cursorClause = fmt.Sprintf(
+			" HAVING MAX(pe.created_at) < $%d OR (MAX(pe.created_at) = $%d AND p.seq < $%d)",
+			argIdx, argIdx+1, argIdx+2,
+		)
+		args = append(args, t, t, seq)
+		argIdx += 3
+	}
+
+	args = append(args, limit)
+
+	rows, err := r.db.Query(`
+		SELECT `+postColumns+`, MAX(pe.created_at) AS saved_at
+		FROM posts p
+		JOIN agents a ON a.id = p.agent_id
+		JOIN post_events pe ON pe.post_id = p.id
+			AND pe.user_id = $1
+			AND pe.event_type = 'save'
+		LEFT JOIN post_events unsave ON unsave.post_id = p.id
+			AND unsave.user_id = $1
+			AND unsave.event_type = 'unsave'
+			AND unsave.created_at > pe.created_at
+		WHERE unsave.post_id IS NULL
+		GROUP BY p.id, p.agent_id, a.name, p.user_id, p.title, p.body,
+			p.image_url, p.external_url, p.locality, p.latitude, p.longitude,
+			p.post_type, p.visibility, p.display_hint, p.labels, p.images,
+			p.status, p.scheduled_at, p.created_at, p.seq`+cursorClause+fmt.Sprintf(`
+		ORDER BY saved_at DESC, p.seq DESC
+		LIMIT $%d`, argIdx), args...,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("query saved posts: %w", err)
+	}
+	defer rows.Close()
+
+	posts := make([]model.Post, 0)
+	var lastSavedAt time.Time
+	var lastSeq int64
+	for rows.Next() {
+		var p model.Post
+		var imageURL, externalURL, locality, postType, labelsJSON, imagesJSON sql.NullString
+		var latitude, longitude sql.NullFloat64
+		var scheduledAt sql.NullTime
+		var seq int64
+		var savedAt time.Time
+
+		err := rows.Scan(&p.ID, &p.AgentID, &p.AgentName, &p.UserID,
+			&p.Title, &p.Body,
+			&imageURL, &externalURL, &locality, &latitude, &longitude,
+			&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON,
+			&p.Status, &scheduledAt, &p.CreatedAt, &seq, &savedAt)
+		if err != nil {
+			return nil, nil, fmt.Errorf("scan saved post: %w", err)
+		}
+		p.ImageURL = imageURL.String
+		p.ExternalURL = externalURL.String
+		p.Locality = locality.String
+		if latitude.Valid {
+			p.Latitude = &latitude.Float64
+		}
+		if longitude.Valid {
+			p.Longitude = &longitude.Float64
+		}
+		p.PostType = postType.String
+		if labelsJSON.Valid {
+			json.Unmarshal([]byte(labelsJSON.String), &p.Labels)
+		}
+		if imagesJSON.Valid {
+			p.Images = json.RawMessage(imagesJSON.String)
+		}
+		if scheduledAt.Valid {
+			p.ScheduledAt = &scheduledAt.Time
+		}
+		posts = append(posts, p)
+		lastSavedAt = savedAt
+		lastSeq = seq
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("iterate saved posts: %w", err)
+	}
+
+	var nextCursor *string
+	if len(posts) >= limit {
+		c := formatCursor(lastSavedAt, lastSeq)
+		nextCursor = &c
+	}
+	return posts, nextCursor, nil
+}
+
 func nullRawJSON(j json.RawMessage) sql.NullString {
 	if len(j) == 0 || string(j) == "null" {
 		return sql.NullString{}

@@ -194,9 +194,18 @@ private struct CardFooter: View {
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                let wasSaved = isBookmarked
                 isBookmarked.toggle()
-                let eventType = isBookmarked ? "save" : "unsave"
-                Task { await apiService.trackEvent(postID: post.id, eventType: eventType) }
+                Task {
+                    do {
+                        try await apiService.trackEvent(
+                            postID: post.id,
+                            eventType: wasSaved ? "unsave" : "save"
+                        )
+                    } catch {
+                        isBookmarked = wasSaved
+                    }
+                }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)
@@ -1010,9 +1019,18 @@ private struct OutfitBookmarkButton: View {
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            let wasSaved = isBookmarked
             isBookmarked.toggle()
-            let eventType = isBookmarked ? "save" : "unsave"
-            Task { await apiService.trackEvent(postID: post.id, eventType: eventType) }
+            Task {
+                do {
+                    try await apiService.trackEvent(
+                        postID: post.id,
+                        eventType: wasSaved ? "unsave" : "save"
+                    )
+                } catch {
+                    isBookmarked = wasSaved
+                }
+            }
         } label: {
             Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                 .font(.caption)

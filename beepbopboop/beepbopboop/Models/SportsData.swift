@@ -22,6 +22,13 @@ struct GameData: Codable {
     let goalScorers: [GoalScorer]?
     let yellowCards: Int?
     let redCards: Int?
+
+    // NFL-specific optional fields
+    let week: Int?                 // NFL week number
+    let keyMatchup: String?        // "Ravens #1 rush offense vs. Chiefs #3 rush defense"
+    let weatherNote: String?       // Omitted for dome games; "🌧️ Rain, 12°C" for outdoor
+    let injuries: [InjuryNote]?
+    let fantasyPlayers: [FantasyPlayer]?
 }
 
 struct GoalScorer: Codable {
@@ -29,6 +36,20 @@ struct GoalScorer: Codable {
     let team: String        // matches TeamInfo.abbr
     let minute: Int
     let assist: String?
+}
+
+struct InjuryNote: Codable {
+    let player: String
+    let team: String
+    let status: String             // "Questionable" | "Out" | "IR"
+    let position: String
+}
+
+struct FantasyPlayer: Codable {
+    let name: String
+    let position: String
+    let projectedPoints: Double
+    let startSitAdvice: String     // "start" | "sit" | "flex"
 }
 
 struct TeamInfo: Codable {
@@ -96,8 +117,8 @@ extension GameData {
         case "hockey":     return "figure.hockey"
         case "baseball":   return "figure.baseball"
         case "basketball": return "figure.basketball"
-        case "soccer", "football":
-                           return "figure.soccer"
+        case "football":   return "figure.american.football"
+        case "soccer":     return "figure.soccer"
         case "mma":        return "figure.martial.arts"
         case "golf":       return "figure.golf"
         case "tennis":     return "figure.tennis"

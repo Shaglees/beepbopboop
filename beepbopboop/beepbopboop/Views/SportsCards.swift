@@ -372,10 +372,130 @@ struct MatchupCard: View {
                     )
                     SportsBookmarkButton(post: post, darkMode: true)
                 }
+
+                // Football-specific details
+                if game.sport == "football" {
+                    FootballMatchupDetails(game: game)
+                        .padding(.top, 4)
+                }
             }
             .padding(16)
         }
-        .frame(height: 260)
+        .frame(minHeight: 260)
+    }
+}
+
+// MARK: - Football Matchup Details
+
+private struct FootballMatchupDetails: View {
+    let game: GameData
+
+    var body: some View {
+        VStack(spacing: 6) {
+            // Key matchup strip
+            if let km = game.keyMatchup {
+                Text(km)
+                    .font(.system(size: 10, weight: .medium))
+                    .italic()
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.08))
+                    .cornerRadius(6)
+            }
+
+            // Weather note
+            if let weather = game.weatherNote {
+                Text(weather)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+
+            // Injury flags
+            if let injuries = game.injuries, !injuries.isEmpty {
+                injuryRow(injuries)
+            }
+
+            // Fantasy projections
+            if let fantasy = game.fantasyPlayers, !fantasy.isEmpty {
+                fantasySection(fantasy)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func injuryRow(_ injuries: [InjuryNote]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(injuries, id: \.player) { injury in
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(injuryColor(injury.status))
+                            .frame(width: 5, height: 5)
+                        Text("\(injury.status): \(injury.player) (\(injury.position))")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(injuryColor(injury.status).opacity(0.2))
+                    .cornerRadius(4)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func fantasySection(_ players: [FantasyPlayer]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("FANTASY")
+                .font(.system(size: 8, weight: .heavy))
+                .tracking(1.5)
+                .foregroundStyle(.white.opacity(0.4))
+
+            let limited = Array(players.prefix(4))
+            let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: min(2, limited.count))
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(limited, id: \.name) { fp in
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(adviceColor(fp.startSitAdvice))
+                            .frame(width: 5, height: 5)
+                        Text("\(fp.name) \(fp.position)")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
+                        Spacer()
+                        Text(String(format: "%.1f", fp.projectedPoints))
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .foregroundStyle(adviceColor(fp.startSitAdvice))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.white.opacity(0.06))
+                    .cornerRadius(4)
+                }
+            }
+        }
+    }
+
+    private func injuryColor(_ status: String) -> Color {
+        switch status.lowercased() {
+        case "out", "ir":    return .red
+        default:             return Color(red: 1.0, green: 0.7, blue: 0.0) // amber
+        }
+    }
+
+    private func adviceColor(_ advice: String) -> Color {
+        switch advice.lowercased() {
+        case "start":  return .green
+        case "sit":    return .red
+        default:       return Color(red: 1.0, green: 0.7, blue: 0.0) // amber for flex
+        }
     }
 }
 

@@ -55,9 +55,10 @@ var ValidDisplayHints = map[string]bool{
 	"game_review":      true,
 	"restaurant":       true,
 ||||||| base
-=======
 	"destination":      true,
->>>>>>> theirs
+=======
+	"science":          true,
+>>>>>>> 7190474 (feat: science interest skill and ScienceCard iOS view (#56))
 }
 
 var ValidImageRoles = map[string]bool{

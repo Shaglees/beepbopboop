@@ -218,9 +218,11 @@ func (h *MultiFeedHandler) GetSaved(w http.ResponseWriter, r *http.Request) {
 
 	posts, nextCursor, err := h.postRepo.ListSaved(user.ID, cursor, limit)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load saved feed"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load saved posts"})
 		return
 	}
+
+	posts = h.enrichAndFilter(posts, user.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(model.FeedResponse{Posts: posts, NextCursor: nextCursor})

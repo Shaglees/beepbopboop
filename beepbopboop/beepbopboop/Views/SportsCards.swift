@@ -1034,6 +1034,7 @@ private struct SportsBookmarkButton: View {
     let post: Post
     let darkMode: Bool
     @AppStorage var isBookmarked: Bool
+    @EnvironmentObject private var apiService: APIService
 
     init(post: Post, darkMode: Bool = false) {
         self.post = post
@@ -1044,7 +1045,18 @@ private struct SportsBookmarkButton: View {
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            let wasSaved = isBookmarked
             isBookmarked.toggle()
+            Task {
+                do {
+                    try await apiService.trackEvent(
+                        postID: post.id,
+                        eventType: wasSaved ? "unsave" : "save"
+                    )
+                } catch {
+                    isBookmarked = wasSaved
+                }
+            }
         } label: {
             Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                 .font(.caption)

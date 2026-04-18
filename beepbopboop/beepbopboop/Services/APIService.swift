@@ -205,6 +205,32 @@ class APIService: ObservableObject {
         }
     }
 
+    // MARK: - Events
+
+    @MainActor
+    func trackEvent(postID: String, eventType: String, dwellMs: Int? = nil) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/posts/\(postID)/events") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var body: [String: Any] = ["event_type": eventType]
+        if let dwellMs = dwellMs {
+            body["dwell_ms"] = dwellMs
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
     // MARK: - Reactions
 
     @MainActor

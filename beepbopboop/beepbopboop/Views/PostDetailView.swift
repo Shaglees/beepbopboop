@@ -789,10 +789,18 @@ struct PostDetailView: View {
     private var sportsEngagementBar: some View {
         HStack(spacing: 12) {
             Button {
+                let wasSaved = isBookmarked
                 withAnimation(.bouncy) { isBookmarked.toggle() }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                if isBookmarked {
-                    eventTracker.fireEvent(postID: post.id, type: "save")
+                Task {
+                    do {
+                        try await apiService.trackEvent(
+                            postID: post.id,
+                            eventType: wasSaved ? "unsave" : "save"
+                        )
+                    } catch {
+                        withAnimation(.bouncy) { isBookmarked = wasSaved }
+                    }
                 }
             } label: {
                 Label(
@@ -1232,12 +1240,20 @@ struct PostDetailView: View {
     private var engagementBar: some View {
         HStack(spacing: 12) {
             Button {
+                let wasSaved = isBookmarked
                 withAnimation(.bouncy) {
                     isBookmarked.toggle()
                 }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                if isBookmarked {
-                    eventTracker.fireEvent(postID: post.id, type: "save")
+                Task {
+                    do {
+                        try await apiService.trackEvent(
+                            postID: post.id,
+                            eventType: wasSaved ? "unsave" : "save"
+                        )
+                    } catch {
+                        withAnimation(.bouncy) { isBookmarked = wasSaved }
+                    }
                 }
             } label: {
                 Label(

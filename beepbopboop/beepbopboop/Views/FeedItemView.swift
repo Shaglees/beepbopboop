@@ -13,7 +13,7 @@ struct FeedItemView: View {
 
     @ViewBuilder
     private var styledContent: some View {
-        if [.outfit, .weather, .scoreboard, .matchup, .standings, .movie, .show, .playerSpotlight, .entertainment, .album, .concert, .gameRelease, .gameReview].contains(post.displayHintValue) {
+        if [.outfit, .weather, .scoreboard, .matchup, .standings, .movie, .show, .playerSpotlight, .entertainment, .album, .concert, .gameRelease, .gameReview, .restaurant].contains(post.displayHintValue) {
             cardContent
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
@@ -77,6 +77,12 @@ struct FeedItemView: View {
             }
         case .show:
             if let card = ShowCard(post: post) {
+                card
+            } else {
+                StandardCard(post: post)
+            }
+        case .restaurant:
+            if let card = RestaurantCard(post: post) {
                 card
             } else {
                 StandardCard(post: post)

@@ -52,6 +52,7 @@ var ValidDisplayHints = map[string]bool{
 	"concert":          true,
 	"game_release":     true,
 	"game_review":      true,
+	"restaurant":       true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -179,7 +180,8 @@ func validatePost(req *createPostRequest) validationResult {
 	structuredHint := req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" ||
 		req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
 		req.DisplayHint == "album" || req.DisplayHint == "concert" ||
-		req.DisplayHint == "game_release" || req.DisplayHint == "game_review"
+		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" ||
+		req.DisplayHint == "restaurant"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -250,9 +252,11 @@ func validatePost(req *createPostRequest) validationResult {
 			validateEntertainmentData(req.ExternalURL, &errs, &warns)
 		case "game_release", "game_review":
 			validateVideoGameData(req.ExternalURL, req.DisplayHint, &errs, &warns)
+		case "restaurant":
+			validateFoodData(req.ExternalURL, &errs, &warns)
 		}
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
-		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" {
+		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",
@@ -511,6 +515,34 @@ func validateVideoGameData(externalURL string, hint string, errs *[]validationIs
 	}
 	if hint == "game_release" && g.ReleaseDate == nil {
 		*warns = append(*warns, validationIssue{Field: "external_url.releaseDate", Code: "missing", Message: "game_release without releaseDate"})
+	}
+}
+
+// --- Food/restaurant data validation ---
+
+type foodDataValidation struct {
+	Name        *string  `json:"name"`
+	Rating      *float64 `json:"rating"`
+	ReviewCount *int     `json:"reviewCount"`
+	Cuisine     []string `json:"cuisine"`
+	Latitude    *float64 `json:"latitude"`
+	Longitude   *float64 `json:"longitude"`
+}
+
+func validateFoodData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var fd foodDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &fd); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "restaurant external_url must be valid JSON"})
+		return
+	}
+	if fd.Name == nil || *fd.Name == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.name", Code: "required", Message: "restaurant data missing name"})
+	}
+	if fd.Rating == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.rating", Code: "missing", Message: "restaurant data missing rating"})
+	}
+	if fd.Latitude == nil || fd.Longitude == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.latitude", Code: "missing", Message: "restaurant data missing coordinates"})
 	}
 }
 

@@ -183,6 +183,7 @@ struct Post: Codable, Identifiable {
         case scoreboard, matchup, standings, playerSpotlight, entertainment, movie, show
         case album, concert
         case gameRelease, gameReview
+        case restaurant
     }
 
     var displayHintValue: DisplayHintValue {
@@ -208,6 +209,7 @@ struct Post: Codable, Identifiable {
         case "concert": return .concert
         case "game_release": return .gameRelease
         case "game_review": return .gameReview
+        case "restaurant": return .restaurant
         default: return .card
         }
     }
@@ -285,6 +287,7 @@ struct Post: Codable, Identifiable {
         case .concert: return Color(red: 0.984, green: 0.729, blue: 0.012)
         case .gameRelease: return Color(red: 0.96, green: 0.62, blue: 0.04)
         case .gameReview: return Color(red: 0.58, green: 0.27, blue: 0.96)
+        case .restaurant: return Color(red: 0.937, green: 0.267, blue: 0.267)
         }
     }
 
@@ -312,6 +315,7 @@ struct Post: Codable, Identifiable {
         case .concert: return "music.mic"
         case .gameRelease: return "calendar.badge.clock"
         case .gameReview: return "gamecontroller"
+        case .restaurant: return "fork.knife"
         }
     }
 
@@ -339,6 +343,7 @@ struct Post: Codable, Identifiable {
         case .concert: return "Concert"
         case .gameRelease: return "Release"
         case .gameReview: return "Review"
+        case .restaurant: return "Restaurant"
         }
     }
 
@@ -487,6 +492,14 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(VideoGameData.self, from: data)
+    }
+
+    /// Parsed restaurant data from externalURL (for restaurant display_hint posts).
+    var foodData: FoodData? {
+        guard displayHintValue == .restaurant,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(FoodData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

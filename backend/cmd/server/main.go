@@ -100,6 +100,7 @@ func main() {
 		r.Get("/feeds/personal", multiFeedH.GetPersonal)
 		r.Get("/feeds/community", multiFeedH.GetCommunity)
 		r.Get("/feeds/foryou", multiFeedH.GetForYou)
+		r.Get("/posts/saved", multiFeedH.GetSaved)
 		r.Get("/user/settings", settingsH.GetSettings)
 		r.Put("/user/settings", settingsH.UpdateSettings)
 		r.Post("/agents", agentH.CreateAgent)

@@ -13,6 +13,33 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Your Feed") {
+                    if let summary = viewModel.weightsSummary {
+                        if summary.dataPoints < 10 {
+                            Label("Still learning — keep scrolling and react to posts", systemImage: "brain")
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                        } else {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("You engage most with:")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(summary.topLabels.prefix(3).joined(separator: " · "))
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                            }
+                            .padding(.vertical, 2)
+                            Text("Based on \(summary.dataPoints) interactions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text("Reacting to posts helps your feed improve")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section("Location") {
                     TextField("Search for a city or place", text: $viewModel.searchText)
                         .textContentType(.addressCity)
@@ -180,6 +207,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var didSave = false
+    @Published var weightsSummary: WeightsSummary?
     @Published var followedTeams: Set<String> = []
     @Published var geoBias: Double = 0.5
     @Published var freshnessBias: Double = 0.8
@@ -218,6 +246,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
         } catch {
             // First time — use defaults
         }
+        weightsSummary = try? await apiService.getWeightsSummary()
     }
 
     func selectSearchResult(_ result: MKLocalSearchCompletion) async {

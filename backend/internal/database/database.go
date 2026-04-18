@@ -104,9 +104,22 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_reactions_user ON post_reactions(user_id, updated_at DESC)")
 
 	// Denormalized engagement counts for feed ranking (avoids JOIN/subquery at query time)
-	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS view_count INT NOT NULL DEFAULT 0") // TODO: increment via EventRepo when event_type="view"
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS view_count INT NOT NULL DEFAULT 0")
 	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS save_count INT NOT NULL DEFAULT 0")
 	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS reaction_count INT NOT NULL DEFAULT 0")
+
+	// Push notification tokens (APNs device tokens from iOS)
+	db.Exec(`CREATE TABLE IF NOT EXISTS push_tokens (
+		user_id    TEXT NOT NULL REFERENCES users(id),
+		token      TEXT NOT NULL,
+		platform   TEXT NOT NULL DEFAULT 'apns',
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, token)
+	)`)
+
+	// Notification preferences in user_settings
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS digest_hour INT NOT NULL DEFAULT 8")
 
 	return db, nil
 }

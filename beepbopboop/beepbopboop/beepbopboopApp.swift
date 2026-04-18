@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct beepbopboopApp: App {
     @StateObject private var authService = AuthService()
+    @StateObject private var notificationService = NotificationService()
 
     var body: some Scene {
         WindowGroup {
@@ -10,7 +11,8 @@ struct beepbopboopApp: App {
                 let api = APIService(authService: authService)
                 FeedView(
                     authService: authService,
-                    apiService: api
+                    apiService: api,
+                    notificationService: notificationService
                 )
                 .environmentObject(api)
             } else {

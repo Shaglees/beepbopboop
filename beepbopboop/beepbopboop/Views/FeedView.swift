@@ -8,13 +8,16 @@ struct FeedView: View {
     @State private var selectedTab = 0
     @State private var showSettings = false
     @State private var isHeaderVisible = true
+    @State private var hasRequestedNotifications = false
     @Namespace private var tabGlass
     private let authService: AuthService
     private let apiService: APIService
+    private let notificationService: NotificationService?
 
-    init(authService: AuthService, apiService: APIService) {
+    init(authService: AuthService, apiService: APIService, notificationService: NotificationService? = nil) {
         self.authService = authService
         self.apiService = apiService
+        self.notificationService = notificationService
         _forYouVM = StateObject(wrappedValue: FeedListViewModel(feedType: .forYou, apiService: apiService))
         _communityVM = StateObject(wrappedValue: FeedListViewModel(feedType: .community, apiService: apiService))
         _personalVM = StateObject(wrappedValue: FeedListViewModel(feedType: .personal, apiService: apiService))
@@ -56,7 +59,7 @@ struct FeedView: View {
             .toolbar(.hidden, for: .navigationBar)
             .animation(.easeInOut(duration: 0.25), value: isHeaderVisible)
             .sheet(isPresented: $showSettings) {
-                SettingsView(apiService: apiService)
+                SettingsView(apiService: apiService, notificationService: notificationService)
                     .onDisappear {
                         // Refresh geo-dependent feeds after settings change
                         Task {
@@ -65,7 +68,25 @@ struct FeedView: View {
                         }
                     }
             }
+            .task {
+                await requestNotificationsAfterFirstLoad()
+            }
         }
+    }
+
+    // MARK: - Notifications
+
+    private func requestNotificationsAfterFirstLoad() async {
+        guard let ns = notificationService, !hasRequestedNotifications else { return }
+        // Wait until the feed has loaded at least once before prompting
+        while forYouVM.posts.isEmpty && forYouVM.isLoading {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        guard !forYouVM.posts.isEmpty else { return }
+        hasRequestedNotifications = true
+        await ns.checkStatus()
+        guard ns.authorizationStatus == .notDetermined else { return }
+        _ = await ns.requestAuthorization()
     }
 
     // MARK: - Title Bar

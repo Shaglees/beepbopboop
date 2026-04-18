@@ -210,6 +210,42 @@ func TestPostRepo_SaveCountMaintained(t *testing.T) {
 	}
 }
 
+func TestPostRepo_SaveCountUnsave(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-unsave-test")
+
+	agentRepo := repository.NewAgentRepo(db)
+	agent, _ := agentRepo.Create(user.ID, "Agent")
+
+	postRepo := repository.NewPostRepo(db)
+	lat, lon := 53.35, -6.26
+	post, _ := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user.ID,
+		Title: "Post", Body: "body", Latitude: &lat, Longitude: &lon, Visibility: "public",
+	})
+
+	eventRepo := repository.NewEventRepo(db)
+
+	// Save then unsave
+	if err := eventRepo.BatchCreate(user.ID, []model.EventInput{{PostID: post.ID, EventType: "save"}}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	posts, _, _ := postRepo.ListCommunity(lat, lon, 10.0, "", 20)
+	if posts[0].SaveCount != 1 {
+		t.Errorf("expected save_count 1 after save, got %d", posts[0].SaveCount)
+	}
+
+	if err := eventRepo.BatchCreate(user.ID, []model.EventInput{{PostID: post.ID, EventType: "unsave"}}); err != nil {
+		t.Fatalf("unsave: %v", err)
+	}
+	posts, _, _ = postRepo.ListCommunity(lat, lon, 10.0, "", 20)
+	if posts[0].SaveCount != 0 {
+		t.Errorf("expected save_count 0 after unsave, got %d", posts[0].SaveCount)
+	}
+}
+
 func TestPostRepo_OptionalFields(t *testing.T) {
 	db := database.OpenTestDB(t)
 

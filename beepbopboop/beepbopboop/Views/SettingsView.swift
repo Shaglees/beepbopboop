@@ -55,6 +55,65 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
+                Section("Tune your feed") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("📍")
+                            Text("More local")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("More global")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("🌍")
+                        }
+                        Slider(value: $viewModel.geoBias, in: 0...1) { editing in
+                            if !editing { viewModel.scheduleWeightsSave() }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("⚡")
+                            Text("Live & timely")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("Evergreen")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("📚")
+                        }
+                        Slider(value: $viewModel.freshnessBias, in: 0...1) { editing in
+                            if !editing { viewModel.scheduleWeightsSave() }
+                        }
+                    }
+
+                    HStack {
+                        Button("Reset to defaults") {
+                            viewModel.resetWeightsToDefaults()
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        if viewModel.feedUpdated {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                    .font(.caption)
+                                Text("Feed updated")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                            }
+                            .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.feedUpdated)
+                }
+
                 Section {
                     Button {
                         Task { await viewModel.save() }
@@ -115,7 +174,11 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var didSave = false
+    @Published var geoBias: Double = 0.5
+    @Published var freshnessBias: Double = 0.8
+    @Published var feedUpdated = false
 
+    private var weightsSaveTask: Task<Void, Never>?
     private let apiService: APIService
     private let completer = MKLocalSearchCompleter()
 
@@ -128,6 +191,13 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
 
     func loadSettings() async {
         isLoading = true
+        async let settingsLoad: () = loadSettingsOnly()
+        async let weightsLoad: () = loadWeights()
+        _ = await (settingsLoad, weightsLoad)
+        isLoading = false
+    }
+
+    private func loadSettingsOnly() async {
         do {
             let settings = try await apiService.getSettings()
             selectedLocationName = settings.locationName
@@ -138,7 +208,6 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
         } catch {
             // First time — use defaults
         }
-        isLoading = false
     }
 
     func selectSearchResult(_ result: MKLocalSearchCompletion) async {
@@ -196,6 +265,43 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
         }
 
         isSaving = false
+    }
+
+    func loadWeights() async {
+        do {
+            let weights = try await apiService.getWeights()
+            geoBias = weights.geoBias
+            freshnessBias = weights.freshnessBias
+        } catch {
+            // Use defaults on failure
+        }
+    }
+
+    func scheduleWeightsSave() {
+        weightsSaveTask?.cancel()
+        weightsSaveTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            await saveWeights()
+        }
+    }
+
+    func resetWeightsToDefaults() {
+        geoBias = FeedWeights.defaults.geoBias
+        freshnessBias = FeedWeights.defaults.freshnessBias
+        scheduleWeightsSave()
+    }
+
+    private func saveWeights() async {
+        let weights = FeedWeights(freshnessBias: freshnessBias, geoBias: geoBias)
+        do {
+            try await apiService.updateWeights(weights)
+            feedUpdated = true
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            feedUpdated = false
+        } catch {
+            // Silent — feed simply won't update until next manual adjustment
+        }
     }
 
     // MARK: - MKLocalSearchCompleterDelegate

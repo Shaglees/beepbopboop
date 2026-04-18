@@ -30,16 +30,16 @@ var ValidVisibility = map[string]bool{
 }
 
 var ValidDisplayHints = map[string]bool{
-	"card":        true,
-	"place":       true,
-	"article":     true,
-	"weather":     true,
-	"calendar":    true,
-	"deal":        true,
-	"digest":      true,
-	"brief":       true,
-	"comparison":  true,
-	"event":       true,
+	"card":             true,
+	"place":            true,
+	"article":          true,
+	"weather":          true,
+	"calendar":         true,
+	"deal":             true,
+	"digest":           true,
+	"brief":            true,
+	"comparison":       true,
+	"event":            true,
 	"outfit":           true,
 	"scoreboard":       true,
 	"matchup":          true,
@@ -50,6 +50,8 @@ var ValidDisplayHints = map[string]bool{
 	"entertainment":    true,
 	"album":            true,
 	"concert":          true,
+	"game_release":     true,
+	"game_review":      true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -176,7 +178,8 @@ func validatePost(req *createPostRequest) validationResult {
 	// JSON payloads in this field, not actual URLs).
 	structuredHint := req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" ||
 		req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
-		req.DisplayHint == "album" || req.DisplayHint == "concert"
+		req.DisplayHint == "album" || req.DisplayHint == "concert" ||
+		req.DisplayHint == "game_release" || req.DisplayHint == "game_review"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -245,8 +248,11 @@ func validatePost(req *createPostRequest) validationResult {
 			validateStandingsData(req.ExternalURL, &errs, &warns)
 		case "entertainment":
 			validateEntertainmentData(req.ExternalURL, &errs, &warns)
+		case "game_release", "game_review":
+			validateVideoGameData(req.ExternalURL, req.DisplayHint, &errs, &warns)
 		}
-	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" {
+	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
+		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",
@@ -477,6 +483,34 @@ func validateEntertainmentData(externalURL string, errs *[]validationIssue, warn
 	}
 	if e.Source == nil {
 		*errs = append(*errs, validationIssue{Field: "external_url.source", Code: "required", Message: "source is required"})
+	}
+}
+
+// --- Video game data validation (game_release / game_review) ---
+
+type videoGameDataValidation struct {
+	Title       *string          `json:"title"`
+	Status      *string          `json:"status"`
+	Platforms   *json.RawMessage `json:"platforms"`
+	Genres      *json.RawMessage `json:"genres"`
+	ReleaseDate *string          `json:"releaseDate"`
+}
+
+func validateVideoGameData(externalURL string, hint string, errs *[]validationIssue, warns *[]validationIssue) {
+	var g videoGameDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &g); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for " + hint + " hint"})
+		return
+	}
+
+	if g.Title == nil || *g.Title == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.title", Code: "required", Message: "game title is required"})
+	}
+	if g.Status == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.status", Code: "missing", Message: "missing status field (upcoming | released | early_access)"})
+	}
+	if hint == "game_release" && g.ReleaseDate == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.releaseDate", Code: "missing", Message: "game_release without releaseDate"})
 	}
 }
 

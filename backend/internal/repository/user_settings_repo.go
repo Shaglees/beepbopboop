@@ -32,9 +32,11 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 	var followedTeamsJSON sql.NullString
 
 	err := r.db.QueryRow(`
-		SELECT user_id, location_name, latitude, longitude, radius_km, followed_teams, updated_at
+		SELECT user_id, location_name, latitude, longitude, radius_km,
+		       followed_teams, notifications_enabled, digest_hour, updated_at
 		FROM user_settings WHERE user_id = $1`, userID,
-	).Scan(&s.UserID, &locationName, &latitude, &longitude, &s.RadiusKm, &followedTeamsJSON, &s.UpdatedAt)
+	).Scan(&s.UserID, &locationName, &latitude, &longitude, &s.RadiusKm,
+		&followedTeamsJSON, &s.NotificationsEnabled, &s.DigestHour, &s.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -58,7 +60,7 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 }
 
 // Upsert inserts or updates the user's settings.
-func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64, followedTeams []string) (*model.UserSettings, error) {
+func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64, followedTeams []string, notificationsEnabled bool, digestHour int) (*model.UserSettings, error) {
 	var followedTeamsJSON sql.NullString
 	if len(followedTeams) > 0 {
 		b, err := json.Marshal(followedTeams)
@@ -69,16 +71,19 @@ func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64
 	}
 
 	_, err := r.db.Exec(`
-		INSERT INTO user_settings (user_id, location_name, latitude, longitude, radius_km, followed_teams, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+		INSERT INTO user_settings (user_id, location_name, latitude, longitude, radius_km, followed_teams, notifications_enabled, digest_hour, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_id) DO UPDATE SET
-			location_name = excluded.location_name,
-			latitude = excluded.latitude,
-			longitude = excluded.longitude,
-			radius_km = excluded.radius_km,
-			followed_teams = excluded.followed_teams,
-			updated_at = CURRENT_TIMESTAMP`,
-		userID, nullString(locationName), nullFloat64(lat), nullFloat64(lon), radiusKm, followedTeamsJSON,
+			location_name         = excluded.location_name,
+			latitude              = excluded.latitude,
+			longitude             = excluded.longitude,
+			radius_km             = excluded.radius_km,
+			followed_teams        = excluded.followed_teams,
+			notifications_enabled = excluded.notifications_enabled,
+			digest_hour           = excluded.digest_hour,
+			updated_at            = CURRENT_TIMESTAMP`,
+		userID, nullString(locationName), nullFloat64(lat), nullFloat64(lon), radiusKm,
+		followedTeamsJSON, notificationsEnabled, digestHour,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("upsert user_settings: %w", err)

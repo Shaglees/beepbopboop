@@ -189,6 +189,20 @@ struct PlayerData: Codable {
         let c = Color(hexString: hex)
         return c == .gray ? playerSpotlightFallbackColor : c
     }
+
+    var sportIcon: String {
+        switch sport.lowercased() {
+        case "hockey":     return "figure.hockey"
+        case "baseball":   return "figure.baseball"
+        case "basketball": return "figure.basketball"
+        case "soccer", "football":
+                           return "figure.soccer"
+        case "mma":        return "figure.martial.arts"
+        case "golf":       return "figure.golf"
+        case "tennis":     return "figure.tennis"
+        default:           return "sportscourt"
+        }
+    }
 }
 
 struct PlayerGameStats: Codable {

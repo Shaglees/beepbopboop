@@ -288,7 +288,7 @@ struct Post: Codable, Identifiable {
         case .scoreboard: return "sportscourt"
         case .matchup: return "clock"
         case .standings: return "list.number"
-        case .playerSpotlight: return "figure.basketball"
+        case .playerSpotlight: return playerData?.sportIcon ?? "figure.basketball"
         }
     }
 

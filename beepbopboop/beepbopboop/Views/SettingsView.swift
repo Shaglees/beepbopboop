@@ -55,6 +55,12 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
+                Section("Sports") {
+                    NavigationLink("Sports & Teams") {
+                        SportsSettingsView(followedTeams: $viewModel.followedTeams)
+                    }
+                }
+
                 Section {
                     Button {
                         Task { await viewModel.save() }
@@ -115,6 +121,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var didSave = false
+    @Published var followedTeams: Set<String> = []
 
     private let apiService: APIService
     private let completer = MKLocalSearchCompleter()
@@ -135,6 +142,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             selectedLongitude = settings.longitude
             selectedRadius = settings.radiusKm
             if selectedRadius <= 0 { selectedRadius = 25.0 }
+            followedTeams = Set(settings.followedTeams ?? [])
         } catch {
             // First time — use defaults
         }
@@ -174,7 +182,8 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             locationName: selectedLocationName,
             latitude: selectedLatitude,
             longitude: selectedLongitude,
-            radiusKm: selectedRadius
+            radiusKm: selectedRadius,
+            followedTeams: followedTeams.isEmpty ? nil : Array(followedTeams)
         )
 
         do {

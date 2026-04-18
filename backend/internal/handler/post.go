@@ -48,17 +48,14 @@ var ValidDisplayHints = map[string]bool{
 	"show":             true,
 	"player_spotlight": true,
 	"entertainment":    true,
-<<<<<<< ours
 	"album":            true,
 	"concert":          true,
 	"game_release":     true,
 	"game_review":      true,
 	"restaurant":       true,
-||||||| base
 	"destination":      true,
-=======
 	"science":          true,
->>>>>>> 7190474 (feat: science interest skill and ScienceCard iOS view (#56))
+	"pet_spotlight":    true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -184,17 +181,11 @@ func validatePost(req *createPostRequest) validationResult {
 	// expect structured JSON (weather, scoreboard, matchup, standings store
 	// JSON payloads in this field, not actual URLs).
 	structuredHint := req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" ||
-<<<<<<< ours
 		req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
 		req.DisplayHint == "album" || req.DisplayHint == "concert" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" ||
-		req.DisplayHint == "restaurant"
-||||||| base
-		req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment"
-=======
-		req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
-		req.DisplayHint == "destination"
->>>>>>> theirs
+		req.DisplayHint == "restaurant" || req.DisplayHint == "destination" ||
+		req.DisplayHint == "pet_spotlight"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -268,14 +259,10 @@ func validatePost(req *createPostRequest) validationResult {
 		case "restaurant":
 			validateFoodData(req.ExternalURL, &errs, &warns)
 		}
-<<<<<<< ours
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" {
-||||||| base
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" {
-=======
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" || req.DisplayHint == "destination" {
->>>>>>> theirs
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",

@@ -4,6 +4,7 @@ struct FeedView: View {
     @StateObject private var forYouVM: FeedListViewModel
     @StateObject private var communityVM: FeedListViewModel
     @StateObject private var personalVM: FeedListViewModel
+    @StateObject private var savedVM: FeedListViewModel
     @State private var selectedTab = 0
     @State private var showSettings = false
     @State private var isHeaderVisible = true
@@ -17,6 +18,7 @@ struct FeedView: View {
         _forYouVM = StateObject(wrappedValue: FeedListViewModel(feedType: .forYou, apiService: apiService))
         _communityVM = StateObject(wrappedValue: FeedListViewModel(feedType: .community, apiService: apiService))
         _personalVM = StateObject(wrappedValue: FeedListViewModel(feedType: .personal, apiService: apiService))
+        _savedVM = StateObject(wrappedValue: FeedListViewModel(feedType: .saved, apiService: apiService))
     }
 
     var body: some View {
@@ -44,6 +46,10 @@ struct FeedView: View {
                     FeedListView(viewModel: personalVM, isHeaderVisible: $isHeaderVisible, onSettingsTapped: { showSettings = true })
                         .tag(2)
                         .task { if personalVM.posts.isEmpty && !personalVM.isLoading { await personalVM.refresh() } }
+
+                    FeedListView(viewModel: savedVM, isHeaderVisible: $isHeaderVisible, onSettingsTapped: { showSettings = true })
+                        .tag(3)
+                        .task { if savedVM.posts.isEmpty && !savedVM.isLoading { await savedVM.refresh() } }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
@@ -97,27 +103,34 @@ struct FeedView: View {
                 tabButton("For You", tag: 0)
                 tabButton("Community", tag: 1)
                 tabButton("Personal", tag: 2)
+                tabButton("Saved", tag: 3, systemImage: "bookmark")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
     }
 
-    private func tabButton(_ title: String, tag: Int) -> some View {
+    private func tabButton(_ title: String, tag: Int, systemImage: String? = nil) -> some View {
         Button {
             withAnimation(.bouncy) {
                 selectedTab = tag
             }
         } label: {
-            Text(title)
-                .font(.subheadline.weight(selectedTab == tag ? .semibold : .regular))
-                .foregroundStyle(selectedTab == tag ? .primary : .secondary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .glassEffect(
-                    selectedTab == tag ? .regular.tint(.accentColor).interactive() : .regular,
-                    in: .capsule
-                )
+            HStack(spacing: 4) {
+                if let systemImage {
+                    Image(systemName: selectedTab == tag ? systemImage + ".fill" : systemImage)
+                        .font(.subheadline)
+                }
+                Text(title)
+                    .font(.subheadline.weight(selectedTab == tag ? .semibold : .regular))
+            }
+            .foregroundStyle(selectedTab == tag ? .primary : .secondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .glassEffect(
+                selectedTab == tag ? .regular.tint(.accentColor).interactive() : .regular,
+                in: .capsule
+            )
         }
         .buttonStyle(.plain)
     }

@@ -200,3 +200,28 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(model.FeedResponse{Posts: posts, NextCursor: nextCursor})
 }
+
+func (h *MultiFeedHandler) GetSaved(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.FirebaseUIDFromContext(r.Context())
+
+	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
+		return
+	}
+
+	cursor, limit, err := parsePagination(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_cursor"})
+		return
+	}
+
+	posts, nextCursor, err := h.postRepo.ListSaved(user.ID, cursor, limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load saved feed"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(model.FeedResponse{Posts: posts, NextCursor: nextCursor})
+}

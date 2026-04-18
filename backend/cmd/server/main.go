@@ -76,6 +76,7 @@ func main() {
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
 	weightsH := handler.NewWeightsHandler(agentRepo, weightsRepo)
+	weightsSummaryH := handler.NewWeightsSummaryHandler(userRepo, weightsRepo, eventRepo)
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
 	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
 	weatherSvc := weather.NewService()
@@ -109,6 +110,7 @@ func main() {
 		r.Put("/posts/{postID}/reaction", reactionsH.SetReaction)
 		r.Delete("/posts/{postID}/reaction", reactionsH.RemoveReaction)
 		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
+		r.Get("/user/weights/summary", weightsSummaryH.GetSummary)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)

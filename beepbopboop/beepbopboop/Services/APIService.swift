@@ -103,6 +103,22 @@ class APIService: ObservableObject {
     }
 
     @MainActor
+    func getWeightsSummary() async throws -> WeightsSummary {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/weights/summary") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        return try JSONDecoder().decode(WeightsSummary.self, from: data)
+    }
+
+    @MainActor
     func updateSettings(_ settings: UserSettings) async throws -> UserSettings {
         let token = authService.getToken()
         guard let url = URL(string: "\(baseURL)/user/settings") else {

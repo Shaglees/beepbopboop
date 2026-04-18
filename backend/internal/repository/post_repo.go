@@ -262,8 +262,8 @@ func (r *PostRepo) ListPersonal(userID, cursor string, limit int) ([]model.Post,
 	return posts, nextCursor, nil
 }
 
-// ListCommunity returns nearby posts with cursor-based pagination.
-// Uses a bounding-box SQL pre-filter then Haversine in Go.
+// ListCommunity returns nearby posts ranked by a composite score:
+// recency decay + geo proximity + engagement + event timing.
 func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limit int) ([]model.Post, *string, error) {
 	minLat, maxLat, minLon, maxLon := geo.BoundingBox(lat, lon, radiusKm)
 
@@ -281,7 +281,8 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 		argIdx += 3
 	}
 
-	sqlLimit := limit * 3
+	// Fetch 5x candidates so the scoring pass has enough to rank from.
+	sqlLimit := limit * 5
 	args = append(args, sqlLimit)
 
 	rows, err := r.db.Query(`
@@ -301,7 +302,12 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 	}
 	defer rows.Close()
 
-	posts := make([]model.Post, 0, limit)
+	type scored struct {
+		post  model.Post
+		score float64
+	}
+
+	var candidates []scored
 	var lastCreatedAt time.Time
 	var lastSeq int64
 	rowsProcessed := 0
@@ -315,13 +321,10 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 		lastSeq = seq
 		rowsProcessed++
 
-		// Haversine check
 		if p.Latitude != nil && p.Longitude != nil {
 			if geo.HaversineKm(lat, lon, *p.Latitude, *p.Longitude) <= radiusKm {
-				posts = append(posts, p)
-				if len(posts) >= limit {
-					break
-				}
+				s := ScoreCommunityPost(p, lat, lon, radiusKm)
+				candidates = append(candidates, scored{post: p, score: s})
 			}
 		}
 	}
@@ -329,8 +332,17 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 		return nil, nil, fmt.Errorf("iterate posts: %w", err)
 	}
 
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score > candidates[j].score
+	})
+
+	posts := make([]model.Post, 0, limit)
+	for i := 0; i < len(candidates) && i < limit; i++ {
+		posts = append(posts, candidates[i].post)
+	}
+
 	var nextCursor *string
-	if rowsProcessed >= limit && len(posts) > 0 {
+	if rowsProcessed >= sqlLimit && len(posts) > 0 {
 		c := formatCursor(lastCreatedAt, lastSeq)
 		nextCursor = &c
 	}

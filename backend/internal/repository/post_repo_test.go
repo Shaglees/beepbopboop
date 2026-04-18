@@ -246,6 +246,76 @@ func TestPostRepo_SaveCountUnsave(t *testing.T) {
 	}
 }
 
+func TestListCommunity_RankedByScore(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-ranking-test")
+
+	agentRepo := repository.NewAgentRepo(db)
+	agent, _ := agentRepo.Create(user.ID, "Agent")
+
+	postRepo := repository.NewPostRepo(db)
+	reactionRepo := repository.NewReactionRepo(db)
+
+	userLat, userLon := 53.35, -6.26
+
+	// Post A: old (6h) but with engagement
+	lat1, lon1 := 53.35, -6.26
+	postA, _ := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user.ID,
+		Title: "Post A - old with engagement", Body: "body",
+		Latitude: &lat1, Longitude: &lon1, Visibility: "public",
+	})
+	// Backdate post A to 6 hours ago
+	db.Exec(`UPDATE posts SET created_at = NOW() - INTERVAL '6 hours' WHERE id = $1`, postA.ID)
+	if _, err := reactionRepo.Upsert(postA.ID, user.ID, "more"); err != nil {
+		t.Fatalf("upsert reaction: %v", err)
+	}
+
+	// Post B: very fresh (just created), no engagement
+	lat2, lon2 := 53.35, -6.26
+	postB, _ := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user.ID,
+		Title: "Post B - fresh no engagement", Body: "body",
+		Latitude: &lat2, Longitude: &lon2, Visibility: "public",
+	})
+
+	// Post C: very old (25h), higher engagement — should be suppressed by recency
+	lat3, lon3 := 53.35, -6.26
+	postC, _ := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user.ID,
+		Title: "Post C - very old", Body: "body",
+		Latitude: &lat3, Longitude: &lon3, Visibility: "public",
+	})
+	db.Exec(`UPDATE posts SET created_at = NOW() - INTERVAL '25 hours' WHERE id = $1`, postC.ID)
+	user2, _ := userRepo.FindOrCreateByFirebaseUID("firebase-ranking-user2")
+	user3, _ := userRepo.FindOrCreateByFirebaseUID("firebase-ranking-user3")
+	if _, err := reactionRepo.Upsert(postC.ID, user2.ID, "more"); err != nil {
+		t.Fatalf("upsert reaction: %v", err)
+	}
+	if _, err := reactionRepo.Upsert(postC.ID, user3.ID, "more"); err != nil {
+		t.Fatalf("upsert reaction: %v", err)
+	}
+
+	posts, _, err := postRepo.ListCommunity(userLat, userLon, 10.0, "", 20)
+	if err != nil {
+		t.Fatalf("ListCommunity: %v", err)
+	}
+	if len(posts) < 3 {
+		t.Fatalf("expected 3 posts, got %d", len(posts))
+	}
+
+	// Post B (fresh) should be first
+	if posts[0].ID != postB.ID {
+		t.Errorf("expected post B (fresh) first, got title=%q", posts[0].Title)
+	}
+	// Post C (25h old) should be last
+	if posts[len(posts)-1].ID != postC.ID {
+		t.Errorf("expected post C (very old) last, got title=%q", posts[len(posts)-1].Title)
+	}
+}
+
 func TestPostRepo_OptionalFields(t *testing.T) {
 	db := database.OpenTestDB(t)
 

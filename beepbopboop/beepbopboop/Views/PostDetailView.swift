@@ -50,6 +50,8 @@ struct PostDetailView: View {
             EntertainmentDetailView(post: post)
         case .show:
             ShowDetailView(post: post)
+        case .restaurant:
+            RestaurantDetailView(post: post)
         default:
             standardDetailBody
         }

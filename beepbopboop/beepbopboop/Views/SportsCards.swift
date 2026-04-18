@@ -542,6 +542,236 @@ struct StandingsCard: View {
     }
 }
 
+// MARK: - Player Spotlight Card
+
+struct PlayerSpotlightCard: View {
+    let post: Post
+    let player: PlayerData
+    @State private var activeReaction: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init?(post: Post) {
+        guard let pd = post.playerData else { return nil }
+        self.post = post
+        self.player = pd
+        self._activeReaction = State(initialValue: post.myReaction)
+    }
+
+    private var teamColor: Color { player.teamSwiftUIColor }
+
+    private var plusMinusColor: Color {
+        guard let pm = player.lastGameStats.plusMinus else { return .white.opacity(0.5) }
+        return pm > 0 ? .green : pm < 0 ? .red : .white.opacity(0.5)
+    }
+
+    var body: some View {
+        ZStack {
+            // Team color gradient background
+            LinearGradient(
+                stops: [
+                    .init(color: teamColor.opacity(0.95), location: 0),
+                    .init(color: teamColor.opacity(0.6), location: 0.5),
+                    .init(color: Color.black.opacity(0.85), location: 1),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            // Dark overlay for readability
+            Color.black.opacity(0.3)
+
+            // Basketball watermark icon
+            Image(systemName: post.hintIcon)
+                .font(.system(size: 130, weight: .ultraLight))
+                .foregroundStyle(.white.opacity(0.05))
+                .offset(x: 40, y: 0)
+                .modifier(SportIconAnimation(reduceMotion: reduceMotion))
+
+            // Content
+            HStack(alignment: .top, spacing: 0) {
+                // Left: metadata + stats
+                VStack(alignment: .leading, spacing: 0) {
+                    // Header: team + league
+                    HStack(spacing: 6) {
+                        Text(player.league)
+                            .font(.system(size: 10, weight: .heavy))
+                            .tracking(1.5)
+                            .foregroundStyle(.white.opacity(0.5))
+                        Text("·")
+                            .foregroundStyle(.white.opacity(0.3))
+                        Text(player.team)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .lineLimit(1)
+                    }
+                    .padding(.bottom, 6)
+
+                    // Player name
+                    Text(player.playerName)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .padding(.bottom, 4)
+
+                    // Position badge + opponent context
+                    HStack(spacing: 6) {
+                        if let position = player.position {
+                            Text(position)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(teamColor.opacity(0.5))
+                                .cornerRadius(4)
+                        }
+                        if let opponent = player.opponent, let result = player.gameResult {
+                            Text("vs \(opponent) · \(result)")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
+                    }
+                    .padding(.bottom, 4)
+
+                    // Series context
+                    if let series = player.seriesContext {
+                        Text(series)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(.white.opacity(0.12))
+                            .cornerRadius(5)
+                            .padding(.bottom, 6)
+                    }
+
+                    Spacer()
+
+                    // Stat trio: PTS / REB / AST
+                    HStack(spacing: 16) {
+                        statBlock(value: "\(player.lastGameStats.points)", label: "PTS")
+                        statBlock(value: "\(player.lastGameStats.rebounds)", label: "REB")
+                        statBlock(value: "\(player.lastGameStats.assists)", label: "AST")
+                    }
+                    .padding(.bottom, 6)
+
+                    // Shooting splits + +/-
+                    HStack(spacing: 8) {
+                        if let fgPct = player.lastGameStats.fieldGoalPct {
+                            Text("FG \(Int(fgPct * 100))%")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
+                        if let threePct = player.lastGameStats.threePointPct {
+                            Text("· 3P \(Int(threePct * 100))%")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
+                        if let pm = player.lastGameStats.plusMinus {
+                            let pmText = pm >= 0 ? "+\(pm)" : "\(pm)"
+                            Text(pmText)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(plusMinusColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(plusMinusColor.opacity(0.15))
+                                .cornerRadius(4)
+                        }
+                    }
+                    .padding(.bottom, 6)
+
+                    // Season averages footer
+                    Text("Season: \(String(format: "%.1f", player.seasonAverages.points)) / \(String(format: "%.1f", player.seasonAverages.rebounds)) / \(String(format: "%.1f", player.seasonAverages.assists)) PPG/RPG/APG")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.bottom, 8)
+
+                    // Storyline
+                    if let storyline = player.storyline, !storyline.isEmpty {
+                        Text(storyline)
+                            .font(.system(size: 10, weight: .regular))
+                            .italic()
+                            .foregroundStyle(.white.opacity(0.6))
+                            .lineLimit(2)
+                            .padding(.bottom, 6)
+                    }
+
+                    // Footer: reaction + bookmark
+                    HStack {
+                        ReactionPicker(
+                            activeReaction: $activeReaction,
+                            postID: post.id,
+                            style: .feedDark
+                        )
+                        SportsBookmarkButton(post: post, darkMode: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Right: player headshot
+                if let urlStr = player.playerHeadshotUrl, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 130, height: 130)
+                                .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(teamColor.opacity(0.8), lineWidth: 2)
+                                )
+                                .shadow(color: teamColor.opacity(0.4), radius: 8)
+                        case .failure:
+                            playerHeadshotFallback
+                        default:
+                            Circle()
+                                .fill(.white.opacity(0.08))
+                                .frame(width: 130, height: 130)
+                                .overlay(ProgressView().tint(.white))
+                        }
+                    }
+                    .frame(width: 130, height: 130)
+                    .padding(.leading, 12)
+                    .padding(.top, 4)
+                } else {
+                    playerHeadshotFallback
+                        .padding(.leading, 12)
+                        .padding(.top, 4)
+                }
+            }
+            .padding(16)
+        }
+        .frame(height: 240)
+    }
+
+    private var playerHeadshotFallback: some View {
+        Circle()
+            .fill(teamColor.opacity(0.3))
+            .frame(width: 130, height: 130)
+            .overlay(
+                Image(systemName: "figure.basketball")
+                    .font(.system(size: 40, weight: .ultraLight))
+                    .foregroundStyle(.white.opacity(0.4))
+            )
+            .overlay(Circle().stroke(teamColor.opacity(0.5), lineWidth: 2))
+    }
+
+    @ViewBuilder
+    private func statBlock(value: String, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1)
+                .foregroundStyle(.white.opacity(0.5))
+        }
+    }
+}
+
 // MARK: - Shared Components
 
 private struct StatusPill: View {

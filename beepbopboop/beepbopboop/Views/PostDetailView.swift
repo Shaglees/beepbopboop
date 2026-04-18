@@ -48,6 +48,8 @@ struct PostDetailView: View {
             PlaceDetailView(post: post)
         case .entertainment:
             EntertainmentDetailView(post: post)
+        case .show:
+            ShowDetailView(post: post)
         default:
             standardDetailBody
         }

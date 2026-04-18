@@ -50,7 +50,9 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 		s.Longitude = &longitude.Float64
 	}
 	if followedTeamsJSON.Valid && followedTeamsJSON.String != "" && followedTeamsJSON.String != "null" {
-		json.Unmarshal([]byte(followedTeamsJSON.String), &s.FollowedTeams)
+		if err := json.Unmarshal([]byte(followedTeamsJSON.String), &s.FollowedTeams); err != nil {
+			return nil, fmt.Errorf("unmarshal followed_teams: %w", err)
+		}
 	}
 	return &s, nil
 }

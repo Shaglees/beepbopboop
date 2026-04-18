@@ -163,6 +163,8 @@ extension GameData {
 
 // MARK: - Player Spotlight Data
 
+private let playerSpotlightFallbackColor = Color(red: 0.1, green: 0.3, blue: 0.7)
+
 struct PlayerData: Codable {
     let type: String
     let sport: String
@@ -174,7 +176,7 @@ struct PlayerData: Codable {
     let teamAbbr: String
     let teamColor: String?
     let position: String?
-    let gameDate: String?
+    let gameDate: String?          // ISO date string e.g. "2026-04-17" (raw String, unlike GameData.gameDate which is Date?)
     let opponent: String?
     let gameResult: String?
     let lastGameStats: PlayerGameStats
@@ -183,9 +185,9 @@ struct PlayerData: Codable {
     let storyline: String?
 
     var teamSwiftUIColor: Color {
-        guard let hex = teamColor else { return Color(red: 0.1, green: 0.3, blue: 0.7) }
+        guard let hex = teamColor else { return playerSpotlightFallbackColor }
         let c = Color(hexString: hex)
-        return c == .gray ? Color(red: 0.1, green: 0.3, blue: 0.7) : c
+        return c == .gray ? playerSpotlightFallbackColor : c
     }
 }
 

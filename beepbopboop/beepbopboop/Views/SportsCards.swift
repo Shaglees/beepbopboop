@@ -140,7 +140,13 @@ struct ScoreboardCard: View {
                     .frame(maxWidth: .infinity)
                 }
 
-                Spacer()
+                // Soccer: goal scorers, matchday, cards
+                if game.sport?.lowercased() == "soccer" {
+                    SoccerScoreboardExtras(game: game)
+                        .padding(.horizontal, 4)
+                } else {
+                    Spacer()
+                }
 
                 // Headline stat line + venue
                 VStack(spacing: 6) {
@@ -176,7 +182,7 @@ struct ScoreboardCard: View {
             }
             .padding(16)
         }
-        .frame(height: 220)
+        .frame(height: (game.sport?.lowercased() == "soccer" && game.goalScorers?.isEmpty == false) ? 250 : 220)
     }
 }
 
@@ -245,7 +251,9 @@ struct MatchupCard: View {
                         .foregroundStyle(.white.opacity(0.7))
                     }
                     Spacer()
-                    if let series = game.series {
+                    if game.sport?.lowercased() == "soccer", game.matchday != nil || game.leagueShortName != nil {
+                        SoccerMatchupHeader(game: game)
+                    } else if let series = game.series {
                         Text(series)
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.white)
@@ -539,6 +547,94 @@ struct StandingsCard: View {
         f.timeZone = .current
         f.dateFormat = "EEE, MMM d"
         return f.string(from: date)
+    }
+}
+
+// MARK: - Soccer Extras
+
+private struct SoccerScoreboardExtras: View {
+    let game: GameData
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            // Matchday strip with league accent bar
+            if let matchday = game.matchday {
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(game.leagueAccentColor)
+                        .frame(width: 3, height: 10)
+                    Text(matchday.uppercased())
+                        .font(.system(size: 9, weight: .bold))
+                        .tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+            }
+
+            // Goal scorers (away left, home right)
+            if let scorers = game.goalScorers, !scorers.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    scorerLine(scorers.filter { $0.team == game.away.abbr }, align: .leading)
+                    Spacer(minLength: 0)
+                    scorerLine(scorers.filter { $0.team == game.home.abbr }, align: .trailing)
+                }
+            }
+
+            // Cards indicator
+            let yellows = game.yellowCards ?? 0
+            let reds = game.redCards ?? 0
+            if yellows > 0 || reds > 0 {
+                HStack(spacing: 6) {
+                    if yellows > 0 { Text("🟨×\(yellows)").font(.system(size: 10)) }
+                    if reds > 0   { Text("🟥×\(reds)").font(.system(size: 10)) }
+                    Spacer()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func scorerLine(_ scorers: [GoalScorer], align: TextAlignment) -> some View {
+        if !scorers.isEmpty {
+            Text(
+                scorers.map { s in
+                    let lastName = s.player.components(separatedBy: " ").last ?? s.player
+                    let assistStr = s.assist.map { " (\($0.components(separatedBy: " ").last ?? $0))" } ?? ""
+                    return "\(s.minute)' \(lastName)\(assistStr)"
+                }.joined(separator: " · ")
+            )
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(.white.opacity(0.65))
+            .multilineTextAlignment(align)
+            .lineLimit(2)
+        }
+    }
+}
+
+private struct SoccerMatchupHeader: View {
+    let game: GameData
+
+    var body: some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(game.leagueAccentColor)
+                .frame(width: 3, height: 12)
+            if let shortName = game.leagueShortName {
+                Text(shortName)
+                    .font(.system(size: 9, weight: .black))
+                    .tracking(1.5)
+                    .foregroundStyle(game.leagueAccentColor)
+            }
+            if let matchday = game.matchday {
+                Text("·")
+                    .foregroundStyle(.white.opacity(0.3))
+                Text(matchday.uppercased())
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            Spacer()
+        }
     }
 }
 

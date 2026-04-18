@@ -180,8 +180,7 @@ struct Post: Codable, Identifiable {
 
     enum DisplayHintValue {
         case card, place, article, weather, calendar, deal, digest, brief, comparison, event, outfit
-        case scoreboard, matchup, standings
-        case movie, show
+        case scoreboard, matchup, standings, playerSpotlight, entertainment, movie, show
     }
 
     var displayHintValue: DisplayHintValue {
@@ -201,6 +200,8 @@ struct Post: Codable, Identifiable {
         case "standings": return .standings
         case "movie": return .movie
         case "show": return .show
+        case "player_spotlight": return .playerSpotlight
+        case "entertainment": return .entertainment
         default: return .card
         }
     }
@@ -272,6 +273,8 @@ struct Post: Codable, Identifiable {
         case .standings: return .secondary
         case .movie: return Color(red: 0.957, green: 0.62, blue: 0.043)
         case .show: return Color(red: 0.957, green: 0.62, blue: 0.043)
+        case .playerSpotlight: return Color(red: 0.0, green: 0.478, blue: 0.757)
+        case .entertainment: return Color(hexString: "#F59E0B")
         }
     }
 
@@ -293,6 +296,8 @@ struct Post: Codable, Identifiable {
         case .standings: return "list.number"
         case .movie: return "film"
         case .show: return "tv"
+        case .playerSpotlight: return "figure.basketball"
+        case .entertainment: return "star.fill"
         }
     }
 
@@ -314,6 +319,8 @@ struct Post: Codable, Identifiable {
         case .standings: return "Scores"
         case .movie: return "Movie"
         case .show: return "TV Show"
+        case .playerSpotlight: return "Player"
+        case .entertainment: return "Entertainment"
         }
     }
 
@@ -420,6 +427,14 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(MediaData.self, from: data)
+    }
+
+    /// Parsed entertainment data from externalURL (for entertainment display_hint posts).
+    var entertainmentData: EntertainmentData? {
+        guard displayHintValue == .entertainment,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(EntertainmentData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

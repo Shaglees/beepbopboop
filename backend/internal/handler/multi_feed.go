@@ -182,6 +182,13 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 		feedWeights = defaultWeights
 	}
 
+	if settings != nil && len(settings.FollowedTeams) > 0 {
+		feedWeights.FollowedTeams = make(map[string]bool, len(settings.FollowedTeams))
+		for _, t := range settings.FollowedTeams {
+			feedWeights.FollowedTeams[t] = true
+		}
+	}
+
 	posts, nextCursor, err := h.postRepo.ListForYou(user.ID, *settings.Latitude, *settings.Longitude, settings.RadiusKm, cursor, limit, feedWeights)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load feed"})
@@ -189,6 +196,31 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 	}
 
 	posts = h.enrichAndFilter(posts, user.ID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(model.FeedResponse{Posts: posts, NextCursor: nextCursor})
+}
+
+func (h *MultiFeedHandler) GetSaved(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.FirebaseUIDFromContext(r.Context())
+
+	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
+		return
+	}
+
+	cursor, limit, err := parsePagination(r)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_cursor"})
+		return
+	}
+
+	posts, nextCursor, err := h.postRepo.ListSaved(user.ID, cursor, limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load saved feed"})
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(model.FeedResponse{Posts: posts, NextCursor: nextCursor})

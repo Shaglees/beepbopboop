@@ -5,7 +5,7 @@ struct FeedItemView: View {
     let post: Post
 
     var body: some View {
-        if [.outfit, .weather, .scoreboard, .matchup, .standings, .movie, .show].contains(post.displayHintValue) {
+        if [.outfit, .weather, .scoreboard, .matchup, .standings, .movie, .show, .playerSpotlight, .entertainment].contains(post.displayHintValue) {
             cardContent
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
@@ -73,6 +73,14 @@ struct FeedItemView: View {
             } else {
                 StandardCard(post: post)
             }
+        case .playerSpotlight:
+            if let card = PlayerSpotlightCard(post: post) {
+                card
+            } else {
+                StandardCard(post: post)
+            }
+        case .entertainment:
+            EntertainmentCard(post: post)
         default:
             StandardCard(post: post)
         }
@@ -140,6 +148,8 @@ private struct CardFooter: View {
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()
+                let eventType = isBookmarked ? "save" : "unsave"
+                Task { await apiService.trackEvent(postID: post.id, eventType: eventType) }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)
@@ -941,6 +951,7 @@ private struct OutfitBookmarkButton: View {
     let post: Post
     let tintColor: Color
     @AppStorage var isBookmarked: Bool
+    @EnvironmentObject private var apiService: APIService
 
     init(post: Post, tintColor: Color) {
         self.post = post
@@ -952,6 +963,8 @@ private struct OutfitBookmarkButton: View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             isBookmarked.toggle()
+            let eventType = isBookmarked ? "save" : "unsave"
+            Task { await apiService.trackEvent(postID: post.id, eventType: eventType) }
         } label: {
             Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                 .font(.caption)

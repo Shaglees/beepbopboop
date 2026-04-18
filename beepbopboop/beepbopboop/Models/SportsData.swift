@@ -14,6 +14,21 @@ struct GameData: Codable {
     let venue: String?
     let broadcast: String?
     let series: String?            // "Game 3 · Series tied 1-1"
+    // Soccer-specific fields (all optional for backward compatibility)
+    let leagueShortName: String?
+    let leagueColor: String?
+    let matchday: String?
+    let competition: String?
+    let goalScorers: [GoalScorer]?
+    let yellowCards: Int?
+    let redCards: Int?
+}
+
+struct GoalScorer: Codable {
+    let player: String
+    let team: String        // matches TeamInfo.abbr
+    let minute: Int
+    let assist: String?
 }
 
 struct TeamInfo: Codable {
@@ -95,12 +110,20 @@ extension GameData {
         let s = status.lowercased()
         return s.hasPrefix("live") || s.contains("period") || s.contains("quarter")
             || s.contains("half") || s.contains("inning")
+            || s == "ht" || s == "1h" || s == "2h" || s.hasPrefix("et")
     }
 
     /// Whether the game is finished.
     var isFinal: Bool {
         let s = status.lowercased()
         return s.hasPrefix("final") || s == "ft" || s == "full time"
+    }
+
+    /// League accent color for soccer branding strips.
+    var leagueAccentColor: Color {
+        guard let hex = leagueColor else { return .white.opacity(0.3) }
+        let c = Color(hexString: hex)
+        return c == .gray ? Color(red: 0.6, green: 0.6, blue: 0.9) : c
     }
 
     /// Status pill color.

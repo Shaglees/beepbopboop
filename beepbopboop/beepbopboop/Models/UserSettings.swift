@@ -5,6 +5,7 @@ struct UserSettings: Codable {
     var latitude: Double?
     var longitude: Double?
     var radiusKm: Double
+    var followedTeams: [String]?
 
     var hasLocation: Bool {
         latitude != nil && longitude != nil
@@ -15,5 +16,6 @@ struct UserSettings: Codable {
         case latitude
         case longitude
         case radiusKm = "radius_km"
+        case followedTeams = "followed_teams"
     }
 }

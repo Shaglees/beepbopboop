@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -28,11 +29,12 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 	var s model.UserSettings
 	var locationName sql.NullString
 	var latitude, longitude sql.NullFloat64
+	var followedTeamsJSON sql.NullString
 
 	err := r.db.QueryRow(`
-		SELECT user_id, location_name, latitude, longitude, radius_km, updated_at
+		SELECT user_id, location_name, latitude, longitude, radius_km, followed_teams, updated_at
 		FROM user_settings WHERE user_id = $1`, userID,
-	).Scan(&s.UserID, &locationName, &latitude, &longitude, &s.RadiusKm, &s.UpdatedAt)
+	).Scan(&s.UserID, &locationName, &latitude, &longitude, &s.RadiusKm, &followedTeamsJSON, &s.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -47,21 +49,36 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 	if longitude.Valid {
 		s.Longitude = &longitude.Float64
 	}
+	if followedTeamsJSON.Valid && followedTeamsJSON.String != "" && followedTeamsJSON.String != "null" {
+		if err := json.Unmarshal([]byte(followedTeamsJSON.String), &s.FollowedTeams); err != nil {
+			return nil, fmt.Errorf("unmarshal followed_teams: %w", err)
+		}
+	}
 	return &s, nil
 }
 
 // Upsert inserts or updates the user's settings.
-func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64) (*model.UserSettings, error) {
+func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64, followedTeams []string) (*model.UserSettings, error) {
+	var followedTeamsJSON sql.NullString
+	if len(followedTeams) > 0 {
+		b, err := json.Marshal(followedTeams)
+		if err != nil {
+			return nil, fmt.Errorf("marshal followed_teams: %w", err)
+		}
+		followedTeamsJSON = sql.NullString{String: string(b), Valid: true}
+	}
+
 	_, err := r.db.Exec(`
-		INSERT INTO user_settings (user_id, location_name, latitude, longitude, radius_km, updated_at)
-		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+		INSERT INTO user_settings (user_id, location_name, latitude, longitude, radius_km, followed_teams, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_id) DO UPDATE SET
 			location_name = excluded.location_name,
 			latitude = excluded.latitude,
 			longitude = excluded.longitude,
 			radius_km = excluded.radius_km,
+			followed_teams = excluded.followed_teams,
 			updated_at = CURRENT_TIMESTAMP`,
-		userID, nullString(locationName), nullFloat64(lat), nullFloat64(lon), radiusKm,
+		userID, nullString(locationName), nullFloat64(lat), nullFloat64(lon), radiusKm, followedTeamsJSON,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("upsert user_settings: %w", err)

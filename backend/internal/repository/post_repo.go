@@ -55,7 +55,8 @@ func NewPostRepo(db *sql.DB) *PostRepo {
 const postColumns = `p.id, p.agent_id, a.name, p.user_id, p.title, p.body,
 	p.image_url, p.external_url, p.locality, p.latitude, p.longitude,
 	p.post_type, p.visibility, p.display_hint, p.labels, p.images,
-	p.status, p.scheduled_at, p.created_at, p.seq`
+	p.status, p.scheduled_at, p.created_at, p.view_count, p.save_count,
+	p.reaction_count, p.seq`
 
 // scanPost scans a row into a model.Post and returns the seq.
 func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, error) {
@@ -69,7 +70,8 @@ func scanPost(scanner interface{ Scan(dest ...any) error }) (model.Post, int64, 
 		&p.Title, &p.Body,
 		&imageURL, &externalURL, &locality, &latitude, &longitude,
 		&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON,
-		&p.Status, &scheduledAt, &p.CreatedAt, &seq)
+		&p.Status, &scheduledAt, &p.CreatedAt, &p.ViewCount, &p.SaveCount,
+		&p.ReactionCount, &seq)
 	if err != nil {
 		return p, 0, err
 	}
@@ -263,8 +265,8 @@ func (r *PostRepo) ListPersonal(userID, cursor string, limit int) ([]model.Post,
 	return posts, nextCursor, nil
 }
 
-// ListCommunity returns nearby posts with cursor-based pagination.
-// Uses a bounding-box SQL pre-filter then Haversine in Go.
+// ListCommunity returns nearby posts ranked by a composite score:
+// recency decay + geo proximity + engagement + event timing.
 func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limit int) ([]model.Post, *string, error) {
 	minLat, maxLat, minLon, maxLon := geo.BoundingBox(lat, lon, radiusKm)
 
@@ -282,7 +284,8 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 		argIdx += 3
 	}
 
-	sqlLimit := limit * 3
+	// Fetch 5x candidates so the scoring pass has enough to rank from.
+	sqlLimit := limit * 5
 	args = append(args, sqlLimit)
 
 	rows, err := r.db.Query(`
@@ -302,7 +305,12 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 	}
 	defer rows.Close()
 
-	posts := make([]model.Post, 0, limit)
+	type scored struct {
+		post  model.Post
+		score float64
+	}
+
+	var candidates []scored
 	var lastCreatedAt time.Time
 	var lastSeq int64
 	rowsProcessed := 0
@@ -316,13 +324,10 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 		lastSeq = seq
 		rowsProcessed++
 
-		// Haversine check
 		if p.Latitude != nil && p.Longitude != nil {
 			if geo.HaversineKm(lat, lon, *p.Latitude, *p.Longitude) <= radiusKm {
-				posts = append(posts, p)
-				if len(posts) >= limit {
-					break
-				}
+				s := ScoreCommunityPost(p, lat, lon, radiusKm)
+				candidates = append(candidates, scored{post: p, score: s})
 			}
 		}
 	}
@@ -330,8 +335,21 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 		return nil, nil, fmt.Errorf("iterate posts: %w", err)
 	}
 
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score > candidates[j].score
+	})
+
+	posts := make([]model.Post, 0, limit)
+	for i := 0; i < len(candidates) && i < limit; i++ {
+		posts = append(posts, candidates[i].post)
+	}
+
+	// The cursor is keyed on SQL row order (created_at DESC), not on composite score.
+	// Cross-page ranking continuity is not guaranteed: a post near the page boundary
+	// may appear on either page depending on which SQL window captures it. This is
+	// an accepted trade-off for cursor-based ranked feeds without a score cache.
 	var nextCursor *string
-	if rowsProcessed >= limit && len(posts) > 0 {
+	if rowsProcessed >= sqlLimit && len(posts) > 0 {
 		c := formatCursor(lastCreatedAt, lastSeq)
 		nextCursor = &c
 	}
@@ -564,6 +582,65 @@ func clamp(v, lo, hi float64) float64 {
 	return v
 }
 
+// ScoreCommunityPost computes a composite ranking score for the community feed.
+// Combines recency decay (primary), geo proximity, engagement signal, and event timing.
+// Exported for testability.
+func ScoreCommunityPost(p model.Post, userLat, userLon, radiusKm float64) float64 {
+	ageHours := time.Since(p.CreatedAt).Hours()
+
+	// Recency decay with 4-hour half-life: exp(-ln(2)/4 * age_hours)
+	recency := math.Exp(-0.173 * ageHours)
+
+	// Geo proximity: 1.0 at centre, 0.0 at radius edge.
+	geoScore := 0.0
+	if p.Latitude != nil && p.Longitude != nil {
+		dist := geo.HaversineKm(userLat, userLon, *p.Latitude, *p.Longitude)
+		geoScore = 1.0 - (dist / radiusKm)
+		if geoScore < 0 {
+			geoScore = 0
+		}
+	}
+
+	// Engagement: logarithmic to prevent viral outliers dominating.
+	// Weight saves double (more deliberate action than a reaction).
+	engagementRaw := float64(p.ReactionCount) + float64(p.SaveCount)*2.0
+	engagementScore := math.Log1p(engagementRaw) / math.Log1p(30) // normalise against ~30 engagement units
+
+	// Event timing: boost posts tied to upcoming / just-started events.
+	eventScore := 0.0
+	if p.ExternalURL != "" {
+		eventScore = parseEventTimingScore(p.ExternalURL)
+	}
+
+	return recency + 0.4*geoScore + 0.3*engagementScore + 0.5*eventScore
+}
+
+// parseEventTimingScore extracts a timing boost from a sports/event ExternalURL JSON.
+// Returns 0 if no parseable game time is found.
+func parseEventTimingScore(externalURL string) float64 {
+	var data struct {
+		GameTime *string `json:"gameTime"`
+	}
+	if err := json.Unmarshal([]byte(externalURL), &data); err != nil || data.GameTime == nil {
+		return 0
+	}
+	gameTime, err := time.Parse(time.RFC3339, *data.GameTime)
+	if err != nil {
+		return 0
+	}
+	hoursUntil := time.Until(gameTime).Hours()
+	if hoursUntil > 0 {
+		// Approaching event: peaks at kick-off
+		return math.Exp(-0.3 * hoursUntil)
+	}
+	// Just started (within 3 hours): live bonus
+	hoursSince := -hoursUntil
+	if hoursSince < 3 {
+		return 1.5 * math.Exp(-0.3*hoursSince)
+	}
+	return 0
+}
+
 // Stats returns aggregated post statistics for a user over the given number of days.
 func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 	ps := &model.PeriodStats{Days: days}
@@ -703,6 +780,29 @@ func (r *PostRepo) UpsertWeatherPost(gridKey, title, body string, lat, lon float
 			labels = excluded.labels,
 			created_at = CURRENT_TIMESTAMP`,
 		id, title, body, forecastJSON, lat, lon, labelsJSON,
+	)
+	return err
+}
+
+// UpsertSportsPost creates or replaces a sports post for a specific ESPN game.
+// The ID is deterministic from gameID so the same game always updates in place.
+// gameDataJSON is serialized GameData stored in external_url for the iOS scoreboard card.
+func (r *PostRepo) UpsertSportsPost(gameID, title, body, league, gameDataJSON string) error {
+	id := "sports-" + gameID
+	labelsJSON, _ := json.Marshal([]string{"sports", league})
+
+	_, err := r.db.Exec(`
+		INSERT INTO posts (id, agent_id, user_id, title, body, external_url,
+			post_type, visibility, display_hint, labels, created_at)
+		VALUES ($1, 'sports-bot', 'system', $2, $3, $4,
+			'discovery', 'public', 'scoreboard', $5, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET
+			title = excluded.title,
+			body = excluded.body,
+			external_url = excluded.external_url,
+			labels = excluded.labels,
+			created_at = CURRENT_TIMESTAMP`,
+		id, title, body, gameDataJSON, string(labelsJSON),
 	)
 	return err
 }

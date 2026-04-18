@@ -187,6 +187,7 @@ struct Post: Codable, Identifiable {
         case destination
         case science
         case petSpotlight
+        case fitness
     }
 
     var displayHintValue: DisplayHintValue {
@@ -216,6 +217,7 @@ struct Post: Codable, Identifiable {
         case "destination": return .destination
         case "science": return .science
         case "pet_spotlight": return .petSpotlight
+        case "fitness": return .fitness
         default: return .card
         }
     }
@@ -297,6 +299,7 @@ struct Post: Codable, Identifiable {
         case .destination: return Color(hex: 0x06B6D4)
         case .science: return Color(red: 0.388, green: 0.671, blue: 0.937)
         case .petSpotlight: return Color(red: 0.976, green: 0.451, blue: 0.086)
+        case .fitness: return Color(red: 0.133, green: 0.773, blue: 0.369)
         }
     }
 
@@ -328,6 +331,7 @@ struct Post: Codable, Identifiable {
         case .destination: return "airplane"
         case .science: return "moon.stars.fill"
         case .petSpotlight: return "pawprint"
+        case .fitness: return "figure.run"
         }
     }
 
@@ -359,6 +363,7 @@ struct Post: Codable, Identifiable {
         case .destination: return "Destination"
         case .science: return "Science"
         case .petSpotlight: return "Adoption"
+        case .fitness: return "Fitness"
         }
     }
 
@@ -533,6 +538,14 @@ struct Post: Codable, Identifiable {
     var petData: PetData? {
         guard displayHintValue == .petSpotlight,
         return try? JSONDecoder().decode(PetData.self, from: data)
+    }
+
+    /// Parsed fitness data from externalURL (for fitness display_hint posts).
+    var fitnessData: FitnessData? {
+        guard displayHintValue == .fitness,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(FitnessData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

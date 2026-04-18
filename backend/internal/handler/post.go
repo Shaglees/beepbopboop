@@ -56,6 +56,7 @@ var ValidDisplayHints = map[string]bool{
 	"destination":      true,
 	"science":          true,
 	"pet_spotlight":    true,
+	"fitness":          true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -185,7 +186,7 @@ func validatePost(req *createPostRequest) validationResult {
 		req.DisplayHint == "album" || req.DisplayHint == "concert" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" ||
 		req.DisplayHint == "restaurant" || req.DisplayHint == "destination" ||
-		req.DisplayHint == "pet_spotlight"
+		req.DisplayHint == "pet_spotlight" || req.DisplayHint == "fitness"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -258,11 +259,12 @@ func validatePost(req *createPostRequest) validationResult {
 			validateVideoGameData(req.ExternalURL, req.DisplayHint, &errs, &warns)
 		case "restaurant":
 			validateFoodData(req.ExternalURL, &errs, &warns)
+		case "fitness":
+			validateFitnessData(req.ExternalURL, &errs, &warns)
 		}
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
-		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" {
-	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" {
-	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" || req.DisplayHint == "destination" {
+		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" ||
+		req.DisplayHint == "destination" || req.DisplayHint == "fitness" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",

@@ -188,6 +188,7 @@ struct Post: Codable, Identifiable {
         case science
         case petSpotlight
         case fitness
+        case boxScore
     }
 
     var displayHintValue: DisplayHintValue {
@@ -218,6 +219,7 @@ struct Post: Codable, Identifiable {
         case "science": return .science
         case "pet_spotlight": return .petSpotlight
         case "fitness": return .fitness
+        case "box_score": return .boxScore
         default: return .card
         }
     }
@@ -290,16 +292,17 @@ struct Post: Codable, Identifiable {
         case .movie: return Color(red: 0.957, green: 0.62, blue: 0.043)
         case .show: return Color(red: 0.957, green: 0.62, blue: 0.043)
         case .playerSpotlight: return Color(red: 0.0, green: 0.478, blue: 0.757)
-        case .entertainment: return Color(hexString: "#F59E0B")
+        case .entertainment: return Color(red: 0.961, green: 0.620, blue: 0.043)
         case .album: return Color(red: 0.459, green: 0.176, blue: 0.902)
         case .concert: return Color(red: 0.984, green: 0.729, blue: 0.012)
         case .gameRelease: return Color(red: 0.96, green: 0.62, blue: 0.04)
         case .gameReview: return Color(red: 0.58, green: 0.27, blue: 0.96)
         case .restaurant: return Color(red: 0.937, green: 0.267, blue: 0.267)
-        case .destination: return Color(hex: 0x06B6D4)
+        case .destination: return Color(red: 0.024, green: 0.714, blue: 0.831)
         case .science: return Color(red: 0.388, green: 0.671, blue: 0.937)
         case .petSpotlight: return Color(red: 0.976, green: 0.451, blue: 0.086)
         case .fitness: return Color(red: 0.133, green: 0.773, blue: 0.369)
+        case .boxScore: return Color(red: 0.055, green: 0.337, blue: 0.188)
         }
     }
 
@@ -332,6 +335,7 @@ struct Post: Codable, Identifiable {
         case .science: return "moon.stars.fill"
         case .petSpotlight: return "pawprint"
         case .fitness: return "figure.run"
+        case .boxScore: return "figure.baseball"
         }
     }
 
@@ -364,6 +368,7 @@ struct Post: Codable, Identifiable {
         case .science: return "Science"
         case .petSpotlight: return "Adoption"
         case .fitness: return "Fitness"
+        case .boxScore: return "Box Score"
         }
     }
 
@@ -472,6 +477,8 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(TravelData.self, from: data)
+    }
+
     /// Parsed science data from externalURL (for science display_hint posts).
     var scienceData: ScienceData? {
         guard displayHintValue == .science,
@@ -534,10 +541,22 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(FoodData.self, from: data)
+    }
+
     /// Parsed pet data from externalURL (for pet_spotlight display_hint posts).
     var petData: PetData? {
         guard displayHintValue == .petSpotlight,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(PetData.self, from: data)
+    }
+
+    /// Parsed baseball box score data from externalURL (for box_score display_hint posts).
+    var baseballData: BaseballData? {
+        guard displayHintValue == .boxScore,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(BaseballData.self, from: data)
     }
 
     /// Parsed fitness data from externalURL (for fitness display_hint posts).

@@ -20,6 +20,7 @@ type FeedWeights struct {
 	TypeWeights   map[string]float64 `json:"type_weights"`
 	FreshnessBias float64            `json:"freshness_bias"`
 	GeoBias       float64            `json:"geo_bias"`
+	FollowedTeams map[string]bool    `json:"-"`
 }
 
 type CreatePostParams struct {
@@ -527,6 +528,24 @@ func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights)
 	// Type affinity (clamped).
 	if wt, ok := w.TypeWeights[p.PostType]; ok {
 		score += clamp(wt, -1.0, 1.0)
+	}
+
+	// Team affinity: parse sports post external_url and boost matched followed teams.
+	if len(w.FollowedTeams) > 0 && p.ExternalURL != "" {
+		var g struct {
+			Sport string `json:"sport"`
+			Home  struct{ Abbr string `json:"abbr"` } `json:"home"`
+			Away  struct{ Abbr string `json:"abbr"` } `json:"away"`
+		}
+		if json.Unmarshal([]byte(p.ExternalURL), &g) == nil && g.Sport != "" {
+			sport := strings.ToLower(g.Sport)
+			if abbr := strings.ToLower(g.Home.Abbr); abbr != "" && w.FollowedTeams[sport+":"+abbr] {
+				score += 1.5
+			}
+			if abbr := strings.ToLower(g.Away.Abbr); abbr != "" && w.FollowedTeams[sport+":"+abbr] {
+				score += 1.5
+			}
+		}
 	}
 
 	return score

@@ -31,7 +31,9 @@ func TestGetWeightsFirebase_NoWeights(t *testing.T) {
 	}
 
 	var resp map[string]any
-	json.NewDecoder(rec.Body).Decode(&resp)
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
 	if resp["weights"] != nil {
 		t.Errorf("expected nil weights for new user, got %v", resp["weights"])
 	}
@@ -68,7 +70,9 @@ func TestUpdateWeightsFirebase_ThenGet(t *testing.T) {
 	}
 
 	var resp map[string]any
-	json.NewDecoder(getRec.Body).Decode(&resp)
+	if err := json.NewDecoder(getRec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
 	if resp["weights"] == nil {
 		t.Error("expected weights to be set after PUT")
 	}

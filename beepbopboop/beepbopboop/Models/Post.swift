@@ -182,6 +182,7 @@ struct Post: Codable, Identifiable {
         case card, place, article, weather, calendar, deal, digest, brief, comparison, event, outfit
         case scoreboard, matchup, standings, playerSpotlight, entertainment, movie, show
         case album, concert
+        case gameRelease, gameReview
     }
 
     var displayHintValue: DisplayHintValue {
@@ -205,6 +206,8 @@ struct Post: Codable, Identifiable {
         case "entertainment": return .entertainment
         case "album": return .album
         case "concert": return .concert
+        case "game_release": return .gameRelease
+        case "game_review": return .gameReview
         default: return .card
         }
     }
@@ -280,6 +283,8 @@ struct Post: Codable, Identifiable {
         case .entertainment: return Color(hexString: "#F59E0B")
         case .album: return Color(red: 0.459, green: 0.176, blue: 0.902)
         case .concert: return Color(red: 0.984, green: 0.729, blue: 0.012)
+        case .gameRelease: return Color(red: 0.96, green: 0.62, blue: 0.04)
+        case .gameReview: return Color(red: 0.58, green: 0.27, blue: 0.96)
         }
     }
 
@@ -305,6 +310,8 @@ struct Post: Codable, Identifiable {
         case .entertainment: return "star.fill"
         case .album: return "music.note"
         case .concert: return "music.mic"
+        case .gameRelease: return "calendar.badge.clock"
+        case .gameReview: return "gamecontroller"
         }
     }
 
@@ -330,6 +337,8 @@ struct Post: Codable, Identifiable {
         case .entertainment: return "Entertainment"
         case .album: return "Album"
         case .concert: return "Concert"
+        case .gameRelease: return "Release"
+        case .gameReview: return "Review"
         }
     }
 
@@ -470,6 +479,14 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(MusicData.self, from: data)
+    }
+
+    /// Parsed video game data from externalURL (for game_release/game_review display_hint posts).
+    var videoGameData: VideoGameData? {
+        guard displayHintValue == .gameRelease || displayHintValue == .gameReview,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(VideoGameData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

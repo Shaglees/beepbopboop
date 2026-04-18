@@ -954,6 +954,51 @@ func TestValidVisibility_AllTestedViaLint(t *testing.T) {
 	}
 }
 
+func TestLintPost_EntertainmentMissingExternalURL(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	_, resp := lintCall(t, h, `{"title":"t","body":"b","display_hint":"entertainment"}`)
+	if resp["valid"] != false {
+		t.Error("expected valid=false when entertainment has no external_url")
+	}
+	if !hasFieldError(lintErrors(resp), "external_url") {
+		t.Error("expected error for missing external_url on entertainment")
+	}
+}
+
+func TestLintPost_EntertainmentBadJSON(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	_, resp := lintCall(t, h, `{"title":"t","body":"b","display_hint":"entertainment","external_url":"{}"}`)
+	if resp["valid"] != false {
+		t.Error("expected valid=false for empty entertainment data")
+	}
+	errs := lintErrors(resp)
+	if !hasFieldError(errs, "external_url.subject") {
+		t.Error("expected error for missing subject")
+	}
+	if !hasFieldError(errs, "external_url.headline") {
+		t.Error("expected error for missing headline")
+	}
+	if !hasFieldError(errs, "external_url.source") {
+		t.Error("expected error for missing source")
+	}
+}
+
+func TestLintPost_EntertainmentValid(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	entJSON := `{"subject":"Zendaya","headline":"Zendaya Named TIME Entertainer of the Year","source":"People","category":"award","tags":["awards","zendaya"]}`
+	body := `{"title":"t","body":"b","display_hint":"entertainment","external_url":` + jsonString(entJSON) + `,"labels":["entertainment"]}`
+	_, resp := lintCall(t, h, body)
+	if resp["valid"] != true {
+		t.Errorf("expected valid=true for good entertainment data, errors: %v", lintErrors(resp))
+	}
+}
+
 // TestValidDisplayHints_AllTestedViaLint verifies every value in ValidDisplayHints
 // is accepted by lint (without requiring external_url for non-structured hints).
 func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
@@ -965,7 +1010,8 @@ func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
 		"weather":    `{"current":{"temp_c":20,"feels_like_c":18,"humidity":60,"wind_speed_kmh":10,"uv_index":5,"is_day":true,"condition":"Sunny","condition_code":1000},"hourly":[],"daily":[],"location":{"latitude":53.3,"longitude":-6.2,"timezone":"Europe/Dublin"}}`,
 		"scoreboard": `{"status":"Final","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA"}`,
 		"matchup":    `{"status":"Scheduled","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA","gameTime":"2026-04-16T19:00:00Z"}`,
-		"standings":  `{"league":"NBA","date":"2026-04-16","games":[{"home":"LAL","away":"BOS","homeScore":110,"awayScore":105,"status":"Final"}]}`,
+		"standings":     `{"league":"NBA","date":"2026-04-16","games":[{"home":"LAL","away":"BOS","homeScore":110,"awayScore":105,"status":"Final"}]}`,
+		"entertainment": `{"subject":"Zendaya","headline":"Zendaya Named TIME Entertainer of the Year","source":"People","category":"award","tags":["entertainment"]}`,
 	}
 
 	for hint := range handler.ValidDisplayHints {
@@ -1008,7 +1054,7 @@ func TestValidImageRoles_AllTestedViaLint(t *testing.T) {
 func TestValidationMaps_Sorted(t *testing.T) {
 	expectedPostTypes := []string{"article", "discovery", "event", "place", "video"}
 	expectedVisibility := []string{"personal", "private", "public"}
-	expectedHints := []string{"article", "brief", "calendar", "card", "comparison", "deal", "digest", "event", "matchup", "outfit", "place", "scoreboard", "standings", "weather"}
+	expectedHints := []string{"article", "brief", "calendar", "card", "comparison", "deal", "digest", "entertainment", "event", "matchup", "outfit", "place", "player_spotlight", "scoreboard", "standings", "weather"}
 	expectedRoles := []string{"detail", "hero", "product"}
 
 	checkMap := func(name string, m map[string]bool, expected []string) {

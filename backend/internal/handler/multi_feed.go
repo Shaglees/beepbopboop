@@ -182,6 +182,13 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 		feedWeights = defaultWeights
 	}
 
+	if settings != nil && len(settings.FollowedTeams) > 0 {
+		feedWeights.FollowedTeams = make(map[string]bool, len(settings.FollowedTeams))
+		for _, t := range settings.FollowedTeams {
+			feedWeights.FollowedTeams[t] = true
+		}
+	}
+
 	posts, nextCursor, err := h.postRepo.ListForYou(user.ID, *settings.Latitude, *settings.Longitude, settings.RadiusKm, cursor, limit, feedWeights)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load feed"})

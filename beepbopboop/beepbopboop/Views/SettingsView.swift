@@ -82,6 +82,71 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
+                Section("Sports") {
+                    NavigationLink("Sports & Teams") {
+                        SportsSettingsView(followedTeams: $viewModel.followedTeams)
+                    }
+                }
+
+                Section("Tune your feed") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("📍")
+                            Text("More local")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("More global")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("🌍")
+                        }
+                        Slider(value: $viewModel.geoBias, in: 0...1) { editing in
+                            if !editing { viewModel.scheduleWeightsSave() }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("⚡")
+                            Text("Live & timely")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("Evergreen")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("📚")
+                        }
+                        Slider(value: $viewModel.freshnessBias, in: 0...1) { editing in
+                            if !editing { viewModel.scheduleWeightsSave() }
+                        }
+                    }
+
+                    HStack {
+                        Button("Reset to defaults") {
+                            viewModel.resetWeightsToDefaults()
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        if viewModel.feedUpdated {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                    .font(.caption)
+                                Text("Feed updated")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                            }
+                            .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.feedUpdated)
+                }
+
                 Section {
                     Button {
                         Task { await viewModel.save() }
@@ -143,7 +208,14 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     @Published var errorMessage: String?
     @Published var didSave = false
     @Published var weightsSummary: WeightsSummary?
+    @Published var followedTeams: Set<String> = []
+    @Published var geoBias: Double = 0.5
+    @Published var freshnessBias: Double = 0.8
+    @Published var feedUpdated = false
 
+    private var weightsSaveTask: Task<Void, Never>?
+    private var badgeTask: Task<Void, Never>?
+    private var cachedWeights: FeedWeights = .defaults
     private let apiService: APIService
     private let completer = MKLocalSearchCompleter()
 
@@ -156,6 +228,13 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
 
     func loadSettings() async {
         isLoading = true
+        async let settingsLoad: () = loadSettingsOnly()
+        async let weightsLoad: () = loadWeights()
+        _ = await (settingsLoad, weightsLoad)
+        isLoading = false
+    }
+
+    private func loadSettingsOnly() async {
         do {
             let settings = try await apiService.getSettings()
             selectedLocationName = settings.locationName
@@ -163,11 +242,11 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             selectedLongitude = settings.longitude
             selectedRadius = settings.radiusKm
             if selectedRadius <= 0 { selectedRadius = 25.0 }
+            followedTeams = Set(settings.followedTeams ?? [])
         } catch {
             // First time — use defaults
         }
         weightsSummary = try? await apiService.getWeightsSummary()
-        isLoading = false
     }
 
     func selectSearchResult(_ result: MKLocalSearchCompletion) async {
@@ -203,7 +282,8 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             locationName: selectedLocationName,
             latitude: selectedLatitude,
             longitude: selectedLongitude,
-            radiusKm: selectedRadius
+            radiusKm: selectedRadius,
+            followedTeams: followedTeams.isEmpty ? nil : Array(followedTeams)
         )
 
         do {
@@ -212,6 +292,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             selectedLatitude = saved.latitude
             selectedLongitude = saved.longitude
             selectedRadius = saved.radiusKm
+            followedTeams = Set(saved.followedTeams ?? [])
 
             // Cache in UserDefaults for quick access
             UserDefaults.standard.set(saved.locationName, forKey: "settings_locationName")
@@ -225,6 +306,60 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
         }
 
         isSaving = false
+    }
+
+    private func loadWeights() async {
+        do {
+            let weights = try await apiService.getWeights()
+            cachedWeights = weights
+            geoBias = weights.geoBias
+            freshnessBias = weights.freshnessBias
+        } catch {
+            // Use defaults on failure
+        }
+    }
+
+    func scheduleWeightsSave() {
+        weightsSaveTask?.cancel()
+        let geo = geoBias
+        let fresh = freshnessBias
+        weightsSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled, let self else { return }
+            await self.saveWeights(geo: geo, freshness: fresh)
+        }
+    }
+
+    func resetWeightsToDefaults() {
+        geoBias = FeedWeights.defaults.geoBias
+        freshnessBias = FeedWeights.defaults.freshnessBias
+        scheduleWeightsSave()
+    }
+
+    private func saveWeights(geo: Double, freshness: Double) async {
+        let weights = FeedWeights(
+            labelWeights: cachedWeights.labelWeights,
+            typeWeights: cachedWeights.typeWeights,
+            freshnessBias: freshness,
+            geoBias: geo
+        )
+        do {
+            try await apiService.updateWeights(weights)
+            cachedWeights = weights
+            await showFeedUpdatedBadge()
+        } catch {
+            // Silent — feed won't update until next adjustment
+        }
+    }
+
+    private func showFeedUpdatedBadge() async {
+        feedUpdated = true
+        badgeTask?.cancel()
+        badgeTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            feedUpdated = false
+        }
     }
 
     // MARK: - MKLocalSearchCompleterDelegate

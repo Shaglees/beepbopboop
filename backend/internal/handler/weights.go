@@ -10,12 +10,14 @@ import (
 
 type WeightsHandler struct {
 	agentRepo   *repository.AgentRepo
+	userRepo    *repository.UserRepo
 	weightsRepo *repository.WeightsRepo
 }
 
-func NewWeightsHandler(agentRepo *repository.AgentRepo, weightsRepo *repository.WeightsRepo) *WeightsHandler {
+func NewWeightsHandler(agentRepo *repository.AgentRepo, userRepo *repository.UserRepo, weightsRepo *repository.WeightsRepo) *WeightsHandler {
 	return &WeightsHandler{
 		agentRepo:   agentRepo,
+		userRepo:    userRepo,
 		weightsRepo: weightsRepo,
 	}
 }
@@ -69,6 +71,61 @@ func (h *WeightsHandler) UpdateWeights(w http.ResponseWriter, r *http.Request) {
 	}
 
 	weights, err := h.weightsRepo.Upsert(agent.UserID, req.Weights)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save weights"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(weights)
+}
+
+// GetWeightsFirebase returns the current user weights (Firebase-auth, mobile client).
+func (h *WeightsHandler) GetWeightsFirebase(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.FirebaseUIDFromContext(r.Context())
+	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
+		return
+	}
+
+	weights, err := h.weightsRepo.Get(user.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load weights"})
+		return
+	}
+
+	if weights == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"user_id": user.ID, "weights": nil})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(weights)
+}
+
+// UpdateWeightsFirebase sets user preference weights (Firebase-auth, mobile client).
+// Accepts flat FeedWeights JSON: {"freshness_bias": 0.8, "geo_bias": 0.5, ...}
+func (h *WeightsHandler) UpdateWeightsFirebase(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.FirebaseUIDFromContext(r.Context())
+	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
+		return
+	}
+
+	var raw json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if len(raw) == 0 || !json.Valid(raw) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "weights must be valid JSON"})
+		return
+	}
+
+	weights, err := h.weightsRepo.Upsert(user.ID, raw)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save weights"})
 		return

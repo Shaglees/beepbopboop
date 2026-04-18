@@ -192,6 +192,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             selectedLatitude = saved.latitude
             selectedLongitude = saved.longitude
             selectedRadius = saved.radiusKm
+            followedTeams = Set(saved.followedTeams ?? [])
 
             // Cache in UserDefaults for quick access
             UserDefaults.standard.set(saved.locationName, forKey: "settings_locationName")

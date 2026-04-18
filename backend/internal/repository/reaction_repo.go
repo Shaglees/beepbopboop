@@ -30,6 +30,11 @@ func (r *ReactionRepo) Upsert(postID, userID, reaction string) (*model.PostReact
 	if err != nil {
 		return nil, fmt.Errorf("upsert reaction: %w", err)
 	}
+	// Keep denormalized reaction_count in sync (count only positive "more" reactions).
+	_, _ = r.db.Exec(`
+		UPDATE posts SET reaction_count = (
+			SELECT COUNT(*) FROM post_reactions WHERE post_id = $1 AND reaction = 'more'
+		) WHERE id = $1`, postID)
 	return &pr, nil
 }
 
@@ -39,6 +44,10 @@ func (r *ReactionRepo) Delete(postID, userID string) error {
 	if err != nil {
 		return fmt.Errorf("delete reaction: %w", err)
 	}
+	_, _ = r.db.Exec(`
+		UPDATE posts SET reaction_count = (
+			SELECT COUNT(*) FROM post_reactions WHERE post_id = $1 AND reaction = 'more'
+		) WHERE id = $1`, postID)
 	return nil
 }
 

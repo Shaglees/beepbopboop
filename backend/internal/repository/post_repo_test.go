@@ -130,6 +130,49 @@ func TestPostRepo_EngagementCountsPopulated(t *testing.T) {
 	}
 }
 
+func TestPostRepo_ReactionCountMaintained(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	user1, _ := userRepo.FindOrCreateByFirebaseUID("firebase-rxn-1")
+	user2, _ := userRepo.FindOrCreateByFirebaseUID("firebase-rxn-2")
+
+	agentRepo := repository.NewAgentRepo(db)
+	agent, _ := agentRepo.Create(user1.ID, "Agent")
+
+	postRepo := repository.NewPostRepo(db)
+	lat, lon := 53.35, -6.26
+	post, _ := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user1.ID,
+		Title: "Post", Body: "body", Latitude: &lat, Longitude: &lon, Visibility: "public",
+	})
+
+	reactionRepo := repository.NewReactionRepo(db)
+
+	// Two "more" reactions
+	reactionRepo.Upsert(post.ID, user1.ID, "more")
+	reactionRepo.Upsert(post.ID, user2.ID, "more")
+
+	posts, _, _ := postRepo.ListCommunity(lat, lon, 10.0, "", 20)
+	if posts[0].ReactionCount != 2 {
+		t.Errorf("expected reaction_count 2, got %d", posts[0].ReactionCount)
+	}
+
+	// One "less" reaction replaces user1's "more" — count drops to 1
+	reactionRepo.Upsert(post.ID, user1.ID, "less")
+	posts, _, _ = postRepo.ListCommunity(lat, lon, 10.0, "", 20)
+	if posts[0].ReactionCount != 1 {
+		t.Errorf("expected reaction_count 1 after downgrade, got %d", posts[0].ReactionCount)
+	}
+
+	// Delete user2's reaction — count drops to 0
+	reactionRepo.Delete(post.ID, user2.ID)
+	posts, _, _ = postRepo.ListCommunity(lat, lon, 10.0, "", 20)
+	if posts[0].ReactionCount != 0 {
+		t.Errorf("expected reaction_count 0 after delete, got %d", posts[0].ReactionCount)
+	}
+}
+
 func TestPostRepo_OptionalFields(t *testing.T) {
 	db := database.OpenTestDB(t)
 

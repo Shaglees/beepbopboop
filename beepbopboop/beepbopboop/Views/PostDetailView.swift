@@ -36,6 +36,8 @@ struct PostDetailView: View {
             matchupDetailBody
         case .standings:
             standingsDetailBody
+        case .deal:
+            DealDetailView(post: post)
         default:
             standardDetailBody
         }

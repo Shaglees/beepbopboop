@@ -150,8 +150,12 @@ func TestPostRepo_ReactionCountMaintained(t *testing.T) {
 	reactionRepo := repository.NewReactionRepo(db)
 
 	// Two "more" reactions
-	reactionRepo.Upsert(post.ID, user1.ID, "more")
-	reactionRepo.Upsert(post.ID, user2.ID, "more")
+	if _, err := reactionRepo.Upsert(post.ID, user1.ID, "more"); err != nil {
+		t.Fatalf("upsert user1 more: %v", err)
+	}
+	if _, err := reactionRepo.Upsert(post.ID, user2.ID, "more"); err != nil {
+		t.Fatalf("upsert user2 more: %v", err)
+	}
 
 	posts, _, _ := postRepo.ListCommunity(lat, lon, 10.0, "", 20)
 	if posts[0].ReactionCount != 2 {
@@ -159,14 +163,18 @@ func TestPostRepo_ReactionCountMaintained(t *testing.T) {
 	}
 
 	// One "less" reaction replaces user1's "more" — count drops to 1
-	reactionRepo.Upsert(post.ID, user1.ID, "less")
+	if _, err := reactionRepo.Upsert(post.ID, user1.ID, "less"); err != nil {
+		t.Fatalf("upsert user1 less: %v", err)
+	}
 	posts, _, _ = postRepo.ListCommunity(lat, lon, 10.0, "", 20)
 	if posts[0].ReactionCount != 1 {
 		t.Errorf("expected reaction_count 1 after downgrade, got %d", posts[0].ReactionCount)
 	}
 
 	// Delete user2's reaction — count drops to 0
-	reactionRepo.Delete(post.ID, user2.ID)
+	if err := reactionRepo.Delete(post.ID, user2.ID); err != nil {
+		t.Fatalf("delete user2 reaction: %v", err)
+	}
 	posts, _, _ = postRepo.ListCommunity(lat, lon, 10.0, "", 20)
 	if posts[0].ReactionCount != 0 {
 		t.Errorf("expected reaction_count 0 after delete, got %d", posts[0].ReactionCount)

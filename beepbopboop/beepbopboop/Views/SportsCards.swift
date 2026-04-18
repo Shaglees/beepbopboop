@@ -140,7 +140,13 @@ struct ScoreboardCard: View {
                     .frame(maxWidth: .infinity)
                 }
 
-                Spacer()
+                // Soccer: goal scorers, matchday, cards
+                if game.sport?.lowercased() == "soccer" {
+                    SoccerScoreboardExtras(game: game)
+                        .padding(.horizontal, 4)
+                } else {
+                    Spacer()
+                }
 
                 // Headline stat line + venue
                 VStack(spacing: 6) {
@@ -176,7 +182,7 @@ struct ScoreboardCard: View {
             }
             .padding(16)
         }
-        .frame(height: 220)
+        .frame(height: (game.sport?.lowercased() == "soccer" && game.goalScorers?.isEmpty == false) ? 250 : 220)
     }
 }
 

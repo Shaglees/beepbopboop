@@ -48,23 +48,36 @@ Determine what was requested:
 - Stat leaders → fetch ESPN leaderboard, post as `article`
 - Team name → find top performer from most recent game, proceed to BB2
 
-### Step BB2 — Fetch ESPN player data
-
-**Search for player ID:**
 ```bash
-curl -s "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/athletes?limit=10&search={player_name}" | jq '.items[0] | {id: .id, displayName: .displayName}'
+# Check for duplicates before proceeding
+beepbopgraph check "{player_name} basketball" 2>/dev/null
+# If a recent post exists for the same player/game, skip to avoid duplicates
 ```
 
-**Get season statistics:**
+### Step BB2 — Fetch ESPN player data
+
+> **WNBA players:** Replace `nba` with `wnba` in all ESPN API paths, use `league=wnba` in search URL, and use headshot URL: `https://a.espncdn.com/i/headshots/wnba/players/full/{athlete_id}.png`
+
+**Search for player ID (extract athlete ID from uid field):**
 ```bash
-curl -s "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/athletes/{athlete_id}/statistics" | jq '{
-  seasonAvg: .splits.categories[] | select(.name == "general") | .stats[:3]
+curl -s "https://site.web.api.espn.com/apis/search/v2?query={player_name}&limit=5&sport=basketball&league=nba" | jq -r '.results[0].contents[0] | {id: (.uid | split("~a:")[1]), displayName}'
+```
+
+**Season statistics (use the year the season ends, e.g. 2026 for 2025-26 season):**
+```bash
+curl -s "https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/seasons/2026/types/2/athletes/{athlete_id}/statistics/0?lang=en&region=us" \
+  -H "Accept: application/json" | jq '{
+  ppg: (.splits.categories[] | select(.name=="offensive") | .stats[] | select(.name=="avgPoints") | .value),
+  rpg: (.splits.categories[] | select(.name=="general") | .stats[] | select(.name=="avgRebounds") | .value),
+  apg: (.splits.categories[] | select(.name=="offensive") | .stats[] | select(.name=="avgAssists") | .value)
 }'
 ```
 
-**Get recent game log (last 5 games):**
+**Recent game stats — use WebSearch as most reliable source:**
 ```bash
-curl -s "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/athletes/{athlete_id}/gamelog" | jq '.events[0:5]'
+# Search: "{player name} stats last game site:espn.com OR site:basketball-reference.com"
+# Extract: points, rebounds, assists, steals, blocks, FG%, 3P%, +/-
+# Fallback: check NBA.com box scores for the most recent game
 ```
 
 Extract from API response:
@@ -73,6 +86,7 @@ Extract from API response:
 - Last game: `points`, `rebounds`, `assists`, `steals`, `blocks`, `fieldGoalPct`, `threePointPct`, `plusMinus`
 - Season averages: PPG, RPG, APG
 - Game result: W/L, opponent, score
+- `teamColor`: Use WebSearch `"{team name} primary color hex"` if not returned by the API.
 
 ### Step BB3 — Contextual enrichment
 
@@ -102,6 +116,20 @@ body: 2-3 sentences. Frame stats in series/season context. Name the opponent.
 ```
 title: Clear, factual headline
 body:  Who, what, when. Player names, teams, terms if known. What it means for both sides.
+```
+
+```bash
+# Publish article (trade/draft/stat-leaders)
+curl -s -X POST "{API_URL}/posts" \
+  -H "Authorization: Bearer {TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"title\": \"...\",
+    \"body\": \"...\",
+    \"post_type\": \"article\",
+    \"display_hint\": \"article\",
+    \"labels\": [\"basketball\", \"nba\"]
+  }"
 ```
 
 ### Step BB6 — Build external_url JSON and publish
@@ -143,18 +171,31 @@ For `player_spotlight` posts only, build this JSON object for `external_url`:
 }
 ```
 
+**Note:** `external_url` must be passed as a serialised JSON string, not a raw object. Serialise the object to a string before placing it in the curl body.
+
 **Publish:**
 ```bash
-curl -s -X POST "${BEEPBOPBOOP_API_URL}/posts" \
-  -H "Authorization: Bearer ${BEEPBOPBOOP_AGENT_TOKEN}" \
+# Parse API URL and token from config (already loaded in Step 0):
+#   API_URL = value of BEEPBOPBOOP_API_URL from config
+#   TOKEN   = value of BEEPBOPBOOP_AGENT_TOKEN from config
+# Substitute literal values below — do NOT rely on shell env vars
+
+curl -s -X POST "{API_URL}/posts" \
+  -H "Authorization: Bearer {TOKEN}" \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "...",
-    "body": "...",
-    "post_type": "discovery",
-    "display_hint": "player_spotlight",
-    "external_url": "{JSON string above}"
-  }'
+  -d "{
+    \"title\": \"...\",
+    \"body\": \"...\",
+    \"post_type\": \"discovery\",
+    \"display_hint\": \"player_spotlight\",
+    \"labels\": [\"basketball\", \"nba\", \"{team_abbr_lowercase}\"],
+    \"external_url\": \"{serialised JSON string — must be a string, not a JSON object}\"
+  }"
 ```
 
 Verify response contains `"id"` field confirming creation.
+
+```bash
+# Save to graph to prevent duplicates
+beepbopgraph save "{player_name} {gameDate} basketball" 2>/dev/null
+```

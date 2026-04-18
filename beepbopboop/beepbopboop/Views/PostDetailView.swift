@@ -68,6 +68,10 @@ struct PostDetailView: View {
             GameReleaseDetailView(post: post)
         case .science:
             ScienceDetailView(post: post)
+        case .petSpotlight:
+            PetSpotlightDetailView(post: post)
+        case .fitness:
+            FitnessDetailView(post: post)
         default:
             standardDetailBody
         }

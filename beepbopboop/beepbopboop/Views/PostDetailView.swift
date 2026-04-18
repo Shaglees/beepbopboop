@@ -58,6 +58,8 @@ struct PostDetailView: View {
             DestinationDetailView(post: post)
         case .concert:
             ConcertDetailView(post: post)
+        case .album:
+            AlbumDetailView(post: post)
         default:
             standardDetailBody
         }

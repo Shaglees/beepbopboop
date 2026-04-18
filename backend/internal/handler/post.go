@@ -48,6 +48,8 @@ var ValidDisplayHints = map[string]bool{
 	"show":             true,
 	"player_spotlight": true,
 	"entertainment":    true,
+	"album":            true,
+	"concert":          true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -173,7 +175,8 @@ func validatePost(req *createPostRequest) validationResult {
 	// expect structured JSON (weather, scoreboard, matchup, standings store
 	// JSON payloads in this field, not actual URLs).
 	structuredHint := req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" ||
-		req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment"
+		req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
+		req.DisplayHint == "album" || req.DisplayHint == "concert"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})

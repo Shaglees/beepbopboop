@@ -43,7 +43,8 @@ var ValidDisplayHints = map[string]bool{
 	"outfit":      true,
 	"scoreboard":  true,
 	"matchup":     true,
-	"standings":   true,
+	"standings":        true,
+	"player_spotlight": true,
 }
 
 var ValidImageRoles = map[string]bool{

@@ -38,6 +38,8 @@ struct PostDetailView: View {
             standingsDetailBody
         case .deal:
             DealDetailView(post: post)
+        case .brief, .digest:
+            BriefDetailView(post: post)
         default:
             standardDetailBody
         }

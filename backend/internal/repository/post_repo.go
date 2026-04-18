@@ -544,6 +544,65 @@ func clamp(v, lo, hi float64) float64 {
 	return v
 }
 
+// ScoreCommunityPost computes a composite ranking score for the community feed.
+// Combines recency decay (primary), geo proximity, engagement signal, and event timing.
+// Exported for testability.
+func ScoreCommunityPost(p model.Post, userLat, userLon, radiusKm float64) float64 {
+	ageHours := time.Since(p.CreatedAt).Hours()
+
+	// Recency decay with 4-hour half-life: exp(-ln(2)/4 * age_hours)
+	recency := math.Exp(-0.173 * ageHours)
+
+	// Geo proximity: 1.0 at centre, 0.0 at radius edge.
+	geoScore := 0.0
+	if p.Latitude != nil && p.Longitude != nil {
+		dist := geo.HaversineKm(userLat, userLon, *p.Latitude, *p.Longitude)
+		geoScore = 1.0 - (dist / radiusKm)
+		if geoScore < 0 {
+			geoScore = 0
+		}
+	}
+
+	// Engagement: logarithmic to prevent viral outliers dominating.
+	// Weight saves double (more deliberate action than a reaction).
+	engagementRaw := float64(p.ReactionCount) + float64(p.SaveCount)*2.0
+	engagementScore := math.Log1p(engagementRaw) / math.Log1p(30) // normalise against ~30 engagement units
+
+	// Event timing: boost posts tied to upcoming / just-started events.
+	eventScore := 0.0
+	if p.ExternalURL != "" {
+		eventScore = parseEventTimingScore(p.ExternalURL)
+	}
+
+	return recency + 0.4*geoScore + 0.3*engagementScore + 0.5*eventScore
+}
+
+// parseEventTimingScore extracts a timing boost from a sports/event ExternalURL JSON.
+// Returns 0 if no parseable game time is found.
+func parseEventTimingScore(externalURL string) float64 {
+	var data struct {
+		GameTime *string `json:"gameTime"`
+	}
+	if err := json.Unmarshal([]byte(externalURL), &data); err != nil || data.GameTime == nil {
+		return 0
+	}
+	gameTime, err := time.Parse(time.RFC3339, *data.GameTime)
+	if err != nil {
+		return 0
+	}
+	hoursUntil := time.Until(gameTime).Hours()
+	if hoursUntil > 0 {
+		// Approaching event: peaks at kick-off
+		return math.Exp(-0.3 * hoursUntil)
+	}
+	// Just started (within 3 hours): live bonus
+	hoursSince := -hoursUntil
+	if hoursSince < 3 {
+		return 1.5 * math.Exp(-0.3*hoursSince)
+	}
+	return 0
+}
+
 // Stats returns aggregated post statistics for a user over the given number of days.
 func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 	ps := &model.PeriodStats{Days: days}

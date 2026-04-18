@@ -313,6 +313,56 @@ func TestListCommunity_RankedByScore(t *testing.T) {
 	}
 }
 
+func TestPostRepo_ListSaved(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-listsaved-test")
+
+	agentRepo := repository.NewAgentRepo(db)
+	agent, _ := agentRepo.Create(user.ID, "Agent")
+
+	postRepo := repository.NewPostRepo(db)
+	post, err := postRepo.Create(repository.CreatePostParams{
+		AgentID: agent.ID, UserID: user.ID, Title: "Saved post", Body: "body",
+	})
+	if err != nil {
+		t.Fatalf("create post: %v", err)
+	}
+
+	eventRepo := repository.NewEventRepo(db)
+	if err := eventRepo.BatchCreate(user.ID, []model.EventInput{
+		{PostID: post.ID, EventType: "save"},
+	}); err != nil {
+		t.Fatalf("save event: %v", err)
+	}
+
+	posts, _, err := postRepo.ListSaved(user.ID, "", 20)
+	if err != nil {
+		t.Fatalf("ListSaved: %v", err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("expected 1 saved post, got %d", len(posts))
+	}
+	if posts[0].ID != post.ID {
+		t.Errorf("expected post %s, got %s", post.ID, posts[0].ID)
+	}
+
+	// Unsave — should disappear from the list.
+	if err := eventRepo.BatchCreate(user.ID, []model.EventInput{
+		{PostID: post.ID, EventType: "unsave"},
+	}); err != nil {
+		t.Fatalf("unsave event: %v", err)
+	}
+	posts, _, err = postRepo.ListSaved(user.ID, "", 20)
+	if err != nil {
+		t.Fatalf("ListSaved after unsave: %v", err)
+	}
+	if len(posts) != 0 {
+		t.Errorf("expected 0 saved posts after unsave, got %d", len(posts))
+	}
+}
+
 func TestPostRepo_OptionalFields(t *testing.T) {
 	db := database.OpenTestDB(t)
 

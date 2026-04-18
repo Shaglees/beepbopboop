@@ -42,6 +42,8 @@ func Open(url string) (*sql.DB, error) {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
 
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS followed_teams JSONB")
+
 	// Geo index for community feed queries
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_geo ON posts(visibility, latitude, longitude, created_at DESC)")
 

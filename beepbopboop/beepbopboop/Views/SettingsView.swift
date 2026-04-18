@@ -55,6 +55,12 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
+                Section("Sports") {
+                    NavigationLink("Sports & Teams") {
+                        SportsSettingsView(followedTeams: $viewModel.followedTeams)
+                    }
+                }
+
                 Section("Tune your feed") {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
@@ -174,6 +180,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var didSave = false
+    @Published var followedTeams: Set<String> = []
     @Published var geoBias: Double = 0.5
     @Published var freshnessBias: Double = 0.8
     @Published var feedUpdated = false
@@ -207,6 +214,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             selectedLongitude = settings.longitude
             selectedRadius = settings.radiusKm
             if selectedRadius <= 0 { selectedRadius = 25.0 }
+            followedTeams = Set(settings.followedTeams ?? [])
         } catch {
             // First time — use defaults
         }
@@ -245,7 +253,8 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             locationName: selectedLocationName,
             latitude: selectedLatitude,
             longitude: selectedLongitude,
-            radiusKm: selectedRadius
+            radiusKm: selectedRadius,
+            followedTeams: followedTeams.isEmpty ? nil : Array(followedTeams)
         )
 
         do {
@@ -254,6 +263,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             selectedLatitude = saved.latitude
             selectedLongitude = saved.longitude
             selectedRadius = saved.radiusKm
+            followedTeams = Set(saved.followedTeams ?? [])
 
             // Cache in UserDefaults for quick access
             UserDefaults.standard.set(saved.locationName, forKey: "settings_locationName")

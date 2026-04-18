@@ -1054,7 +1054,7 @@ func TestValidImageRoles_AllTestedViaLint(t *testing.T) {
 func TestValidationMaps_Sorted(t *testing.T) {
 	expectedPostTypes := []string{"article", "discovery", "event", "place", "video"}
 	expectedVisibility := []string{"personal", "private", "public"}
-	expectedHints := []string{"article", "brief", "calendar", "card", "comparison", "deal", "digest", "entertainment", "event", "matchup", "outfit", "place", "scoreboard", "standings", "weather"}
+	expectedHints := []string{"article", "brief", "calendar", "card", "comparison", "deal", "digest", "entertainment", "event", "matchup", "outfit", "place", "player_spotlight", "scoreboard", "standings", "weather"}
 	expectedRoles := []string{"detail", "hero", "product"}
 
 	checkMap := func(name string, m map[string]bool, expected []string) {

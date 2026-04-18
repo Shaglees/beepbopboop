@@ -94,6 +94,13 @@ Common team name mappings from config slugs:
 - Season: January–November
 - Note: Same multi-day format as PGA.
 
+### NFL (National Football League)
+- Schedule: https://www.nfl.com/schedules
+- ESPN API: `sports/football/nfl/scoreboard`
+- Season: September–January (playoffs Jan–Feb, Super Bowl Feb)
+- Note: Use `display_hint: "matchup"` with extended GameData JSON (see `beepbopboop-football` skill for schema including `keyMatchup`, `injuries`, `fantasyPlayers`). Week number available as `.week.number` in ESPN API response.
+- Team color tip: ESPN `.team.color` is hex without `#` — prepend `#` when building JSON.
+
 ### AHL (American Hockey League)
 - Schedule: https://theahl.com/stats/schedule
 - No ESPN API — use WebFetch on the official schedule page

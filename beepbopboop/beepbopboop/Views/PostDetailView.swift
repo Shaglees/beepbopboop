@@ -40,6 +40,12 @@ struct PostDetailView: View {
             DealDetailView(post: post)
         case .brief, .digest:
             BriefDetailView(post: post)
+        case .weather:
+            WeatherDetailView(post: post)
+        case .calendar, .event:
+            CalendarDetailView(post: post)
+        case .place:
+            PlaceDetailView(post: post)
         default:
             standardDetailBody
         }

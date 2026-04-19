@@ -13,6 +13,7 @@ import (
 	"firebase.google.com/go/v4/auth"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
@@ -67,6 +68,7 @@ func main() {
 	templateRepo := repository.NewTemplateRepo(db)
 	reactionRepo := repository.NewReactionRepo(db)
 	pushTokenRepo := repository.NewPushTokenRepo(db)
+	calendarRepo := repository.NewCalendarRepo(db)
 	followRepo := repository.NewFollowRepo(db)
 
 	// Handlers
@@ -84,6 +86,7 @@ func main() {
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
 	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
 	pushTokenH := handler.NewPushTokenHandler(userRepo, pushTokenRepo)
+	calendarH := handler.NewCalendarHandler(userRepo, calendarRepo, userSettingsRepo)
 	weatherSvc := weather.NewService()
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
@@ -115,6 +118,7 @@ func main() {
 		r.Get("/user/weights", weightsH.GetWeightsFirebase)
 		r.Put("/user/weights", weightsH.UpdateWeightsFirebase)
 		r.Put("/user/push-token", pushTokenH.RegisterPushToken)
+		r.Post("/user/calendar-events", calendarH.SyncCalendarEvents)
 		r.Get("/user/digest", pushTokenH.GetDigestPosts)
 		r.Post("/agents", agentH.CreateAgent)
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
@@ -156,6 +160,9 @@ func main() {
 
 	schedulerWorker := scheduler.NewWorker(postRepo, 1*time.Minute)
 	go schedulerWorker.Run(workerCtx)
+
+	calendarWorker := calendar.NewWorker(calendarRepo, postRepo, userSettingsRepo, 6*time.Hour)
+	go calendarWorker.Run(workerCtx)
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 

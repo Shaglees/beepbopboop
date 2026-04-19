@@ -33,10 +33,11 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 
 	err := r.db.QueryRow(`
 		SELECT user_id, location_name, latitude, longitude, radius_km,
-		       followed_teams, notifications_enabled, digest_hour, updated_at
+		       followed_teams, notifications_enabled, digest_hour,
+		       COALESCE(calendar_enabled, FALSE), updated_at
 		FROM user_settings WHERE user_id = $1`, userID,
 	).Scan(&s.UserID, &locationName, &latitude, &longitude, &s.RadiusKm,
-		&followedTeamsJSON, &s.NotificationsEnabled, &s.DigestHour, &s.UpdatedAt)
+		&followedTeamsJSON, &s.NotificationsEnabled, &s.DigestHour, &s.CalendarEnabled, &s.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -59,8 +60,9 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 	return &s, nil
 }
 
-// Upsert inserts or updates the user's settings.
-func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64, followedTeams []string, notificationsEnabled bool, digestHour int) (*model.UserSettings, error) {
+// Upsert inserts or updates the user's settings. calendarEnabled is optional;
+// nil means "preserve whatever is already stored".
+func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64, followedTeams []string, notificationsEnabled bool, digestHour int, calendarEnabled *bool) (*model.UserSettings, error) {
 	var followedTeamsJSON sql.NullString
 	if len(followedTeams) > 0 {
 		b, err := json.Marshal(followedTeams)
@@ -70,9 +72,14 @@ func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64
 		followedTeamsJSON = sql.NullString{String: string(b), Valid: true}
 	}
 
+	var calendarEnabledNull sql.NullBool
+	if calendarEnabled != nil {
+		calendarEnabledNull = sql.NullBool{Bool: *calendarEnabled, Valid: true}
+	}
+
 	_, err := r.db.Exec(`
-		INSERT INTO user_settings (user_id, location_name, latitude, longitude, radius_km, followed_teams, notifications_enabled, digest_hour, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+		INSERT INTO user_settings (user_id, location_name, latitude, longitude, radius_km, followed_teams, notifications_enabled, digest_hour, calendar_enabled, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_id) DO UPDATE SET
 			location_name         = excluded.location_name,
 			latitude              = excluded.latitude,
@@ -81,14 +88,48 @@ func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64
 			followed_teams        = excluded.followed_teams,
 			notifications_enabled = excluded.notifications_enabled,
 			digest_hour           = excluded.digest_hour,
+			calendar_enabled      = COALESCE(excluded.calendar_enabled, user_settings.calendar_enabled),
 			updated_at            = CURRENT_TIMESTAMP`,
 		userID, nullString(locationName), nullFloat64(lat), nullFloat64(lon), radiusKm,
-		followedTeamsJSON, notificationsEnabled, digestHour,
+		followedTeamsJSON, notificationsEnabled, digestHour, calendarEnabledNull,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("upsert user_settings: %w", err)
 	}
 	return r.Get(userID)
+}
+
+// SetCalendarEnabled updates only the calendar_enabled flag for a user.
+func (r *UserSettingsRepo) SetCalendarEnabled(userID string, enabled bool) error {
+	_, err := r.db.Exec(`
+		INSERT INTO user_settings (user_id, calendar_enabled, updated_at)
+		VALUES ($1, $2, CURRENT_TIMESTAMP)
+		ON CONFLICT(user_id) DO UPDATE SET
+			calendar_enabled = excluded.calendar_enabled,
+			updated_at       = CURRENT_TIMESTAMP`,
+		userID, enabled)
+	if err != nil {
+		return fmt.Errorf("set calendar_enabled: %w", err)
+	}
+	return nil
+}
+
+// UsersWithCalendarEnabled returns all user IDs that have calendar integration enabled.
+func (r *UserSettingsRepo) UsersWithCalendarEnabled() ([]string, error) {
+	rows, err := r.db.Query(`SELECT user_id FROM user_settings WHERE calendar_enabled = TRUE`)
+	if err != nil {
+		return nil, fmt.Errorf("query calendar users: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan user_id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // DistinctLocationCells returns unique geographic grid cells that have at least

@@ -249,6 +249,29 @@ class APIService: ObservableObject {
         }
     }
 
+    // MARK: - Calendar
+
+    @MainActor
+    func syncCalendarEvents(_ events: [CalendarEventPayload]) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/calendar-events") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = try JSONEncoder().encode(["events": events])
+        request.httpBody = body
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
     // MARK: - Events
 
     @MainActor

@@ -1,3 +1,4 @@
+import EventKit
 import SwiftUI
 
 @main
@@ -6,6 +7,7 @@ struct beepbopboopApp: App {
     @StateObject private var notificationService: NotificationService
     @StateObject private var api: APIService
     @StateObject private var tracker: EventTracker
+    @StateObject private var calendarService: CalendarService
     @AppStorage("onboardingComplete") private var onboardingComplete = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -18,6 +20,7 @@ struct beepbopboopApp: App {
         _tracker = StateObject(wrappedValue: EventTracker { events in
             try? await apiSvc.postEventsBatch(events)
         })
+        _calendarService = StateObject(wrappedValue: CalendarService())
     }
 
     var body: some Scene {
@@ -26,13 +29,17 @@ struct beepbopboopApp: App {
                 FeedView(
                     authService: authService,
                     apiService: api,
-                    notificationService: notificationService
+                    notificationService: notificationService,
+                    calendarService: calendarService
                 )
                 .environmentObject(api)
                 .environmentObject(tracker)
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {
                         Task { await tracker.flush() }
+                    }
+                    if phase == .active {
+                        Task { await syncCalendarIfEnabled(api: api) }
                     }
                 }
                 .fullScreenCover(isPresented: Binding(
@@ -47,5 +54,12 @@ struct beepbopboopApp: App {
                 LoginView(authService: authService)
             }
         }
+    }
+
+    private func syncCalendarIfEnabled(api: APIService) async {
+        guard calendarService.authorizationStatus == .fullAccess else { return }
+        let events = calendarService.fetchUpcomingEvents()
+        guard !events.isEmpty else { return }
+        try? await api.syncCalendarEvents(events)
     }
 }

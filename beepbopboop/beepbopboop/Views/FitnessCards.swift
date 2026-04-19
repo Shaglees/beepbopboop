@@ -423,12 +423,14 @@ private struct MapPin: Identifiable {
 
 private struct FitnessCardFooter: View {
     let post: Post
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
     @State private var activeReaction: String?
+
+    @EnvironmentObject private var apiService: APIService
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
         self._activeReaction = State(initialValue: post.myReaction)
     }
 
@@ -447,8 +449,13 @@ private struct FitnessCardFooter: View {
                 style: .feedCompact
             )
             Button {
+                let wasSaved = isBookmarked
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()
+                Task {
+                    do { try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save") }
+                    catch { isBookmarked = wasSaved }
+                }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)

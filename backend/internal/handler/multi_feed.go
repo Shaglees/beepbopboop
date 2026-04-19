@@ -30,8 +30,8 @@ func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.Pos
 	}
 }
 
-// enrichAndFilter batch-looks up reactions, sets MyReaction on each post,
-// and removes posts that the user has negatively reacted to.
+// enrichAndFilter batch-looks up reactions and save state, sets MyReaction
+// and Saved on each post, and removes posts that the user has negatively reacted to.
 func (h *MultiFeedHandler) enrichAndFilter(posts []model.Post, userID string) []model.Post {
 	if len(posts) == 0 {
 		return posts
@@ -45,19 +45,23 @@ func (h *MultiFeedHandler) enrichAndFilter(posts []model.Post, userID string) []
 	reactions, err := h.reactionRepo.GetForPosts(postIDs, userID)
 	if err != nil {
 		slog.Warn("failed to lookup reactions for feed", "error", err)
-		return posts
 	}
-	if len(reactions) == 0 {
-		return posts
+
+	savedSet, err := h.eventRepo.GetSavedForPosts(postIDs, userID)
+	if err != nil {
+		slog.Warn("failed to lookup saved state for feed", "error", err)
 	}
 
 	filtered := make([]model.Post, 0, len(posts))
 	for i := range posts {
 		if r, ok := reactions[posts[i].ID]; ok {
 			if repository.NegativeReactions[r] {
-				continue // hide negatively-reacted posts
+				continue
 			}
 			posts[i].MyReaction = &r
+		}
+		if savedSet[posts[i].ID] {
+			posts[i].Saved = true
 		}
 		filtered = append(filtered, posts[i])
 	}

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct DealDetailView: View {
     let post: Post
-    @AppStorage private var isBookmarked: Bool
+    @State private var isBookmarked: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var activeReaction: String?
     @EnvironmentObject private var apiService: APIService
@@ -10,7 +10,7 @@ struct DealDetailView: View {
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
         self._activeReaction = State(initialValue: post.myReaction)
     }
 

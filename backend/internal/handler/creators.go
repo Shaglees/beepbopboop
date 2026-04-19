@@ -154,7 +154,7 @@ func (h *CreatorsHandler) UpdateUserLocation(w http.ResponseWriter, r *http.Requ
 
 	lat := req.Latitude
 	lon := req.Longitude
-	settings, err := h.userSettingsRepo.Upsert(user.ID, locationName, &lat, &lon, radiusKm, followedTeams, notificationsEnabled, digestHour)
+	settings, err := h.userSettingsRepo.Upsert(user.ID, locationName, &lat, &lon, radiusKm, followedTeams, notificationsEnabled, digestHour, nil)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update location"})
 		return

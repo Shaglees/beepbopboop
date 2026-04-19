@@ -121,5 +121,32 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS digest_hour INT NOT NULL DEFAULT 8")
 
+	// Calendar integration opt-in flag per user
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS calendar_enabled BOOLEAN NOT NULL DEFAULT FALSE")
+
+	// Local creator profiles for deduplication across geo-discovery runs.
+	// lat/lon are nullable (creators can be discovered without precise coordinates).
+	// PostgreSQL NULL != NULL in UNIQUE constraints, so we need a partial index
+	// to deduplicate name-only creators alongside the composite key for located ones.
+	db.Exec(`CREATE TABLE IF NOT EXISTS creators (
+		id                  TEXT PRIMARY KEY,
+		name                TEXT NOT NULL,
+		designation         TEXT,
+		bio                 TEXT,
+		lat                 DOUBLE PRECISION,
+		lon                 DOUBLE PRECISION,
+		area_name           TEXT,
+		links               JSONB,
+		notable_works       TEXT,
+		tags                JSONB,
+		source              TEXT,
+		discovered_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		discovered_by_user_id TEXT REFERENCES users(id),
+		UNIQUE (name, lat, lon)
+	)`)
+	// Deduplicate creators that have no location (NULL lat/lon).
+	// The UNIQUE(name, lat, lon) above only covers rows where lat/lon are non-NULL.
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_creators_name_no_location ON creators(name) WHERE lat IS NULL AND lon IS NULL`)
+
 	return db, nil
 }

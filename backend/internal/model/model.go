@@ -36,6 +36,7 @@ type UserSettings struct {
 	FollowedTeams        []string  `json:"followed_teams,omitempty"`
 	NotificationsEnabled bool      `json:"notifications_enabled"`
 	DigestHour           int       `json:"digest_hour"`
+	CalendarEnabled      bool      `json:"calendar_enabled"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
 

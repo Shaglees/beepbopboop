@@ -8,6 +8,7 @@ struct UserSettings: Codable {
     var followedTeams: [String]?
     var notificationsEnabled: Bool
     var digestHour: Int
+    var calendarEnabled: Bool
 
     var hasLocation: Bool {
         latitude != nil && longitude != nil
@@ -20,7 +21,8 @@ struct UserSettings: Codable {
         radiusKm: Double = 25,
         followedTeams: [String]? = nil,
         notificationsEnabled: Bool = true,
-        digestHour: Int = 8
+        digestHour: Int = 8,
+        calendarEnabled: Bool = false
     ) {
         self.locationName = locationName
         self.latitude = latitude
@@ -29,6 +31,7 @@ struct UserSettings: Codable {
         self.followedTeams = followedTeams
         self.notificationsEnabled = notificationsEnabled
         self.digestHour = digestHour
+        self.calendarEnabled = calendarEnabled
     }
 
     enum CodingKeys: String, CodingKey {
@@ -39,6 +42,7 @@ struct UserSettings: Codable {
         case followedTeams = "followed_teams"
         case notificationsEnabled = "notifications_enabled"
         case digestHour = "digest_hour"
+        case calendarEnabled = "calendar_enabled"
     }
 
     init(from decoder: Decoder) throws {
@@ -50,5 +54,6 @@ struct UserSettings: Codable {
         followedTeams = try c.decodeIfPresent([String].self, forKey: .followedTeams)
         notificationsEnabled = (try? c.decode(Bool.self, forKey: .notificationsEnabled)) ?? true
         digestHour = (try? c.decode(Int.self, forKey: .digestHour)) ?? 8
+        calendarEnabled = (try? c.decode(Bool.self, forKey: .calendarEnabled)) ?? false
     }
 }

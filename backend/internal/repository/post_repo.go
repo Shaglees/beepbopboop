@@ -881,6 +881,27 @@ func (r *PostRepo) UpsertSportsPost(gameID, title, body, league, gameDataJSON st
 }
 
 
+// UpsertAnticipatoryPost creates or replaces a user-targeted anticipatory post.
+// The post is stored under the target user's ID so it surfaces in their ForYou feed.
+// postKey should be a stable, deterministic string for the event (e.g. "anticipatory-<userID>-<eventID>").
+func (r *PostRepo) UpsertAnticipatoryPost(postKey, userID, title, body, postType string, labels []string) error {
+	labelsJSON, _ := json.Marshal(labels)
+	_, err := r.db.Exec(`
+		INSERT INTO posts (id, agent_id, user_id, title, body,
+			post_type, visibility, display_hint, labels, created_at)
+		VALUES ($1, 'calendar-bot', $2, $3, $4,
+			$5, 'personal', 'card', $6, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET
+			title      = excluded.title,
+			body       = excluded.body,
+			post_type  = excluded.post_type,
+			labels     = excluded.labels,
+			created_at = CURRENT_TIMESTAMP`,
+		postKey, userID, title, body, postType, string(labelsJSON),
+	)
+	return err
+}
+
 func nullRawJSON(j json.RawMessage) sql.NullString {
 	if len(j) == 0 || string(j) == "null" {
 		return sql.NullString{}

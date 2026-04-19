@@ -1,4 +1,5 @@
 import Combine
+import EventKit
 import MapKit
 import SwiftUI
 
@@ -154,6 +155,20 @@ struct SettingsView: View {
                     .animation(.easeInOut(duration: 0.3), value: viewModel.feedUpdated)
                 }
 
+                Section("Calendar") {
+                    Toggle("Anticipatory feed", isOn: $viewModel.calendarEnabled)
+                        .onChange(of: viewModel.calendarEnabled) { _, enabled in
+                            if enabled {
+                                Task { await viewModel.requestCalendarAccessAndSync() }
+                            }
+                        }
+                    if viewModel.calendarEnabled {
+                        Text("Your upcoming events help surface relevant content before you need it.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section("Notifications") {
                     Toggle("Daily digest", isOn: $viewModel.notificationsEnabled)
 
@@ -273,6 +288,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     @Published var geoBias: Double = 0.5
     @Published var freshnessBias: Double = 0.8
     @Published var feedUpdated = false
+    @Published var calendarEnabled: Bool = false
 
     private var weightsSaveTask: Task<Void, Never>?
     private var badgeTask: Task<Void, Never>?
@@ -280,6 +296,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     private let apiService: APIService
     private let notificationService: NotificationService?
     private let completer = MKLocalSearchCompleter()
+    private let calendarService = CalendarService()
 
     init(apiService: APIService, notificationService: NotificationService? = nil) {
         self.apiService = apiService
@@ -308,6 +325,7 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             followedTeams = Set(settings.followedTeams ?? [])
             notificationsEnabled = settings.notificationsEnabled
             digestHour = settings.digestHour
+            calendarEnabled = settings.calendarEnabled
         } catch {
             // First time — use defaults
         }
@@ -316,6 +334,16 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             await ns.checkStatus()
             notificationsDenied = ns.authorizationStatus == .denied
         }
+    }
+
+    func requestCalendarAccessAndSync() async {
+        let granted = await calendarService.requestAccess()
+        guard granted else {
+            calendarEnabled = false
+            return
+        }
+        let events = calendarService.fetchUpcomingEvents()
+        try? await apiService.syncCalendarEvents(events)
     }
 
     func selectSearchResult(_ result: MKLocalSearchCompletion) async {
@@ -354,7 +382,8 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
             radiusKm: selectedRadius,
             followedTeams: followedTeams.isEmpty ? nil : Array(followedTeams),
             notificationsEnabled: notificationsEnabled,
-            digestHour: digestHour
+            digestHour: digestHour,
+            calendarEnabled: calendarEnabled
         )
 
         do {

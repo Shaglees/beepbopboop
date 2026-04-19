@@ -36,7 +36,19 @@ type UserSettings struct {
 	FollowedTeams        []string  `json:"followed_teams,omitempty"`
 	NotificationsEnabled bool      `json:"notifications_enabled"`
 	DigestHour           int       `json:"digest_hour"`
+	CalendarEnabled      bool      `json:"calendar_enabled"`
 	UpdatedAt            time.Time `json:"updated_at"`
+}
+
+type CalendarEvent struct {
+	ID        string     `json:"id"`
+	UserID    string     `json:"user_id"`
+	Title     string     `json:"title"`
+	StartTime time.Time  `json:"start_time"`
+	EndTime   *time.Time `json:"end_time,omitempty"`
+	Location  string     `json:"location,omitempty"`
+	Notes     string     `json:"notes,omitempty"`
+	SyncedAt  time.Time  `json:"synced_at"`
 }
 
 type PushToken struct {

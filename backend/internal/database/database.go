@@ -121,5 +121,25 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS digest_hour INT NOT NULL DEFAULT 8")
 
+	// Calendar integration opt-in flag per user
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS calendar_enabled BOOLEAN NOT NULL DEFAULT FALSE")
+
+	// Calendar events synced from device (EventKit/iOS)
+	db.Exec(`CREATE TABLE IF NOT EXISTS calendar_events (
+		id          TEXT NOT NULL,
+		user_id     TEXT NOT NULL REFERENCES users(id),
+		title       TEXT NOT NULL,
+		start_time  TIMESTAMPTZ NOT NULL,
+		end_time    TIMESTAMPTZ,
+		location    TEXT,
+		notes       TEXT,
+		synced_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, id)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_calendar_events_user_start ON calendar_events(user_id, start_time)")
+
+	// Anticipatory worker agent
+	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('calendar-bot', 'system', 'Anticipatory', 'active') ON CONFLICT DO NOTHING")
+
 	return db, nil
 }

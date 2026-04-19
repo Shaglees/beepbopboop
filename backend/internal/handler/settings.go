@@ -55,6 +55,7 @@ type updateSettingsRequest struct {
 	FollowedTeams        []string `json:"followed_teams"`
 	NotificationsEnabled *bool    `json:"notifications_enabled"`
 	DigestHour           *int     `json:"digest_hour"`
+	CalendarEnabled      *bool    `json:"calendar_enabled"`
 }
 
 func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +93,12 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	settings, err := h.userSettingsRepo.Upsert(user.ID, req.LocationName, req.Latitude, req.Longitude, req.RadiusKm, req.FollowedTeams, notificationsEnabled, digestHour)
+	calendarEnabled := false
+	if req.CalendarEnabled != nil {
+		calendarEnabled = *req.CalendarEnabled
+	}
+
+	settings, err := h.userSettingsRepo.Upsert(user.ID, req.LocationName, req.Latitude, req.Longitude, req.RadiusKm, req.FollowedTeams, notificationsEnabled, digestHour, calendarEnabled)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save settings"})
 		return

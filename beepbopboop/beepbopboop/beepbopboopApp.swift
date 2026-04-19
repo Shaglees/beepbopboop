@@ -1,3 +1,4 @@
+import EventKit
 import SwiftUI
 
 @main
@@ -6,6 +7,7 @@ struct beepbopboopApp: App {
     @AppStorage("onboardingComplete") private var onboardingComplete = false
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var notificationService = NotificationService()
+    @StateObject private var calendarService = CalendarService()
 
     var body: some Scene {
         WindowGroup {
@@ -25,6 +27,9 @@ struct beepbopboopApp: App {
                     if phase == .background {
                         Task { await tracker.flush() }
                     }
+                    if phase == .active {
+                        Task { await syncCalendarIfEnabled(api: api) }
+                    }
                 }
                 .fullScreenCover(isPresented: Binding(
                     get: { !onboardingComplete },
@@ -34,9 +39,17 @@ struct beepbopboopApp: App {
                         onboardingComplete = true
                     }
                 }
+                .task { await syncCalendarIfEnabled(api: api) }
             } else {
                 LoginView(authService: authService)
             }
         }
+    }
+
+    private func syncCalendarIfEnabled(api: APIService) async {
+        guard calendarService.authorizationStatus == .fullAccess else { return }
+        let events = calendarService.fetchUpcomingEvents()
+        guard !events.isEmpty else { return }
+        try? await api.syncCalendarEvents(events)
     }
 }

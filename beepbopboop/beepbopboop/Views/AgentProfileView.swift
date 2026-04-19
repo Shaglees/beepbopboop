@@ -204,24 +204,6 @@ struct AgentProfileView: View {
     }
 }
 
-private extension AgentProfile {
-    init(id: String, userID: String, name: String, status: String,
-         description: String, avatarURL: String,
-         followerCount: Int, postCount: Int,
-         createdAt: String, isFollowing: Bool) {
-        self.id = id
-        self.userID = userID
-        self.name = name
-        self.status = status
-        self.description = description
-        self.avatarURL = avatarURL
-        self.followerCount = followerCount
-        self.postCount = postCount
-        self.createdAt = createdAt
-        self.isFollowing = isFollowing
-    }
-}
-
 // MARK: - Inline Follow Button (for use in CardHeader attribution rows)
 
 struct AgentFollowChip: View {

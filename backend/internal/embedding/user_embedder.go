@@ -91,18 +91,25 @@ func (ue *UserEmbedder) ComputeForUser(ctx context.Context, userID string) ([]fl
 		FROM (
 			SELECT
 				pe.post_id,
-				MAX(CASE WHEN pe.event_type = 'save'  THEN 1 ELSE 0 END) AS saved,
+				CASE
+					WHEN MAX(pe.created_at) FILTER (WHERE pe.event_type = 'save') >
+					     COALESCE(MAX(pe.created_at) FILTER (WHERE pe.event_type = 'unsave'), '-infinity'::timestamptz)
+					THEN 1 ELSE 0
+				END AS saved,
 				MAX(CASE WHEN pe.event_type = 'click' THEN 1 ELSE 0 END) AS clicked,
 				COUNT(*) FILTER (WHERE pe.event_type = 'view')            AS views,
 				COALESCE(MAX(pe.dwell_ms) FILTER (WHERE pe.event_type = 'view'), 0) AS max_dwell_ms,
-				MAX(pe.created_at)                                         AS last_interaction_at,
-				pr.reaction
+				COALESCE(
+					MAX(pe.created_at) FILTER (WHERE pe.event_type IN ('save', 'unsave', 'click', 'share')),
+					MAX(pe.created_at)
+				) AS last_interaction_at,
+				MAX(pr.reaction) AS reaction
 			FROM post_events pe
 			LEFT JOIN post_reactions pr
 				ON pr.post_id = pe.post_id AND pr.user_id = $1
 			WHERE pe.user_id = $1
 			  AND pe.created_at > NOW() - INTERVAL '14 days'
-			GROUP BY pe.post_id, pr.reaction
+			GROUP BY pe.post_id
 		) eng
 		JOIN post_embeddings emb ON emb.post_id = eng.post_id`,
 		userID)
@@ -191,6 +198,7 @@ func (ue *UserEmbedder) ComputeAll(ctx context.Context) error {
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate active users: %w", err)
 	}
+	rows.Close() // release connection before per-user queries
 
 	var ok, failed int
 	for _, uid := range userIDs {

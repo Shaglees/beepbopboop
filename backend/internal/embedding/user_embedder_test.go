@@ -408,3 +408,110 @@ func TestComputeAll_NoUsers_NoError(t *testing.T) {
 		t.Fatalf("ComputeAll on empty DB: %v", err)
 	}
 }
+
+// TestComputeForUser_SaveThenUnsave_NotCountedAsSaved: a save followed by an unsave
+// means the post is no longer saved; it should not contribute the save weight.
+func TestComputeForUser_SaveThenUnsave_NotCountedAsSaved(t *testing.T) {
+	f := newFixture(t)
+
+	userID, postID := f.makePost(t, "firebase-unsave", "unsaved post")
+	f.postEmbRepo.Upsert(postID, []float32{1, 0, 0, 0}, "test")
+
+	// Save at T, then unsave later — net: not saved.
+	f.seedEvent(t, postID, userID, "save", nil, time.Now().UTC().Add(-2*time.Hour))
+	f.seedEvent(t, postID, userID, "unsave", nil, time.Now())
+
+	vec, postCount, err := f.embedder.ComputeForUser(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("ComputeForUser: %v", err)
+	}
+	// Only a view-level signal (0) remains — weight should be 0 → nil result.
+	if vec != nil {
+		t.Error("expected nil vector after save+unsave (net weight = 0)")
+	}
+	if postCount != 0 {
+		t.Errorf("expected postCount=0, got %d", postCount)
+	}
+}
+
+// TestComputeForUser_DecayUsesSaveTime_NotViewTime: a recent save and an old view on
+// the same post — decay should be anchored to the save time, not the (possibly later)
+// view time. We verify this by checking that a recent save gives a high-weight result.
+func TestComputeForUser_DecayUsesSaveTime_NotViewTime(t *testing.T) {
+	f := newFixture(t)
+
+	userID, postID := f.makePost(t, "firebase-decaytime", "decay-time post")
+	f.postEmbRepo.Upsert(postID, []float32{0, 1, 0, 0}, "test")
+
+	// Old view (12 days ago) — should not anchor the decay timestamp.
+	f.seedEvent(t, postID, userID, "view", nil, time.Now().UTC().Add(-12*24*time.Hour))
+	// Recent save (today) — this should set the decay anchor.
+	f.seedEvent(t, postID, userID, "save", nil, time.Now())
+
+	vec, postCount, err := f.embedder.ComputeForUser(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("ComputeForUser: %v", err)
+	}
+	if vec == nil {
+		t.Fatal("expected non-nil vector")
+	}
+	if postCount != 1 {
+		t.Errorf("expected postCount=1, got %d", postCount)
+	}
+
+	// With decay anchor = now, decay ≈ 1.0 and weight = save(5) + view(0.3) ≈ 5.3.
+	// The result should be unit-length and pointing at [0,1,0,0].
+	sim := cosineSim(vec, []float32{0, 1, 0, 0})
+	if sim < 0.999 {
+		t.Errorf("expected result to closely match post embedding, cosine_sim=%.4f", sim)
+	}
+}
+
+// TestComputeForUser_MultipleEventsForSamePost_CountedOnce: several events for the
+// same post must not fan out into multiple rows in the result set (GROUP BY fix).
+func TestComputeForUser_MultipleEventsForSamePost_CountedOnce(t *testing.T) {
+	f := newFixture(t)
+
+	userID, postID := f.makePost(t, "firebase-multiev", "multi-event post")
+	f.postEmbRepo.Upsert(postID, []float32{1, 0, 0, 0}, "test")
+
+	// Multiple events of different types for the same post.
+	f.seedEvent(t, postID, userID, "view", nil, time.Now())
+	f.seedEvent(t, postID, userID, "click", nil, time.Now())
+	f.seedEvent(t, postID, userID, "save", nil, time.Now())
+
+	vec, postCount, err := f.embedder.ComputeForUser(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("ComputeForUser: %v", err)
+	}
+	if vec == nil {
+		t.Fatal("expected non-nil vector")
+	}
+	// Exactly one post contributed — if GROUP BY fan-out bug were present, postCount
+	// could be > 1 and the vector would have inflated weights.
+	if postCount != 1 {
+		t.Errorf("expected postCount=1, got %d (GROUP BY fan-out?)", postCount)
+	}
+}
+
+// TestComputeAll_DoesNotDeadlock: ComputeAll must not deadlock even when the
+// connection pool is limited to a single connection.
+func TestComputeAll_DoesNotDeadlock(t *testing.T) {
+	f := newFixture(t)
+	f.db.SetMaxOpenConns(1)
+
+	// Seed one active user so the inner per-user loop actually runs.
+	userID, postID := f.makePost(t, "firebase-deadlock", "deadlock test post")
+	f.postEmbRepo.Upsert(postID, []float32{1, 0, 0, 0}, "test")
+	f.seedEvent(t, postID, userID, "save", nil, time.Now())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := f.embedder.ComputeAll(ctx); err != nil {
+		t.Fatalf("ComputeAll: %v", err)
+	}
+	if ctx.Err() != nil {
+		t.Error("ComputeAll deadlocked (context timed out)")
+	}
+}

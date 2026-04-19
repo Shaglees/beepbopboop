@@ -90,7 +90,9 @@ func Open(url string) (*sql.DB, error) {
 	// Post scheduling: status tracks published vs scheduled, scheduled_at holds publish time
 	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'published'")
 	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ")
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS source_published_at TIMESTAMPTZ")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_scheduled ON posts(status, scheduled_at) WHERE status = 'scheduled'")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_source_published_at ON posts(source_published_at DESC)")
 
 	// Post reactions (explicit user feedback for agent content tuning)
 	db.Exec(`CREATE TABLE IF NOT EXISTS post_reactions (

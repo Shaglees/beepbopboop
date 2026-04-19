@@ -697,6 +697,49 @@ func TestLintPost_InvalidPostType(t *testing.T) {
 	}
 }
 
+func TestLintPost_SourcePublishedAtFutureInvalid(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	_, resp := lintCall(t, h, `{"title":"t","body":"b","source_published_at":"2099-01-01T00:00:00Z"}`)
+	if resp["valid"] != false {
+		t.Error("expected valid=false for future source_published_at")
+	}
+	if !hasFieldError(lintErrors(resp), "source_published_at") {
+		t.Error("expected error for future source_published_at")
+	}
+}
+
+func TestPostHandler_SourcePublishedAtRoundTrip(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	agentRepo := repository.NewAgentRepo(db)
+	postRepo := repository.NewPostRepo(db)
+
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-source-date")
+	agent, _ := agentRepo.Create(user.ID, "Source Date Agent")
+
+	h := handler.NewPostHandler(agentRepo, postRepo)
+
+	body := `{"title":"Source dated post","body":"Test","source_published_at":"2026-04-10T14:30:00Z"}`
+	req := httptest.NewRequest("POST", "/posts", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithAgentID(req.Context(), agent.ID))
+	rec := httptest.NewRecorder()
+
+	h.CreatePost(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["source_published_at"] != "2026-04-10T14:30:00Z" {
+		t.Fatalf("expected source_published_at to round-trip, got %v", resp["source_published_at"])
+	}
+}
+
 func TestLintPost_InvalidVisibility(t *testing.T) {
 	db := database.OpenTestDB(t)
 	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))

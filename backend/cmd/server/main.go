@@ -100,9 +100,11 @@ func main() {
 	creatorsH := handler.NewCreatorsHandler(creatorRepo, userRepo, userSettingsRepo)
 
 	prototypeStore := embedding.NewPrototypeStore(db)
-	if err := prototypeStore.Compute(context.Background()); err != nil {
-		slog.Warn("prototype store: initial compute failed", "error", err)
-	}
+	go func() {
+		if err := prototypeStore.Compute(context.Background()); err != nil {
+			slog.Warn("prototype store: initial compute failed", "error", err)
+		}
+	}()
 	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo)
 
 	// Middleware

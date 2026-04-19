@@ -76,9 +76,9 @@ func seedOldPopularPost(t *testing.T, db *sql.DB, postEmbRepo *repository.PostEm
 	}
 }
 
-// recordDwell creates a post with a 4-dim embedding and inserts a view event
-// with the given dwell_ms for the user.
-func recordDwell(t *testing.T, db *sql.DB, postEmbRepo *repository.PostEmbeddingRepo, userID string, dwellMs int) {
+// recordDwell creates a post, writes a 1536-dim embedding to posts.embedding
+// (the same column BackfillWorker writes to), and inserts a view event.
+func recordDwell(t *testing.T, db *sql.DB, userID string, dwellMs int) {
 	t.Helper()
 	id := nextID("dwell")
 	if _, err := db.Exec(`
@@ -88,8 +88,10 @@ func recordDwell(t *testing.T, db *sql.DB, postEmbRepo *repository.PostEmbedding
 		id, "Dwell post "+id); err != nil {
 		t.Fatalf("recordDwell insert post: %v", err)
 	}
-	if err := postEmbRepo.Upsert(id, []float32{1, 0, 0, 0}, "test"); err != nil {
-		t.Fatalf("recordDwell upsert embedding: %v", err)
+	vec := make([]float32, 1536)
+	vec[0] = 1.0
+	if err := embedding.NewEmbeddingRepo(db).StoreEmbedding(id, vec); err != nil {
+		t.Fatalf("recordDwell store embedding: %v", err)
 	}
 	if _, err := db.Exec(`
 		INSERT INTO post_events (post_id, user_id, event_type, dwell_ms)
@@ -200,7 +202,6 @@ func TestPrototypeVectors_SportsFashionCosineSimilarityLow(t *testing.T) {
 // stores an embedding after exactly 3 high-dwell posts, and not before.
 func TestEarlySignalUpdate_FiresAfterThreeHighDwellPosts(t *testing.T) {
 	db := database.OpenTestDB(t)
-	postEmbRepo := repository.NewPostEmbeddingRepo(db)
 	userRepo := repository.NewUserRepo(db)
 
 	u, err := userRepo.FindOrCreateByFirebaseUID("firebase-earlysignal")
@@ -210,14 +211,14 @@ func TestEarlySignalUpdate_FiresAfterThreeHighDwellPosts(t *testing.T) {
 	cs := embedding.NewColdStartUpdater(db)
 
 	// Two events: threshold not reached.
-	recordDwell(t, db, postEmbRepo, u.ID, 6000)
-	recordDwell(t, db, postEmbRepo, u.ID, 8000)
+	recordDwell(t, db, u.ID, 6000)
+	recordDwell(t, db, u.ID, 8000)
 	if embeddingUpdated(t, db, u.ID) {
 		t.Error("embedding must not exist before MaybeRefresh is called")
 	}
 
 	// Third event + explicit refresh: embedding must be written.
-	recordDwell(t, db, postEmbRepo, u.ID, 7000)
+	recordDwell(t, db, u.ID, 7000)
 	if err := cs.MaybeRefresh(context.Background(), u.ID); err != nil {
 		t.Fatalf("MaybeRefresh: %v", err)
 	}
@@ -230,14 +231,13 @@ func TestEarlySignalUpdate_FiresAfterThreeHighDwellPosts(t *testing.T) {
 // no-op when fewer than 3 high-dwell posts exist.
 func TestEarlySignalUpdate_DoesNotFireBeforeThreshold(t *testing.T) {
 	db := database.OpenTestDB(t)
-	postEmbRepo := repository.NewPostEmbeddingRepo(db)
 	userRepo := repository.NewUserRepo(db)
 
 	u, _ := userRepo.FindOrCreateByFirebaseUID("firebase-earlysignal-noop")
 	cs := embedding.NewColdStartUpdater(db)
 
-	recordDwell(t, db, postEmbRepo, u.ID, 6000)
-	recordDwell(t, db, postEmbRepo, u.ID, 8000)
+	recordDwell(t, db, u.ID, 6000)
+	recordDwell(t, db, u.ID, 8000)
 
 	if err := cs.MaybeRefresh(context.Background(), u.ID); err != nil {
 		t.Fatalf("MaybeRefresh: %v", err)
@@ -338,5 +338,96 @@ func TestIsZero_EmptySlice(t *testing.T) {
 func TestIsZero_NonZeroElement(t *testing.T) {
 	if embedding.IsZero([]float32{0, 0, 1, 0}) {
 		t.Error("IsZero([0,0,1,0]) should be false")
+	}
+}
+
+// --- Fix 1: signal guard ---
+
+// TestMaybeRefresh_SkipsHighSignalCountUser verifies MaybeRefresh is a no-op
+// when the user already has a mature embedding (post_count >= 20).
+func TestMaybeRefresh_SkipsHighSignalCountUser(t *testing.T) {
+	db := database.OpenTestDB(t)
+	userRepo := repository.NewUserRepo(db)
+	userEmbRepo := repository.NewUserEmbeddingRepo(db)
+
+	u, _ := userRepo.FindOrCreateByFirebaseUID("firebase-highsignal")
+	cs := embedding.NewColdStartUpdater(db)
+
+	// Seed a mature embedding well above the guard threshold.
+	matureVec := []float32{0, 1, 0, 0}
+	if err := userEmbRepo.Upsert(context.Background(), u.ID, matureVec, 25); err != nil {
+		t.Fatalf("seed mature embedding: %v", err)
+	}
+
+	// Record enough high-dwell events to normally trigger a refresh.
+	recordDwell(t, db, u.ID, 6000)
+	recordDwell(t, db, u.ID, 7000)
+	recordDwell(t, db, u.ID, 8000)
+
+	if err := cs.MaybeRefresh(context.Background(), u.ID); err != nil {
+		t.Fatalf("MaybeRefresh: %v", err)
+	}
+
+	stored, err := userEmbRepo.Get(context.Background(), u.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if stored == nil || stored.PostCount != 25 {
+		t.Errorf("expected mature embedding (post_count=25) preserved, got %v", stored)
+	}
+}
+
+// --- Fix 2: embedding source ---
+
+// TestMaybeRefresh_FindsBackfillWorkerEmbeddings verifies MaybeRefresh reads
+// from posts.embedding — the same column BackfillWorker writes to via EmbeddingRepo.
+func TestMaybeRefresh_FindsBackfillWorkerEmbeddings(t *testing.T) {
+	db := database.OpenTestDB(t)
+	userRepo := repository.NewUserRepo(db)
+
+	u, _ := userRepo.FindOrCreateByFirebaseUID("firebase-backfill-source")
+	cs := embedding.NewColdStartUpdater(db)
+
+	// recordDwell now writes to posts.embedding (BackfillWorker path).
+	recordDwell(t, db, u.ID, 6000)
+	recordDwell(t, db, u.ID, 7000)
+	recordDwell(t, db, u.ID, 8000)
+
+	if err := cs.MaybeRefresh(context.Background(), u.ID); err != nil {
+		t.Fatalf("MaybeRefresh: %v", err)
+	}
+	if !embeddingUpdated(t, db, u.ID) {
+		t.Error("MaybeRefresh must find embeddings written by BackfillWorker to posts.embedding")
+	}
+}
+
+// --- Fix 3: dimension mismatch ---
+
+// TestCompute_DimensionMismatch_ReturnsError verifies Compute returns an error
+// when two rows for the same label have different embedding dimensions.
+func TestCompute_DimensionMismatch_ReturnsError(t *testing.T) {
+	db := database.OpenTestDB(t)
+	postEmbRepo := repository.NewPostEmbeddingRepo(db)
+
+	id1 := nextID("mismatch")
+	seedLabeledPost(t, db, postEmbRepo, id1, "sports", [4]float32{1, 0, 0, 0})
+
+	// Insert a second sports post with 3-dim embedding (mismatches the 4-dim above).
+	id2 := nextID("mismatch")
+	if _, err := db.Exec(`
+		INSERT INTO posts (id, agent_id, user_id, title, body, labels, status, display_hint)
+		VALUES ($1, 'sports-bot', 'system', 'T', 'B', '["sports"]', 'published', 'card')
+		ON CONFLICT DO NOTHING`, id2); err != nil {
+		t.Fatalf("insert mismatched post: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO post_embeddings (post_id, embedding, model_version)
+		VALUES ($1, '{0,1,0}', 'test')`, id2); err != nil {
+		t.Fatalf("insert mismatched embedding: %v", err)
+	}
+
+	store := embedding.NewPrototypeStore(db)
+	if err := store.Compute(context.Background()); err == nil {
+		t.Error("Compute must return an error when a label has inconsistent embedding dimensions")
 	}
 }

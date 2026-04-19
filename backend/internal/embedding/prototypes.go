@@ -73,7 +73,12 @@ func (ps *PrototypeStore) Compute(ctx context.Context) error {
 		if err := rows.Scan(&label, &f64); err != nil {
 			return fmt.Errorf("scan prototype row: %w", err)
 		}
-		if _, ok := sums[label]; !ok {
+		if existing, ok := sums[label]; ok {
+			if len(f64) != len(existing) {
+				return fmt.Errorf("prototype compute: dimension mismatch for label %q: got %d, want %d",
+					label, len(f64), len(existing))
+			}
+		} else {
 			sums[label] = make([]float64, len(f64))
 		}
 		for i, v := range f64 {

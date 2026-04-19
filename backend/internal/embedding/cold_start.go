@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/lib/pq"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
 
 const (
-	highDwellThresholdMs = 5000 // dwell events above this are "high engagement"
-	coldStartMinPosts    = 3    // minimum high-dwell posts before early-signal update fires
+	highDwellThresholdMs  = 5000 // dwell events above this are "high engagement"
+	coldStartMinPosts     = 3    // minimum high-dwell posts before early-signal update fires
+	coldStartMaxSignalCount = 20 // users with post_count >= this have a mature embedding; skip refresh
 )
 
 // ColdStartUpdater recomputes a user's embedding from their first high-dwell
@@ -31,18 +31,28 @@ func NewColdStartUpdater(db *sql.DB) *ColdStartUpdater {
 }
 
 // MaybeRefresh recomputes and stores the user's embedding if they have at least
-// coldStartMinPosts distinct high-dwell posts in the last 24 hours. A no-op when
-// the threshold has not yet been reached.
+// coldStartMinPosts distinct high-dwell posts in the last 24 hours. Skipped when
+// the user already has a mature embedding (post_count >= coldStartMaxSignalCount).
 func (cs *ColdStartUpdater) MaybeRefresh(ctx context.Context, userID string) error {
+	existing, err := cs.userEmbRepo.Get(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("cold start: get existing embedding: %w", err)
+	}
+	if existing != nil && existing.PostCount >= coldStartMaxSignalCount {
+		return nil
+	}
+
+	// Read from posts.embedding — the same column BackfillWorker writes to.
 	rows, err := cs.db.QueryContext(ctx, `
-		SELECT pe.embedding
+		SELECT p.embedding::text
 		FROM post_events evt
-		JOIN post_embeddings pe ON pe.post_id = evt.post_id
+		JOIN posts p ON p.id = evt.post_id
 		WHERE evt.user_id = $1
 		  AND evt.event_type = 'view'
 		  AND evt.dwell_ms > $2
 		  AND evt.created_at > NOW() - INTERVAL '24 hours'
-		GROUP BY pe.post_id, pe.embedding`,
+		  AND p.embedding IS NOT NULL
+		GROUP BY p.id, p.embedding`,
 		userID, highDwellThresholdMs)
 	if err != nil {
 		return fmt.Errorf("cold start: query high-dwell posts: %w", err)
@@ -52,15 +62,19 @@ func (cs *ColdStartUpdater) MaybeRefresh(ctx context.Context, userID string) err
 	var sum []float64
 	count := 0
 	for rows.Next() {
-		var f64 pq.Float64Array
-		if err := rows.Scan(&f64); err != nil {
+		var vecText string
+		if err := rows.Scan(&vecText); err != nil {
 			return fmt.Errorf("cold start: scan embedding: %w", err)
 		}
-		if sum == nil {
-			sum = make([]float64, len(f64))
+		vec32, err := parseVec(vecText)
+		if err != nil {
+			return fmt.Errorf("cold start: parse embedding: %w", err)
 		}
-		for i, v := range f64 {
-			sum[i] += v
+		if sum == nil {
+			sum = make([]float64, len(vec32))
+		}
+		for i, v := range vec32 {
+			sum[i] += float64(v)
 		}
 		count++
 	}

@@ -2,7 +2,9 @@ package sports
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -77,16 +79,23 @@ func NewService() *Service {
 	}
 }
 
-// FetchAll returns games from all supported leagues.
+// FetchAll returns games from all supported leagues. Per-league errors are
+// logged and skipped so partial results are still returned; an error is only
+// returned when every league fails.
 func (s *Service) FetchAll() ([]FetchedGame, error) {
 	var all []FetchedGame
+	var errs []error
 	for _, lg := range leagueDefs {
 		games, err := s.fetchLeagueCached(lg)
 		if err != nil {
-			// Log is handled by the caller; skip failing leagues.
+			slog.Warn("sports: fetch league failed", "league", lg.name, "error", err)
+			errs = append(errs, err)
 			continue
 		}
 		all = append(all, games...)
+	}
+	if len(errs) == len(leagueDefs) {
+		return nil, fmt.Errorf("all ESPN leagues failed: %w", errors.Join(errs...))
 	}
 	return all, nil
 }

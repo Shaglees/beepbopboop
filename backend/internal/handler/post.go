@@ -79,19 +79,20 @@ func NewPostHandler(agentRepo *repository.AgentRepo, postRepo *repository.PostRe
 }
 
 type createPostRequest struct {
-	Title       string          `json:"title"`
-	Body        string          `json:"body"`
-	ImageURL    string          `json:"image_url,omitempty"`
-	ExternalURL string          `json:"external_url,omitempty"`
-	Locality    string          `json:"locality,omitempty"`
-	Latitude    *float64        `json:"latitude,omitempty"`
-	Longitude   *float64        `json:"longitude,omitempty"`
-	PostType    string          `json:"post_type,omitempty"`
-	Visibility  string          `json:"visibility,omitempty"`
-	DisplayHint string          `json:"display_hint,omitempty"`
-	Labels      []string        `json:"labels,omitempty"`
-	Images      json.RawMessage `json:"images,omitempty"`
-	ScheduledAt *time.Time      `json:"scheduled_at,omitempty"`
+	Title             string          `json:"title"`
+	Body              string          `json:"body"`
+	ImageURL          string          `json:"image_url,omitempty"`
+	ExternalURL       string          `json:"external_url,omitempty"`
+	Locality          string          `json:"locality,omitempty"`
+	Latitude          *float64        `json:"latitude,omitempty"`
+	Longitude         *float64        `json:"longitude,omitempty"`
+	PostType          string          `json:"post_type,omitempty"`
+	Visibility        string          `json:"visibility,omitempty"`
+	DisplayHint       string          `json:"display_hint,omitempty"`
+	Labels            []string        `json:"labels,omitempty"`
+	Images            json.RawMessage `json:"images,omitempty"`
+	ScheduledAt       *time.Time      `json:"scheduled_at,omitempty"`
+	SourcePublishedAt *time.Time      `json:"source_published_at,omitempty"`
 }
 
 // --- Validation types ---
@@ -176,6 +177,12 @@ func validatePost(req *createPostRequest) validationResult {
 	if req.ImageURL != "" {
 		if msg := validateURL(req.ImageURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "image_url", Code: "invalid_url", Message: msg})
+		}
+	}
+
+	if req.SourcePublishedAt != nil {
+		if req.SourcePublishedAt.After(time.Now().Add(24 * time.Hour)) {
+			errs = append(errs, validationIssue{Field: "source_published_at", Code: "invalid", Message: "source_published_at cannot be in the future"})
 		}
 	}
 
@@ -605,21 +612,22 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	post, err := h.postRepo.Create(repository.CreatePostParams{
-		AgentID:     agentID,
-		UserID:      agent.UserID,
-		Title:       req.Title,
-		Body:        req.Body,
-		ImageURL:    req.ImageURL,
-		ExternalURL: req.ExternalURL,
-		Locality:    req.Locality,
-		Latitude:    req.Latitude,
-		Longitude:   req.Longitude,
-		PostType:    req.PostType,
-		Visibility:  req.Visibility,
-		DisplayHint: req.DisplayHint,
-		Labels:      req.Labels,
-		Images:      req.Images,
-		ScheduledAt: req.ScheduledAt,
+		AgentID:           agentID,
+		UserID:            agent.UserID,
+		Title:             req.Title,
+		Body:              req.Body,
+		ImageURL:          req.ImageURL,
+		ExternalURL:       req.ExternalURL,
+		Locality:          req.Locality,
+		Latitude:          req.Latitude,
+		Longitude:         req.Longitude,
+		PostType:          req.PostType,
+		Visibility:        req.Visibility,
+		DisplayHint:       req.DisplayHint,
+		Labels:            req.Labels,
+		Images:            req.Images,
+		ScheduledAt:       req.ScheduledAt,
+		SourcePublishedAt: req.SourcePublishedAt,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create post"})

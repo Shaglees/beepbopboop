@@ -26,21 +26,22 @@ type FeedWeights struct {
 }
 
 type CreatePostParams struct {
-	AgentID     string
-	UserID      string
-	Title       string
-	Body        string
-	ImageURL    string
-	ExternalURL string
-	Locality    string
-	Latitude    *float64
-	Longitude   *float64
-	PostType    string
-	Visibility  string
-	DisplayHint string
-	Labels      []string
-	Images      json.RawMessage
-	ScheduledAt *time.Time
+	AgentID           string
+	UserID            string
+	Title             string
+	Body              string
+	ImageURL          string
+	ExternalURL       string
+	Locality          string
+	Latitude          *float64
+	Longitude         *float64
+	PostType          string
+	Visibility        string
+	DisplayHint       string
+	Labels            []string
+	Images            json.RawMessage
+	ScheduledAt       *time.Time
+	SourcePublishedAt *time.Time
 }
 
 type PostRepo struct {
@@ -55,7 +56,7 @@ func NewPostRepo(db *sql.DB) *PostRepo {
 const postColumns = `p.id, p.agent_id, a.name, p.user_id, p.title, p.body,
 	p.image_url, p.external_url, p.locality, p.latitude, p.longitude,
 	p.post_type, p.visibility, p.display_hint, p.labels, p.images,
-	p.status, p.scheduled_at, p.created_at, p.view_count, p.save_count,
+	p.status, p.scheduled_at, p.source_published_at, p.created_at, p.view_count, p.save_count,
 	p.reaction_count, p.seq`
 
 // scanPost scans a row into a model.Post and returns the seq.
@@ -65,6 +66,7 @@ func scanPost(scanner interface{ Scan(dest ...any) error }, extra ...any) (model
 	var imageURL, externalURL, locality, postType, labelsJSON, imagesJSON sql.NullString
 	var latitude, longitude sql.NullFloat64
 	var scheduledAt sql.NullTime
+	var sourcePublishedAt sql.NullTime
 	var seq int64
 
 	dest := []any{
@@ -72,7 +74,7 @@ func scanPost(scanner interface{ Scan(dest ...any) error }, extra ...any) (model
 		&p.Title, &p.Body,
 		&imageURL, &externalURL, &locality, &latitude, &longitude,
 		&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON,
-		&p.Status, &scheduledAt, &p.CreatedAt, &p.ViewCount, &p.SaveCount,
+		&p.Status, &scheduledAt, &sourcePublishedAt, &p.CreatedAt, &p.ViewCount, &p.SaveCount,
 		&p.ReactionCount, &seq,
 	}
 	dest = append(dest, extra...)
@@ -98,6 +100,9 @@ func scanPost(scanner interface{ Scan(dest ...any) error }, extra ...any) (model
 	}
 	if scheduledAt.Valid {
 		p.ScheduledAt = &scheduledAt.Time
+	}
+	if sourcePublishedAt.Valid {
+		p.SourcePublishedAt = &sourcePublishedAt.Time
 	}
 	return p, seq, nil
 }
@@ -135,13 +140,13 @@ func (r *PostRepo) Create(p CreatePostParams) (*model.Post, error) {
 	}
 
 	_, err = r.db.Exec(`
-		INSERT INTO posts (id, agent_id, user_id, title, body, image_url, external_url, locality, latitude, longitude, post_type, visibility, display_hint, labels, images, status, scheduled_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		INSERT INTO posts (id, agent_id, user_id, title, body, image_url, external_url, locality, latitude, longitude, post_type, visibility, display_hint, labels, images, status, scheduled_at, source_published_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
 		id, p.AgentID, p.UserID, p.Title, p.Body,
 		nullString(p.ImageURL), nullString(p.ExternalURL),
 		nullString(p.Locality), nullFloat64(p.Latitude), nullFloat64(p.Longitude),
 		nullString(p.PostType), visibility, displayHint, labelsJSON, nullRawJSON(p.Images),
-		status, scheduledAt,
+		status, scheduledAt, nullTime(p.SourcePublishedAt),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert post: %w", err)
@@ -627,8 +632,12 @@ func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights)
 	if len(w.FollowedTeams) > 0 && p.ExternalURL != "" {
 		var g struct {
 			Sport string `json:"sport"`
-			Home  struct{ Abbr string `json:"abbr"` } `json:"home"`
-			Away  struct{ Abbr string `json:"abbr"` } `json:"away"`
+			Home  struct {
+				Abbr string `json:"abbr"`
+			} `json:"home"`
+			Away struct {
+				Abbr string `json:"abbr"`
+			} `json:"away"`
 		}
 		if json.Unmarshal([]byte(p.ExternalURL), &g) == nil && g.Sport != "" {
 			sport := strings.ToLower(g.Sport)
@@ -880,7 +889,6 @@ func (r *PostRepo) UpsertSportsPost(gameID, title, body, league, gameDataJSON st
 	return err
 }
 
-
 func nullRawJSON(j json.RawMessage) sql.NullString {
 	if len(j) == 0 || string(j) == "null" {
 		return sql.NullString{}
@@ -900,4 +908,11 @@ func nullFloat64(f *float64) sql.NullFloat64 {
 		return sql.NullFloat64{}
 	}
 	return sql.NullFloat64{Float64: *f, Valid: true}
+}
+
+func nullTime(t *time.Time) sql.NullTime {
+	if t == nil {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: *t, Valid: true}
 }

@@ -41,7 +41,7 @@ class ParsedDate:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Filter sports news by publication date")
     p.add_argument("--timezone", default="America/Vancouver", help="IANA timezone (default: America/Vancouver)")
-    p.add_argument("--max-age-days", type=int, default=1, help="Max age in days to accept (default: 1)")
+    p.add_argument("--max-age-days", type=int, default=10, help="Max age in days to accept (default: 10)")
     p.add_argument("--today", help="Override today's date (YYYY-MM-DD) for deterministic testing")
     return p.parse_args()
 

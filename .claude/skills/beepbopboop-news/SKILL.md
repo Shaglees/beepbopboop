@@ -266,9 +266,9 @@ Instead of individual scoreboard posts for every game, create a single standings
    cat /tmp/sports_news_candidates.json | \
      python3 /Users/sgleeson/beepbopboop/scripts/filter_sports_news_by_date.py \
        --timezone America/Vancouver \
-       --max-age-days 1 > /tmp/sports_news_filtered.json
+       --max-age-days 10 > /tmp/sports_news_filtered.json
    ```
-3. Only use items from `fresh[]` (same day or yesterday in local timezone). Never use `stale[]` or `invalid[]` items.
+3. Only use items from `fresh[]` (published within the last 10 days in local timezone). Never use `stale[]` or `invalid[]` items.
 4. If `fresh[]` is empty, skip team-news article generation for that team (do not infer from old stories).
 5. If newsworthy fresh items exist, generate **article** posts:
    - `post_type`: `article`

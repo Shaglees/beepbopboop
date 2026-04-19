@@ -21,9 +21,9 @@ Official sources for league schedules. Always fetch from these before falling ba
    cat /tmp/sports_news_candidates.json | \
      python3 /Users/sgleeson/beepbopboop/scripts/filter_sports_news_by_date.py \
        --timezone America/Vancouver \
-       --max-age-days 1
+       --max-age-days 10
    ```
-   Use only `fresh[]` items (same day or yesterday in local time). Drop stale/future/undated stories.
+   Use only `fresh[]` items (published within the last 10 days in local time). Drop stale/future/undated stories.
 
 ## Preferred Teams
 

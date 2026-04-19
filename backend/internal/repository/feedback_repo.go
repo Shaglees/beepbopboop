@@ -24,9 +24,8 @@ func (r *FeedbackRepo) Upsert(postID, userID string, response json.RawMessage) (
 		INSERT INTO user_feedback (post_id, user_id, response)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (post_id, user_id) DO UPDATE SET
-			response   = excluded.response,
-			created_at = CURRENT_TIMESTAMP`,
-		postID, userID, string(response),
+			response = excluded.response`,
+		postID, userID, response,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("upsert feedback: %w", err)

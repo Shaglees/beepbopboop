@@ -34,10 +34,6 @@ func (h *FeedbackHandler) SubmitResponse(w http.ResponseWriter, r *http.Request)
 	}
 
 	postID := chi.URLParam(r, "postID")
-	if postID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "postID is required"})
-		return
-	}
 
 	var body model.FeedbackResponseBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -94,10 +90,6 @@ func (h *FeedbackHandler) GetResponses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	postID := chi.URLParam(r, "postID")
-	if postID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "postID is required"})
-		return
-	}
 
 	summary, err := h.feedbackRepo.GetSummary(postID, user.ID)
 	if err != nil {

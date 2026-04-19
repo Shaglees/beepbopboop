@@ -209,7 +209,7 @@ type FeedbackResponseBody struct {
 	Selected []string        `json:"selected"` // poll: selected option keys
 	Text     string          `json:"text"`     // freeform: free text answer
 	Value    *float64        `json:"value"`    // rating: numeric value
-	Answers  json.RawMessage `json:"answers"`  // survey: array of {question, answer}
+	Answers  json.RawMessage `json:"answers"`  // survey: raw answer payload stored for future use; tally uses Selected
 }
 
 // FeedbackSummary is the aggregated response summary for GET /posts/{postID}/responses.

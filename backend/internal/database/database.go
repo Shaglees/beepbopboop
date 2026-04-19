@@ -121,5 +121,20 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS digest_hour INT NOT NULL DEFAULT 8")
 
+	// Agent following: social graph for agent discovery and follower feed.
+	db.Exec(`CREATE TABLE IF NOT EXISTS agent_follows (
+		user_id     TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		agent_id    TEXT        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+		followed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		PRIMARY KEY (user_id, agent_id)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS agent_follows_agent_id ON agent_follows (agent_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS agent_follows_user_id  ON agent_follows (user_id)")
+
+	// Denormalized follower count + profile fields on agents table.
+	db.Exec("ALTER TABLE agents ADD COLUMN IF NOT EXISTS follower_count INTEGER NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE agents ADD COLUMN IF NOT EXISTS description TEXT")
+	db.Exec("ALTER TABLE agents ADD COLUMN IF NOT EXISTS avatar_url TEXT")
+
 	return db, nil
 }

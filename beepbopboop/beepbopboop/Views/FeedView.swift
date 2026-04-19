@@ -3,6 +3,7 @@ import SwiftUI
 struct FeedView: View {
     @StateObject private var forYouVM: FeedListViewModel
     @StateObject private var communityVM: FeedListViewModel
+    @StateObject private var followingVM: FeedListViewModel
     @StateObject private var personalVM: FeedListViewModel
     @StateObject private var savedVM: FeedListViewModel
     @State private var selectedTab = 0
@@ -13,13 +14,16 @@ struct FeedView: View {
     private let authService: AuthService
     private let apiService: APIService
     private let notificationService: NotificationService?
+    private let calendarService: CalendarService
 
-    init(authService: AuthService, apiService: APIService, notificationService: NotificationService? = nil) {
+    init(authService: AuthService, apiService: APIService, notificationService: NotificationService? = nil, calendarService: CalendarService) {
         self.authService = authService
         self.apiService = apiService
         self.notificationService = notificationService
+        self.calendarService = calendarService
         _forYouVM = StateObject(wrappedValue: FeedListViewModel(feedType: .forYou, apiService: apiService))
         _communityVM = StateObject(wrappedValue: FeedListViewModel(feedType: .community, apiService: apiService))
+        _followingVM = StateObject(wrappedValue: FeedListViewModel(feedType: .following, apiService: apiService))
         _personalVM = StateObject(wrappedValue: FeedListViewModel(feedType: .personal, apiService: apiService))
         _savedVM = StateObject(wrappedValue: FeedListViewModel(feedType: .saved, apiService: apiService))
     }
@@ -46,12 +50,16 @@ struct FeedView: View {
                         .tag(1)
                         .task { if communityVM.posts.isEmpty && !communityVM.isLoading { await communityVM.refresh() } }
 
-                    FeedListView(viewModel: personalVM, isHeaderVisible: $isHeaderVisible, onSettingsTapped: { showSettings = true })
+                    FeedListView(viewModel: followingVM, isHeaderVisible: $isHeaderVisible, onSettingsTapped: { showSettings = true })
                         .tag(2)
+                        .task { if followingVM.posts.isEmpty && !followingVM.isLoading { await followingVM.refresh() } }
+
+                    FeedListView(viewModel: personalVM, isHeaderVisible: $isHeaderVisible, onSettingsTapped: { showSettings = true })
+                        .tag(3)
                         .task { if personalVM.posts.isEmpty && !personalVM.isLoading { await personalVM.refresh() } }
 
                     FeedListView(viewModel: savedVM, isHeaderVisible: $isHeaderVisible, onSettingsTapped: { showSettings = true })
-                        .tag(3)
+                        .tag(4)
                         .task { if savedVM.posts.isEmpty && !savedVM.isLoading { await savedVM.refresh() } }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -59,7 +67,7 @@ struct FeedView: View {
             .toolbar(.hidden, for: .navigationBar)
             .animation(.easeInOut(duration: 0.25), value: isHeaderVisible)
             .sheet(isPresented: $showSettings) {
-                SettingsView(apiService: apiService, notificationService: notificationService)
+                SettingsView(apiService: apiService, notificationService: notificationService, calendarService: calendarService)
                     .onDisappear {
                         // Refresh geo-dependent feeds after settings change
                         Task {
@@ -85,8 +93,15 @@ struct FeedView: View {
         guard !forYouVM.posts.isEmpty else { return }
         hasRequestedNotifications = true
         await ns.checkStatus()
-        guard ns.authorizationStatus == .notDetermined else { return }
-        _ = await ns.requestAuthorization()
+        if ns.authorizationStatus == .notDetermined {
+            _ = await ns.requestAuthorization()
+        }
+        if ns.authorizationStatus == .authorized {
+            let digestHour = UserDefaults.standard.object(forKey: "settings_digestHour") as? Int ?? 8
+            if let posts = try? await apiService.fetchDigestPosts() {
+                await ns.scheduleDailyDigest(posts: posts, digestHour: digestHour)
+            }
+        }
     }
 
     // MARK: - Title Bar
@@ -120,14 +135,17 @@ struct FeedView: View {
 
     private var tabBar: some View {
         GlassEffectContainer(spacing: 4) {
-            HStack(spacing: 4) {
-                tabButton("For You", tag: 0)
-                tabButton("Community", tag: 1)
-                tabButton("Personal", tag: 2)
-                tabButton("Saved", tag: 3, systemImage: "bookmark")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    tabButton("For You", tag: 0)
+                    tabButton("Community", tag: 1)
+                    tabButton("Following", tag: 2, systemImage: "person.2")
+                    tabButton("Personal", tag: 3)
+                    tabButton("Saved", tag: 4, systemImage: "bookmark")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
         }
     }
 

@@ -166,27 +166,37 @@ extension GameData {
         return iso.date(from: gt)
     }
 
+    private static let gameTimeWithTZ: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a zzz"
+        return f
+    }()
+    private static let gameTimeShort: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+    private static let gameDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEEE, MMM d"
+        return f
+    }()
+
     /// Formatted game time with timezone abbreviation (e.g. "7:30 PM EDT").
     var formattedGameTime: String? {
         guard let date = gameDate else { return gameTime }
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a zzz"
-        return f.string(from: date)
+        return GameData.gameTimeWithTZ.string(from: date)
     }
 
     /// Formatted game time without timezone (for compact cards).
     var formattedGameTimeShort: String? {
         guard let date = gameDate else { return gameTime }
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a"
-        return f.string(from: date)
+        return GameData.gameTimeShort.string(from: date)
     }
 
     var formattedGameDate: String? {
         guard let date = gameDate else { return nil }
-        let f = DateFormatter()
-        f.dateFormat = "EEEE, MMM d"
-        return f.string(from: date)
+        return GameData.gameDateFormatter.string(from: date)
     }
 
     /// Countdown string like "IN 3 HOURS" or "TOMORROW" for matchup cards.

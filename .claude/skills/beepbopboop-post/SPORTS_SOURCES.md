@@ -16,6 +16,14 @@ Official sources for league schedules. Always fetch from these before falling ba
 4. Filter results by the user's preferred team (from `BEEPBOPBOOP_SPORTS_TEAMS` config)
 5. Use the official data for dates, times, opponents, and venues
 6. Only use WebSearch for enrichment (ticket links, venue atmosphere, travel info) — **never for the schedule itself**
+7. For team-news articles (trades, injuries, playoff updates), validate article publication date before use:
+   ```bash
+   cat /tmp/sports_news_candidates.json | \
+     python3 /Users/sgleeson/beepbopboop/scripts/filter_sports_news_by_date.py \
+       --timezone America/Vancouver \
+       --max-age-days 10
+   ```
+   Use only `fresh[]` items (published within the last 10 days in local time). Drop stale/future/undated stories.
 
 ## Preferred Teams
 

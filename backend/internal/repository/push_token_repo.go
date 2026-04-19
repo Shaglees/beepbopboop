@@ -35,8 +35,20 @@ func (r *PushTokenRepo) Upsert(userID, token, platform string) error {
 // Score: save=3, click=2, view=1.
 func (r *PushTokenRepo) TopUnseenPosts(userID string, limit int) ([]model.DigestPost, error) {
 	rows, err := r.db.Query(`
+		WITH engagement AS (
+		    SELECT post_id,
+		           COALESCE(SUM(CASE
+		               WHEN event_type = 'save'  THEN 3
+		               WHEN event_type = 'click' THEN 2
+		               WHEN event_type = 'view'  THEN 1
+		               ELSE 0
+		           END), 0) AS score
+		    FROM post_events
+		    GROUP BY post_id
+		)
 		SELECT p.id, p.title, p.body
 		FROM posts p
+		LEFT JOIN engagement e ON e.post_id = p.id
 		WHERE p.created_at > NOW() - INTERVAL '24 hours'
 		  AND p.status = 'published'
 		  AND NOT EXISTS (
@@ -45,16 +57,7 @@ func (r *PushTokenRepo) TopUnseenPosts(userID string, limit int) ([]model.Digest
 		        AND pe.user_id = $1
 		        AND pe.event_type = 'view'
 		  )
-		ORDER BY (
-		    SELECT COALESCE(SUM(CASE
-		        WHEN event_type = 'save'  THEN 3
-		        WHEN event_type = 'click' THEN 2
-		        WHEN event_type = 'view'  THEN 1
-		        ELSE 0
-		    END), 0)
-		    FROM post_events
-		    WHERE post_id = p.id
-		) DESC
+		ORDER BY COALESCE(e.score, 0) DESC
 		LIMIT $2`,
 		userID, limit,
 	)

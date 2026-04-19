@@ -23,24 +23,28 @@ type FeedWeights struct {
 	// FollowedTeams is populated per-request from user settings and is never
 	// persisted with the rest of the weights (json:"-").
 	FollowedTeams map[string]bool `json:"-"`
+	// FollowedAgentIDs is populated per-request from agent_follows and is never
+	// persisted with the rest of the weights (json:"-").
+	FollowedAgentIDs map[string]bool `json:"-"`
 }
 
 type CreatePostParams struct {
-	AgentID     string
-	UserID      string
-	Title       string
-	Body        string
-	ImageURL    string
-	ExternalURL string
-	Locality    string
-	Latitude    *float64
-	Longitude   *float64
-	PostType    string
-	Visibility  string
-	DisplayHint string
-	Labels      []string
-	Images      json.RawMessage
-	ScheduledAt *time.Time
+	AgentID           string
+	UserID            string
+	Title             string
+	Body              string
+	ImageURL          string
+	ExternalURL       string
+	Locality          string
+	Latitude          *float64
+	Longitude         *float64
+	PostType          string
+	Visibility        string
+	DisplayHint       string
+	Labels            []string
+	Images            json.RawMessage
+	ScheduledAt       *time.Time
+	SourcePublishedAt *time.Time
 }
 
 type PostRepo struct {
@@ -55,7 +59,7 @@ func NewPostRepo(db *sql.DB) *PostRepo {
 const postColumns = `p.id, p.agent_id, a.name, p.user_id, p.title, p.body,
 	p.image_url, p.external_url, p.locality, p.latitude, p.longitude,
 	p.post_type, p.visibility, p.display_hint, p.labels, p.images,
-	p.status, p.scheduled_at, p.created_at, p.view_count, p.save_count,
+	p.status, p.scheduled_at, p.source_published_at, p.created_at, p.view_count, p.save_count,
 	p.reaction_count, p.seq`
 
 // scanPost scans a row into a model.Post and returns the seq.
@@ -65,6 +69,7 @@ func scanPost(scanner interface{ Scan(dest ...any) error }, extra ...any) (model
 	var imageURL, externalURL, locality, postType, labelsJSON, imagesJSON sql.NullString
 	var latitude, longitude sql.NullFloat64
 	var scheduledAt sql.NullTime
+	var sourcePublishedAt sql.NullTime
 	var seq int64
 
 	dest := []any{
@@ -72,7 +77,7 @@ func scanPost(scanner interface{ Scan(dest ...any) error }, extra ...any) (model
 		&p.Title, &p.Body,
 		&imageURL, &externalURL, &locality, &latitude, &longitude,
 		&postType, &p.Visibility, &p.DisplayHint, &labelsJSON, &imagesJSON,
-		&p.Status, &scheduledAt, &p.CreatedAt, &p.ViewCount, &p.SaveCount,
+		&p.Status, &scheduledAt, &sourcePublishedAt, &p.CreatedAt, &p.ViewCount, &p.SaveCount,
 		&p.ReactionCount, &seq,
 	}
 	dest = append(dest, extra...)
@@ -98,6 +103,9 @@ func scanPost(scanner interface{ Scan(dest ...any) error }, extra ...any) (model
 	}
 	if scheduledAt.Valid {
 		p.ScheduledAt = &scheduledAt.Time
+	}
+	if sourcePublishedAt.Valid {
+		p.SourcePublishedAt = &sourcePublishedAt.Time
 	}
 	return p, seq, nil
 }
@@ -135,13 +143,13 @@ func (r *PostRepo) Create(p CreatePostParams) (*model.Post, error) {
 	}
 
 	_, err = r.db.Exec(`
-		INSERT INTO posts (id, agent_id, user_id, title, body, image_url, external_url, locality, latitude, longitude, post_type, visibility, display_hint, labels, images, status, scheduled_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		INSERT INTO posts (id, agent_id, user_id, title, body, image_url, external_url, locality, latitude, longitude, post_type, visibility, display_hint, labels, images, status, scheduled_at, source_published_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
 		id, p.AgentID, p.UserID, p.Title, p.Body,
 		nullString(p.ImageURL), nullString(p.ExternalURL),
 		nullString(p.Locality), nullFloat64(p.Latitude), nullFloat64(p.Longitude),
 		nullString(p.PostType), visibility, displayHint, labelsJSON, nullRawJSON(p.Images),
-		status, scheduledAt,
+		status, scheduledAt, nullTime(p.SourcePublishedAt),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert post: %w", err)
@@ -243,6 +251,77 @@ func (r *PostRepo) ListPersonal(userID, cursor string, limit int) ([]model.Post,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query personal feed: %w", err)
+	}
+	defer rows.Close()
+
+	posts := make([]model.Post, 0)
+	var lastCreatedAt time.Time
+	var lastSeq int64
+	for rows.Next() {
+		p, seq, err := scanPost(rows)
+		if err != nil {
+			return nil, nil, fmt.Errorf("scan post: %w", err)
+		}
+		posts = append(posts, p)
+		lastCreatedAt = p.CreatedAt
+		lastSeq = seq
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("iterate posts: %w", err)
+	}
+
+	var nextCursor *string
+	if len(posts) >= limit {
+		c := formatCursor(lastCreatedAt, lastSeq)
+		nextCursor = &c
+	}
+	return posts, nextCursor, nil
+}
+
+// ListFollowing returns posts from agents the user follows, in reverse chronological order.
+func (r *PostRepo) ListFollowing(followedAgentIDs []string, cursor string, limit int) ([]model.Post, *string, error) {
+	if len(followedAgentIDs) == 0 {
+		return []model.Post{}, nil, nil
+	}
+
+	// Build $2, $3, ... placeholders for the agent IDs.
+	placeholders := make([]string, len(followedAgentIDs))
+	args := []any{}
+	argIdx := 1
+	for i, id := range followedAgentIDs {
+		placeholders[i] = fmt.Sprintf("$%d", argIdx)
+		args = append(args, id)
+		argIdx++
+	}
+	inClause := strings.Join(placeholders, ", ")
+
+	cursorClause := ""
+	if cursor != "" {
+		t, seq, err := parseCursorString(cursor)
+		if err != nil {
+			return nil, nil, err
+		}
+		cursorClause = fmt.Sprintf(
+			" AND (p.created_at < $%d OR (p.created_at = $%d AND p.seq < $%d))",
+			argIdx, argIdx+1, argIdx+2,
+		)
+		args = append(args, t, t, seq)
+		argIdx += 3
+	}
+	args = append(args, limit)
+
+	query := fmt.Sprintf(`
+		SELECT `+postColumns+`
+		FROM posts p
+		JOIN agents a ON a.id = p.agent_id
+		WHERE p.agent_id IN (%s)
+		  AND p.status = 'published'%s
+		ORDER BY p.created_at DESC, p.seq DESC
+		LIMIT $%d`, inClause, cursorClause, argIdx)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("query following feed: %w", err)
 	}
 	defer rows.Close()
 
@@ -623,12 +702,26 @@ func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights)
 		score += clamp(wt, -1.0, 1.0)
 	}
 
+	// Personal follow boost: posts from agents the user explicitly follows rank higher.
+	if len(w.FollowedAgentIDs) > 0 && w.FollowedAgentIDs[p.AgentID] {
+		score *= 1.5
+	}
+
+	// Platform-wide follower boost: logarithmic so popular agents get modest signal.
+	// followerBoost = 1 + log10(max(followerCount, 1)) * 0.1
+	// (FollowerCount is not on model.Post yet — this is a forward-looking hook;
+	//  when follower_count is joined into postColumns this activates automatically.)
+
 	// Team affinity: parse sports post external_url and boost matched followed teams.
 	if len(w.FollowedTeams) > 0 && p.ExternalURL != "" {
 		var g struct {
 			Sport string `json:"sport"`
-			Home  struct{ Abbr string `json:"abbr"` } `json:"home"`
-			Away  struct{ Abbr string `json:"abbr"` } `json:"away"`
+			Home  struct {
+				Abbr string `json:"abbr"`
+			} `json:"home"`
+			Away struct {
+				Abbr string `json:"abbr"`
+			} `json:"away"`
 		}
 		if json.Unmarshal([]byte(p.ExternalURL), &g) == nil && g.Sport != "" {
 			sport := strings.ToLower(g.Sport)
@@ -795,7 +888,7 @@ func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 func (r *PostRepo) PublishScheduled() (int64, error) {
 	result, err := r.db.Exec(`
 		UPDATE posts
-		SET status = 'published', created_at = CURRENT_TIMESTAMP
+		SET status = 'published', created_at = scheduled_at
 		WHERE status = 'scheduled' AND scheduled_at <= CURRENT_TIMESTAMP`)
 	if err != nil {
 		return 0, fmt.Errorf("publish scheduled: %w", err)
@@ -881,6 +974,27 @@ func (r *PostRepo) UpsertSportsPost(gameID, title, body, league, gameDataJSON st
 }
 
 
+// UpsertAnticipatoryPost creates or replaces a user-targeted anticipatory post.
+// The post is stored under the target user's ID so it surfaces in their ForYou feed.
+// postKey should be a stable, deterministic string for the event (e.g. "anticipatory-<userID>-<eventID>").
+func (r *PostRepo) UpsertAnticipatoryPost(postKey, userID, title, body, postType string, labels []string) error {
+	labelsJSON, _ := json.Marshal(labels)
+	_, err := r.db.Exec(`
+		INSERT INTO posts (id, agent_id, user_id, title, body,
+			post_type, visibility, display_hint, labels, created_at)
+		VALUES ($1, 'calendar-bot', $2, $3, $4,
+			$5, 'personal', 'card', $6, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET
+			title      = excluded.title,
+			body       = excluded.body,
+			post_type  = excluded.post_type,
+			labels     = excluded.labels,
+			created_at = CURRENT_TIMESTAMP`,
+		postKey, userID, title, body, postType, string(labelsJSON),
+	)
+	return err
+}
+
 func nullRawJSON(j json.RawMessage) sql.NullString {
 	if len(j) == 0 || string(j) == "null" {
 		return sql.NullString{}
@@ -900,4 +1014,11 @@ func nullFloat64(f *float64) sql.NullFloat64 {
 		return sql.NullFloat64{}
 	}
 	return sql.NullFloat64{Float64: *f, Valid: true}
+}
+
+func nullTime(t *time.Time) sql.NullTime {
+	if t == nil {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: *t, Valid: true}
 }

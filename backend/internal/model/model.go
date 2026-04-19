@@ -19,6 +19,21 @@ type Agent struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// AgentProfile is a richer agent view including follower/post counts and profile fields.
+type AgentProfile struct {
+	ID            string    `json:"id"`
+	UserID        string    `json:"user_id"`
+	Name          string    `json:"name"`
+	Status        string    `json:"status"`
+	Description   string    `json:"description,omitempty"`
+	AvatarURL     string    `json:"avatar_url,omitempty"`
+	FollowerCount int       `json:"follower_count"`
+	PostCount     int       `json:"post_count"`
+	CreatedAt     time.Time `json:"created_at"`
+	// IsFollowing is populated per-request (not stored).
+	IsFollowing bool `json:"is_following,omitempty"`
+}
+
 type AgentToken struct {
 	ID        string    `json:"id"`
 	AgentID   string    `json:"agent_id"`
@@ -36,7 +51,19 @@ type UserSettings struct {
 	FollowedTeams        []string  `json:"followed_teams,omitempty"`
 	NotificationsEnabled bool      `json:"notifications_enabled"`
 	DigestHour           int       `json:"digest_hour"`
+	CalendarEnabled      bool      `json:"calendar_enabled"`
 	UpdatedAt            time.Time `json:"updated_at"`
+}
+
+type CalendarEvent struct {
+	ID        string     `json:"id"`
+	UserID    string     `json:"user_id"`
+	Title     string     `json:"title"`
+	StartTime time.Time  `json:"start_time"`
+	EndTime   *time.Time `json:"end_time,omitempty"`
+	Location  string     `json:"location,omitempty"`
+	Notes     string     `json:"notes,omitempty"`
+	SyncedAt  time.Time  `json:"synced_at"`
 }
 
 type PushToken struct {
@@ -58,30 +85,31 @@ type FeedResponse struct {
 }
 
 type Post struct {
-	ID            string          `json:"id"`
-	AgentID       string          `json:"agent_id"`
-	AgentName     string          `json:"agent_name"`
-	UserID        string          `json:"user_id"`
-	Title         string          `json:"title"`
-	Body          string          `json:"body"`
-	ImageURL      string          `json:"image_url,omitempty"`
-	ExternalURL   string          `json:"external_url,omitempty"`
-	Locality      string          `json:"locality,omitempty"`
-	Latitude      *float64        `json:"latitude,omitempty"`
-	Longitude     *float64        `json:"longitude,omitempty"`
-	PostType      string          `json:"post_type,omitempty"`
-	Visibility    string          `json:"visibility"`
-	DisplayHint   string          `json:"display_hint"`
-	Labels        []string        `json:"labels,omitempty"`
-	Images        json.RawMessage `json:"images,omitempty"`
-	Status        string          `json:"status"`
-	ScheduledAt   *time.Time      `json:"scheduled_at,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
-	ViewCount     int             `json:"view_count"`
-	SaveCount     int             `json:"save_count"`
-	ReactionCount int             `json:"reaction_count"`
-	MyReaction    *string         `json:"my_reaction,omitempty"`
-	Saved         bool            `json:"saved"`
+	ID                string          `json:"id"`
+	AgentID           string          `json:"agent_id"`
+	AgentName         string          `json:"agent_name"`
+	UserID            string          `json:"user_id"`
+	Title             string          `json:"title"`
+	Body              string          `json:"body"`
+	ImageURL          string          `json:"image_url,omitempty"`
+	ExternalURL       string          `json:"external_url,omitempty"`
+	Locality          string          `json:"locality,omitempty"`
+	Latitude          *float64        `json:"latitude,omitempty"`
+	Longitude         *float64        `json:"longitude,omitempty"`
+	PostType          string          `json:"post_type,omitempty"`
+	Visibility        string          `json:"visibility"`
+	DisplayHint       string          `json:"display_hint"`
+	Labels            []string        `json:"labels,omitempty"`
+	Images            json.RawMessage `json:"images,omitempty"`
+	Status            string          `json:"status"`
+	ScheduledAt       *time.Time      `json:"scheduled_at,omitempty"`
+	SourcePublishedAt *time.Time      `json:"source_published_at,omitempty"`
+	CreatedAt         time.Time       `json:"created_at"`
+	ViewCount         int             `json:"view_count"`
+	SaveCount         int             `json:"save_count"`
+	ReactionCount     int             `json:"reaction_count"`
+	MyReaction        *string         `json:"my_reaction,omitempty"`
+	Saved             bool            `json:"saved"`
 }
 
 type DisplayTemplate struct {

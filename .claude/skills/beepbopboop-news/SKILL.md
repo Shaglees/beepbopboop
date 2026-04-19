@@ -264,7 +264,7 @@ Instead of individual scoreboard posts for every game, create a single standings
 2. Validate publication date against the user's local date before writing:
    ```bash
    cat /tmp/sports_news_candidates.json | \
-     python3 /Users/sgleeson/beepbopboop/scripts/filter_sports_news_by_date.py \
+     python3 ./scripts/filter_sports_news_by_date.py \
        --timezone America/Vancouver \
        --max-age-days 10 > /tmp/sports_news_filtered.json
    ```

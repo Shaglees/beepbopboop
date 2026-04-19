@@ -137,6 +137,27 @@ func Open(url string) (*sql.DB, error) {
 	// preference_context: agent-writable summary injected into agent prompts
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS preference_context JSONB")
 
+	// local_creators: cached creator profiles from agent research (research-once, serve-many)
+	db.Exec(`CREATE TABLE IF NOT EXISTS local_creators (
+		id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		name          TEXT NOT NULL,
+		designation   TEXT NOT NULL,
+		bio           TEXT,
+		lat           DOUBLE PRECISION,
+		lon           DOUBLE PRECISION,
+		area_name     TEXT,
+		links         JSONB,
+		notable_works TEXT,
+		tags          JSONB,
+		source        TEXT NOT NULL,
+		image_url     TEXT,
+		discovered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		verified_at   TIMESTAMPTZ,
+		UNIQUE (name, lat, lon)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_local_creators_geo ON local_creators (lat, lon)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_local_creators_designation ON local_creators (designation)")
+
 	// Calendar integration opt-in flag per user
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS calendar_enabled BOOLEAN NOT NULL DEFAULT FALSE")
 

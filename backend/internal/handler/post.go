@@ -57,8 +57,9 @@ var ValidDisplayHints = map[string]bool{
 	"science":          true,
 	"pet_spotlight":    true,
 	"fitness":          true,
-	"box_score":        true,
-	"feedback":         true,
+	"box_score":          true,
+	"feedback":           true,
+	"creator_spotlight":  true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -198,7 +199,7 @@ func validatePost(req *createPostRequest) validationResult {
 		req.DisplayHint == "pet_spotlight" || req.DisplayHint == "fitness" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
 		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" ||
-		req.DisplayHint == "feedback"
+		req.DisplayHint == "feedback" || req.DisplayHint == "creator_spotlight"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})

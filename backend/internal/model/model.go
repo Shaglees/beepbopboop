@@ -273,3 +273,36 @@ type SurveyQuestion struct {
 	Type    string           `json:"type"` // "poll", "freeform", "rating"
 	Options []FeedbackOption `json:"options,omitempty"`
 }
+
+// LocalCreator is a cached creator profile discovered by agent research.
+type LocalCreator struct {
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	Designation  string          `json:"designation"`
+	Bio          string          `json:"bio,omitempty"`
+	Lat          *float64        `json:"lat,omitempty"`
+	Lon          *float64        `json:"lon,omitempty"`
+	AreaName     string          `json:"area_name,omitempty"`
+	Links        json.RawMessage `json:"links,omitempty"`
+	NotableWorks string          `json:"notable_works,omitempty"`
+	Tags         []string        `json:"tags,omitempty"`
+	Source       string          `json:"source"`
+	ImageURL     string          `json:"image_url,omitempty"`
+	DiscoveredAt time.Time       `json:"discovered_at"`
+	VerifiedAt   *time.Time      `json:"verified_at,omitempty"`
+}
+
+// CreateCreatorRequest is the agent-facing request body for POST /creators.
+type CreateCreatorRequest struct {
+	Name         string          `json:"name"`
+	Designation  string          `json:"designation"`
+	Bio          string          `json:"bio"`
+	Lat          *float64        `json:"lat"`
+	Lon          *float64        `json:"lon"`
+	AreaName     string          `json:"area_name"`
+	Links        json.RawMessage `json:"links"`
+	NotableWorks string          `json:"notable_works"`
+	Tags         []string        `json:"tags"`
+	Source       string          `json:"source"`
+	ImageURL     string          `json:"image_url"`
+}

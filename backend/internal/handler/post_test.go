@@ -1048,14 +1048,26 @@ func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
 	db := database.OpenTestDB(t)
 	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
 
-	// Hints that need structured external_url
+	// Hints that need structured external_url — keep in sync with ValidDisplayHints
 	structuredHints := map[string]string{
-		"weather":       `{"current":{"temp_c":20,"feels_like_c":18,"humidity":60,"wind_speed_kmh":10,"uv_index":5,"is_day":true,"condition":"Sunny","condition_code":1000},"hourly":[],"daily":[],"location":{"latitude":53.3,"longitude":-6.2,"timezone":"Europe/Dublin"}}`,
-		"scoreboard":    `{"status":"Final","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA"}`,
-		"matchup":       `{"status":"Scheduled","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA","gameTime":"2026-04-16T19:00:00Z"}`,
-		"standings":     `{"league":"NBA","date":"2026-04-16","games":[{"home":"LAL","away":"BOS","homeScore":110,"awayScore":105,"status":"Final"}]}`,
-		"entertainment": `{"subject":"Zendaya","headline":"Zendaya Named TIME Entertainer of the Year","source":"People","category":"award","tags":["entertainment"]}`,
-		"pet_spotlight": `{"type":"adoption","name":"Biscuit","species":"dog","breed":"Labrador Mix","age":"Young","gender":"Male","shelterName":"SF SPCA","shelterCity":"San Francisco","petfinderUrl":"https://www.petfinder.com/dog/biscuit-12345678"}`,
+		"weather":           `{"current":{"temp_c":20,"feels_like_c":18,"humidity":60,"wind_speed_kmh":10,"uv_index":5,"is_day":true,"condition":"Sunny","condition_code":1000},"hourly":[],"daily":[],"location":{"latitude":53.3,"longitude":-6.2,"timezone":"Europe/Dublin"}}`,
+		"scoreboard":        `{"status":"Final","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA"}`,
+		"matchup":           `{"status":"Scheduled","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA","gameTime":"2026-04-16T19:00:00Z"}`,
+		"standings":         `{"league":"NBA","date":"2026-04-16","games":[{"home":"LAL","away":"BOS","homeScore":110,"awayScore":105,"status":"Final"}]}`,
+		"entertainment":     `{"subject":"Zendaya","headline":"Zendaya Named TIME Entertainer of the Year","source":"People","category":"award","tags":["entertainment"]}`,
+		"pet_spotlight":     `{"type":"adoption","name":"Biscuit","species":"dog","breed":"Labrador Mix","age":"Young","gender":"Male","shelterName":"SF SPCA","shelterCity":"San Francisco","petfinderUrl":"https://www.petfinder.com/dog/biscuit-12345678"}`,
+		"game_release":      `{"title":"Test Game","status":"upcoming"}`,
+		"game_review":       `{"title":"Test Game","status":"released"}`,
+		"box_score":         `{}`,
+		"feedback":          `{"feedback_type":"poll","question":"What do you think?","options":[{"key":"a","label":"Option A"}]}`,
+		"movie":             `{}`,
+		"player_spotlight":  `{}`,
+		"science":           `{}`,
+		"destination":       `{}`,
+		"fitness":           `{}`,
+		"show":              `{}`,
+		"restaurant":        `{"name":"Test Cafe","latitude":40.7,"longitude":-74.0}`,
+		"creator_spotlight": `{"designation":"Painter","source":"Brooklyn Rail"}`,
 	}
 
 	for hint := range handler.ValidDisplayHints {
@@ -1098,7 +1110,7 @@ func TestValidImageRoles_AllTestedViaLint(t *testing.T) {
 func TestValidationMaps_Sorted(t *testing.T) {
 	expectedPostTypes := []string{"article", "discovery", "event", "place", "video"}
 	expectedVisibility := []string{"personal", "private", "public"}
-	expectedHints := []string{"article", "brief", "calendar", "card", "comparison", "deal", "digest", "entertainment", "event", "matchup", "outfit", "pet_spotlight", "place", "player_spotlight", "scoreboard", "standings", "weather"}
+	expectedHints := []string{"album", "article", "box_score", "brief", "calendar", "card", "comparison", "concert", "creator_spotlight", "deal", "destination", "digest", "entertainment", "event", "feedback", "fitness", "game_release", "game_review", "matchup", "movie", "outfit", "pet_spotlight", "place", "player_spotlight", "restaurant", "science", "scoreboard", "show", "standings", "weather"}
 	expectedRoles := []string{"detail", "hero", "product"}
 
 	checkMap := func(name string, m map[string]bool, expected []string) {

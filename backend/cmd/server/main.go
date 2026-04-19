@@ -92,6 +92,8 @@ func main() {
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
 	feedbackH := handler.NewFeedbackHandler(userRepo, feedbackRepo)
+	creatorRepo := repository.NewLocalCreatorRepo(db)
+	creatorsH := handler.NewCreatorsHandler(creatorRepo, userRepo, userSettingsRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -137,6 +139,7 @@ func main() {
 		r.Get("/sports/scores", sportsH.GetScores)
 		r.Post("/posts/{postID}/response", feedbackH.SubmitResponse)
 		r.Get("/posts/{postID}/responses", feedbackH.GetResponses)
+		r.Get("/creators/nearby", creatorsH.GetNearby)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -146,6 +149,7 @@ func main() {
 		r.Get("/posts/stats", postH.GetPostStats)
 		r.Post("/posts", postH.CreatePost)
 		r.Post("/posts/lint", postH.LintPost)
+		r.Post("/creators", creatorsH.Create)
 		r.Get("/events/summary", eventsH.Summary)
 		r.Get("/reactions/summary", reactionsH.Summary)
 		r.Get("/user/weights", weightsH.GetWeights)

@@ -83,6 +83,30 @@ class APIService: ObservableObject {
         return try JSONDecoder().decode(FeedResponse.self, from: data)
     }
 
+    // MARK: - Local Creator Discovery
+
+    @MainActor
+    func fetchNearbyCreators() async throws -> FeedResponse {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/creators/nearby") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        if httpResponse.statusCode == 422 {
+            throw APIError.locationRequired
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+        return try JSONDecoder().decode(FeedResponse.self, from: data)
+    }
+
     // MARK: - User Settings
 
     @MainActor

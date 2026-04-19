@@ -7,6 +7,7 @@ type Config struct {
 	DatabaseURL             string
 	FirebaseProjectID       string
 	FirebaseCredentialsFile string
+	CreatorsAPIKey          string // optional: Serp API key for richer creator search results
 }
 
 func Load() Config {
@@ -15,6 +16,7 @@ func Load() Config {
 		DatabaseURL:             envOr("DATABASE_URL", "postgres://beepbopboop:beepbopboop@localhost:5432/beepbopboop?sslmode=disable"),
 		FirebaseProjectID:       os.Getenv("FIREBASE_PROJECT_ID"),
 		FirebaseCredentialsFile: os.Getenv("FIREBASE_CREDENTIALS_FILE"),
+		CreatorsAPIKey:          os.Getenv("CREATORS_API_KEY"),
 	}
 }
 

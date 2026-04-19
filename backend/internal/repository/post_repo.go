@@ -881,6 +881,83 @@ func (r *PostRepo) UpsertSportsPost(gameID, title, body, league, gameDataJSON st
 }
 
 
+// UpsertCreatorPost creates or replaces a creator_spotlight post for a local creator.
+// The ID is deterministic from creatorID so the same person always updates in place.
+// profileJSON is serialized CreatorProfile stored in external_url for the iOS card to parse.
+func (r *PostRepo) UpsertCreatorPost(creatorID, gridKey, title, body string, lat, lon float64, areaName, designation, profileJSON string) error {
+	id := "creator-" + creatorID
+	labelsJSON, _ := json.Marshal([]string{"creators", "local", designation})
+
+	_, err := r.db.Exec(`
+		INSERT INTO posts (id, agent_id, user_id, title, body, external_url, latitude, longitude,
+			locality, post_type, visibility, display_hint, labels, created_at)
+		VALUES ($1, 'creators-bot', 'system', $2, $3, $4, $5, $6, $7,
+			'discovery', 'public', 'creator_spotlight', $8, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET
+			title = excluded.title,
+			body = excluded.body,
+			external_url = excluded.external_url,
+			latitude = excluded.latitude,
+			longitude = excluded.longitude,
+			locality = excluded.locality,
+			labels = excluded.labels,
+			created_at = CURRENT_TIMESTAMP`,
+		id, title, body, profileJSON, lat, lon, areaName, string(labelsJSON),
+	)
+	return err
+}
+
+// HasFreshCreatorPosts returns true if the creators-bot has posts for the given
+// grid key that were created within the last staleDays days. Used to skip
+// re-researching regions that are already fresh.
+func (r *PostRepo) HasFreshCreatorPosts(gridKey string, staleDays int) bool {
+	var count int
+	_ = r.db.QueryRow(`
+		SELECT COUNT(*) FROM posts
+		WHERE agent_id = 'creators-bot'
+		  AND display_hint = 'creator_spotlight'
+		  AND created_at > NOW() - INTERVAL '1 day' * $1
+		LIMIT 1`,
+		staleDays,
+	).Scan(&count)
+	return count > 0
+}
+
+// ListCreatorsByRegion returns creator_spotlight posts within a bounding box.
+func (r *PostRepo) ListCreatorsByRegion(lat, lon, radiusKm float64, limit int) ([]model.Post, error) {
+	minLat := lat - radiusKm/111.0
+	maxLat := lat + radiusKm/111.0
+	minLon := lon - radiusKm/(111.0*0.7) // rough lon correction
+	maxLon := lon + radiusKm/(111.0*0.7)
+
+	rows, err := r.db.Query(`
+		SELECT `+postColumns+`
+		FROM posts p
+		JOIN agents a ON a.id = p.agent_id
+		WHERE p.display_hint = 'creator_spotlight'
+		  AND p.status = 'published'
+		  AND p.latitude BETWEEN $1 AND $2
+		  AND p.longitude BETWEEN $3 AND $4
+		ORDER BY p.created_at DESC
+		LIMIT $5`,
+		minLat, maxLat, minLon, maxLon, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query creators: %w", err)
+	}
+	defer rows.Close()
+
+	posts := make([]model.Post, 0)
+	for rows.Next() {
+		p, _, err := scanPost(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan creator post: %w", err)
+		}
+		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}
+
 func nullRawJSON(j json.RawMessage) sql.NullString {
 	if len(j) == 0 || string(j) == "null" {
 		return sql.NullString{}

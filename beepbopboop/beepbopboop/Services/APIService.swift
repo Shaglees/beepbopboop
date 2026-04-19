@@ -330,6 +330,57 @@ class APIService: ObservableObject {
         _ = try? await URLSession.shared.data(for: request)
     }
 
+    // MARK: - Local Creator Discovery
+
+    /// Fetches creator_spotlight posts near the given coordinates.
+    @MainActor
+    func fetchLocalCreators(lat: Double, lon: Double, radius: Double?) async throws -> [Post] {
+        let token = authService.getToken()
+        var components = URLComponents(string: "\(baseURL)/discovery/local-creators")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "lat", value: String(lat)),
+            URLQueryItem(name: "lon", value: String(lon)),
+        ]
+        if let radius = radius {
+            queryItems.append(URLQueryItem(name: "radius", value: String(radius)))
+        }
+        components?.queryItems = queryItems
+
+        guard let url = components?.url else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+
+        let feedResponse = try JSONDecoder().decode(FeedResponse.self, from: data)
+        return feedResponse.posts
+    }
+
+    /// Updates the user's current location for background creator discovery.
+    @MainActor
+    func updateUserLocation(latitude: Double, longitude: Double) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/location") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode([
+            "latitude": latitude,
+            "longitude": longitude,
+        ])
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
     enum APIError: LocalizedError {
         case invalidURL
         case invalidResponse

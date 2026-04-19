@@ -18,6 +18,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
+	"github.com/shanegleeson/beepbopboop/backend/internal/creators"
 	"github.com/shanegleeson/beepbopboop/backend/internal/scheduler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/sports"
 	"github.com/shanegleeson/beepbopboop/backend/internal/weather"
@@ -85,6 +86,8 @@ func main() {
 	weatherSvc := weather.NewService()
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
+	creatorsSvc := creators.NewService(cfg.CreatorsAPIKey)
+	creatorsH := handler.NewCreatorsHandler(userRepo, userSettingsRepo, postRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -121,6 +124,8 @@ func main() {
 		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
 		r.Get("/user/weights/summary", weightsSummaryH.GetSummary)
 		r.Get("/sports/scores", sportsH.GetScores)
+		r.Get("/discovery/local-creators", creatorsH.GetLocalCreators)
+		r.Post("/user/location", creatorsH.UpdateUserLocation)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -145,6 +150,9 @@ func main() {
 
 	sportsWorker := sports.NewWorker(sportsSvc, postRepo, 10*time.Minute)
 	go sportsWorker.Run(workerCtx)
+
+	creatorsWorker := creators.NewWorker(creatorsSvc, postRepo, userSettingsRepo, 6*time.Hour)
+	go creatorsWorker.Run(workerCtx)
 
 	schedulerWorker := scheduler.NewWorker(postRepo, 1*time.Minute)
 	go schedulerWorker.Run(workerCtx)

@@ -204,18 +204,11 @@ struct AgentProfileView: View {
     }
 }
 
-// Convenience initializer for struct-based creation
 private extension AgentProfile {
     init(id: String, userID: String, name: String, status: String,
          description: String, avatarURL: String,
          followerCount: Int, postCount: Int,
          createdAt: String, isFollowing: Bool) {
-        var data = [
-            "id": id, "user_id": userID, "name": name, "status": status,
-            "description": description, "avatar_url": avatarURL,
-            "created_at": createdAt
-        ]
-        _ = data  // suppress unused warning
         self.id = id
         self.userID = userID
         self.name = name

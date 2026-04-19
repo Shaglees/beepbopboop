@@ -34,6 +34,16 @@ struct FeedbackData: Codable {
     }
 }
 
+// MARK: - SurveyAnswer (per-question answer for survey submissions)
+
+struct SurveyAnswer: Codable {
+    let question: String
+    let type: String
+    var selected: [String]?
+    var text: String?
+    var value: Double?
+}
+
 // MARK: - FeedbackResponse (submitted to / received from backend)
 
 struct FeedbackResponse: Codable {
@@ -41,6 +51,7 @@ struct FeedbackResponse: Codable {
     var selected: [String]?   // poll
     var text: String?          // freeform
     var value: Double?         // rating
+    var answers: [SurveyAnswer]?   // survey: per-question answers
 }
 
 // MARK: - FeedbackSummary (GET /posts/{id}/responses)

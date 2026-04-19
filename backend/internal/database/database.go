@@ -90,7 +90,9 @@ func Open(url string) (*sql.DB, error) {
 	// Post scheduling: status tracks published vs scheduled, scheduled_at holds publish time
 	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'published'")
 	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ")
+	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS source_published_at TIMESTAMPTZ")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_scheduled ON posts(status, scheduled_at) WHERE status = 'scheduled'")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_source_published_at ON posts(source_published_at DESC)")
 
 	// Post reactions (explicit user feedback for agent content tuning)
 	db.Exec(`CREATE TABLE IF NOT EXISTS post_reactions (
@@ -155,6 +157,41 @@ func Open(url string) (*sql.DB, error) {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_local_creators_geo ON local_creators (lat, lon)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_local_creators_designation ON local_creators (designation)")
+
+	// Calendar integration opt-in flag per user
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS calendar_enabled BOOLEAN NOT NULL DEFAULT FALSE")
+
+	// Calendar events synced from device (EventKit/iOS)
+	db.Exec(`CREATE TABLE IF NOT EXISTS calendar_events (
+		id          TEXT NOT NULL,
+		user_id     TEXT NOT NULL REFERENCES users(id),
+		title       TEXT NOT NULL,
+		start_time  TIMESTAMPTZ NOT NULL,
+		end_time    TIMESTAMPTZ,
+		location    TEXT,
+		notes       TEXT,
+		synced_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, id)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_calendar_events_user_start ON calendar_events(user_id, start_time)")
+
+	// Anticipatory worker agent
+	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('calendar-bot', 'system', 'Anticipatory', 'active') ON CONFLICT DO NOTHING")
+
+	// Agent following: social graph for agent discovery and follower feed.
+	db.Exec(`CREATE TABLE IF NOT EXISTS agent_follows (
+		user_id     TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		agent_id    TEXT        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+		followed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		PRIMARY KEY (user_id, agent_id)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS agent_follows_agent_id ON agent_follows (agent_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS agent_follows_user_id  ON agent_follows (user_id)")
+
+	// Denormalized follower count + profile fields on agents table.
+	db.Exec("ALTER TABLE agents ADD COLUMN IF NOT EXISTS follower_count INTEGER NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE agents ADD COLUMN IF NOT EXISTS description TEXT")
+	db.Exec("ALTER TABLE agents ADD COLUMN IF NOT EXISTS avatar_url TEXT")
 
 	return db, nil
 }

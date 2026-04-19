@@ -13,6 +13,7 @@ import (
 	"firebase.google.com/go/v4/auth"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
@@ -68,6 +69,8 @@ func main() {
 	reactionRepo := repository.NewReactionRepo(db)
 	pushTokenRepo := repository.NewPushTokenRepo(db)
 	feedbackRepo := repository.NewFeedbackRepo(db)
+	calendarRepo := repository.NewCalendarRepo(db)
+	followRepo := repository.NewFollowRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -75,7 +78,8 @@ func main() {
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo)
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
-	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo)
+	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo, followRepo)
+	followH := handler.NewFollowHandler(userRepo, followRepo)
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
 	weightsH := handler.NewWeightsHandler(agentRepo, userRepo, weightsRepo)
@@ -83,6 +87,7 @@ func main() {
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
 	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
 	pushTokenH := handler.NewPushTokenHandler(userRepo, pushTokenRepo)
+	calendarH := handler.NewCalendarHandler(userRepo, calendarRepo, userSettingsRepo)
 	weatherSvc := weather.NewService()
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
@@ -110,14 +115,21 @@ func main() {
 		r.Get("/feeds/personal", multiFeedH.GetPersonal)
 		r.Get("/feeds/community", multiFeedH.GetCommunity)
 		r.Get("/feeds/foryou", multiFeedH.GetForYou)
+		r.Get("/feeds/following", multiFeedH.GetFollowing)
 		r.Get("/posts/saved", multiFeedH.GetSaved)
 		r.Get("/user/settings", settingsH.GetSettings)
 		r.Put("/user/settings", settingsH.UpdateSettings)
 		r.Get("/user/weights", weightsH.GetWeightsFirebase)
 		r.Put("/user/weights", weightsH.UpdateWeightsFirebase)
 		r.Put("/user/push-token", pushTokenH.RegisterPushToken)
+		r.Post("/user/calendar-events", calendarH.SyncCalendarEvents)
+		r.Get("/user/digest", pushTokenH.GetDigestPosts)
 		r.Post("/agents", agentH.CreateAgent)
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
+		r.Get("/agents/following", followH.ListFollowing)
+		r.Post("/agents/{agentID}/follow", followH.Follow)
+		r.Delete("/agents/{agentID}/follow", followH.Unfollow)
+		r.Get("/agents/{agentID}", followH.GetAgentProfile)
 		r.Post("/posts/{postID}/events", eventsH.TrackEvent)
 		r.Post("/events/batch", eventsH.BatchTrack)
 		r.Put("/posts/{postID}/reaction", reactionsH.SetReaction)
@@ -156,6 +168,9 @@ func main() {
 
 	schedulerWorker := scheduler.NewWorker(postRepo, 1*time.Minute)
 	go schedulerWorker.Run(workerCtx)
+
+	calendarWorker := calendar.NewWorker(calendarRepo, postRepo, userSettingsRepo, 6*time.Hour)
+	go calendarWorker.Run(workerCtx)
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 

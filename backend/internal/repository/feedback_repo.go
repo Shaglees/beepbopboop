@@ -3,10 +3,14 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 )
+
+// ErrNotFeedbackPost is returned when a post exists but has a different display_hint.
+var ErrNotFeedbackPost = errors.New("post is not a feedback post")
 
 // FeedbackRepo handles storage and retrieval of user feedback responses.
 type FeedbackRepo struct {
@@ -101,7 +105,7 @@ func (r *FeedbackRepo) GetSummary(postID, currentUserID string) (*model.Feedback
 			continue
 		}
 		switch resp.Type {
-		case "poll", "survey":
+		case "poll":
 			for _, sel := range resp.Selected {
 				tally[sel]++
 			}
@@ -125,4 +129,21 @@ func (r *FeedbackRepo) GetSummary(postID, currentUserID string) (*model.Feedback
 	}
 
 	return summary, nil
+}
+
+// ValidateFeedbackPost returns nil if the post exists with display_hint='feedback'.
+// Returns sql.ErrNoRows if the post doesn't exist, ErrNotFeedbackPost if wrong type.
+func (r *FeedbackRepo) ValidateFeedbackPost(postID string) error {
+	var hint string
+	err := r.db.QueryRow(`SELECT display_hint FROM posts WHERE id = $1`, postID).Scan(&hint)
+	if err == sql.ErrNoRows {
+		return sql.ErrNoRows
+	}
+	if err != nil {
+		return fmt.Errorf("query post hint: %w", err)
+	}
+	if hint != "feedback" {
+		return ErrNotFeedbackPost
+	}
+	return nil
 }

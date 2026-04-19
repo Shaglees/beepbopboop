@@ -99,6 +99,12 @@ func main() {
 	creatorRepo := repository.NewLocalCreatorRepo(db)
 	creatorsH := handler.NewCreatorsHandler(creatorRepo, userRepo, userSettingsRepo)
 
+	prototypeStore := embedding.NewPrototypeStore(db)
+	if err := prototypeStore.Compute(context.Background()); err != nil {
+		slog.Warn("prototype store: initial compute failed", "error", err)
+	}
+	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo)
+
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
 	agentAuth := middleware.AgentAuth(tokenRepo)
@@ -144,6 +150,7 @@ func main() {
 		r.Post("/posts/{postID}/response", feedbackH.SubmitResponse)
 		r.Get("/posts/{postID}/responses", feedbackH.GetResponses)
 		r.Get("/creators/nearby", creatorsH.GetNearby)
+		r.Post("/user/interests", onboardingH.SubmitInterests)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)

@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -35,6 +37,15 @@ func (h *FeedbackHandler) SubmitResponse(w http.ResponseWriter, r *http.Request)
 
 	postID := chi.URLParam(r, "postID")
 
+	if err := h.feedbackRepo.ValidateFeedbackPost(postID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, repository.ErrNotFeedbackPost) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "post not found or not a feedback post"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to validate post"})
+		return
+	}
+
 	var body model.FeedbackResponseBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
@@ -53,9 +64,17 @@ func (h *FeedbackHandler) SubmitResponse(w http.ResponseWriter, r *http.Request)
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "freeform response requires text"})
 			return
 		}
+		if len(body.Text) > 2000 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "freeform text exceeds 2000 character limit"})
+			return
+		}
 	case "rating":
 		if body.Value == nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rating response requires value"})
+			return
+		}
+		if *body.Value < 0 || *body.Value > 100 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rating value must be between 0 and 100"})
 			return
 		}
 	default:
@@ -90,6 +109,15 @@ func (h *FeedbackHandler) GetResponses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	postID := chi.URLParam(r, "postID")
+
+	if err := h.feedbackRepo.ValidateFeedbackPost(postID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, repository.ErrNotFeedbackPost) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "post not found or not a feedback post"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to validate post"})
+		return
+	}
 
 	summary, err := h.feedbackRepo.GetSummary(postID, user.ID)
 	if err != nil {

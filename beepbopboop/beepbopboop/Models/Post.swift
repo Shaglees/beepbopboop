@@ -191,6 +191,7 @@ struct Post: Codable, Identifiable {
         case fitness
         case boxScore
         case feedback
+        case creatorSpotlight
     }
 
     var displayHintValue: DisplayHintValue {
@@ -223,6 +224,7 @@ struct Post: Codable, Identifiable {
         case "fitness": return .fitness
         case "box_score": return .boxScore
         case "feedback": return .feedback
+        case "creator_spotlight": return .creatorSpotlight
         default: return .card
         }
     }
@@ -307,6 +309,7 @@ struct Post: Codable, Identifiable {
         case .fitness: return Color(red: 0.133, green: 0.773, blue: 0.369)
         case .boxScore: return Color(red: 0.055, green: 0.337, blue: 0.188)
         case .feedback: return Color(red: 0.365, green: 0.376, blue: 0.996)
+        case .creatorSpotlight: return Color(red: 0.541, green: 0.169, blue: 0.886)
         }
     }
 
@@ -341,6 +344,7 @@ struct Post: Codable, Identifiable {
         case .fitness: return "figure.run"
         case .boxScore: return "figure.baseball"
         case .feedback: return feedbackData?.feedbackType == "rating" ? "star.fill" : "checklist"
+        case .creatorSpotlight: return "paintpalette"
         }
     }
 
@@ -375,6 +379,7 @@ struct Post: Codable, Identifiable {
         case .fitness: return "Fitness"
         case .boxScore: return "Box Score"
         case .feedback: return "Quick Question"
+        case .creatorSpotlight: return "Local Creator"
         }
     }
 
@@ -580,6 +585,14 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(FeedbackData.self, from: data)
+    }
+
+    /// Parsed creator data from externalURL (for creator_spotlight display_hint posts).
+    var creatorData: CreatorData? {
+        guard displayHintValue == .creatorSpotlight,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(CreatorData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

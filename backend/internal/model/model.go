@@ -292,6 +292,17 @@ type LocalCreator struct {
 	VerifiedAt   *time.Time      `json:"verified_at,omitempty"`
 }
 
+// TrainingPair is a labeled (user, post) pair for ML model training.
+type TrainingPair struct {
+	UserID     string  `json:"user_id"`
+	PostID     string  `json:"post_id"`
+	Label      float64 `json:"label"`
+	Saved      bool    `json:"saved"`
+	Clicked    bool    `json:"clicked"`
+	MaxDwellMs int     `json:"max_dwell_ms"`
+	Reaction   string  `json:"reaction,omitempty"`
+}
+
 // CreateCreatorRequest is the agent-facing request body for POST /creators.
 type CreateCreatorRequest struct {
 	Name         string          `json:"name"`

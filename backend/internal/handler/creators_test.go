@@ -80,7 +80,7 @@ func TestCreatorsHandler_GetNearby(t *testing.T) {
 	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-nearby-test")
 
 	lat, lon := 40.7128, -74.0060
-	userSettingsRepo.Upsert(user.ID, "Brooklyn, NY", &lat, &lon, 25.0, nil, true, 8)
+	userSettingsRepo.Upsert(user.ID, "Brooklyn, NY", &lat, &lon, 25.0, nil, true, 8, nil)
 
 	creatorRepo.Upsert(model.CreateCreatorRequest{
 		Name:        "Maria Chen",

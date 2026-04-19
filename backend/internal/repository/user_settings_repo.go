@@ -79,7 +79,7 @@ func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64
 
 	_, err := r.db.Exec(`
 		INSERT INTO user_settings (user_id, location_name, latitude, longitude, radius_km, followed_teams, notifications_enabled, digest_hour, calendar_enabled, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, FALSE), CURRENT_TIMESTAMP)
 		ON CONFLICT(user_id) DO UPDATE SET
 			location_name         = excluded.location_name,
 			latitude              = excluded.latitude,
@@ -88,7 +88,7 @@ func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64
 			followed_teams        = excluded.followed_teams,
 			notifications_enabled = excluded.notifications_enabled,
 			digest_hour           = excluded.digest_hour,
-			calendar_enabled      = COALESCE(excluded.calendar_enabled, user_settings.calendar_enabled),
+			calendar_enabled      = CASE WHEN $9 IS NULL THEN user_settings.calendar_enabled ELSE excluded.calendar_enabled END,
 			updated_at            = CURRENT_TIMESTAMP`,
 		userID, nullString(locationName), nullFloat64(lat), nullFloat64(lon), radiusKm,
 		followedTeamsJSON, notificationsEnabled, digestHour, calendarEnabledNull,

@@ -15,6 +15,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
+	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
@@ -92,6 +93,9 @@ func main() {
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
 	feedbackH := handler.NewFeedbackHandler(userRepo, feedbackRepo)
+	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
+	userEmbedder := embedding.NewUserEmbedder(db, userEmbeddingRepo)
+
 	creatorRepo := repository.NewLocalCreatorRepo(db)
 	creatorsH := handler.NewCreatorsHandler(creatorRepo, userRepo, userSettingsRepo)
 
@@ -171,6 +175,9 @@ func main() {
 
 	calendarWorker := calendar.NewWorker(calendarRepo, postRepo, userSettingsRepo, 6*time.Hour)
 	go calendarWorker.Run(workerCtx)
+
+	embeddingWorker := embedding.NewWorker(userEmbedder, 24*time.Hour)
+	go embeddingWorker.Run(workerCtx)
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 

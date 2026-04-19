@@ -1,9 +1,11 @@
 import Combine
+import EventKit
 import MapKit
 import SwiftUI
 
 struct SettingsView: View {
     @StateObject private var viewModel: SettingsViewModel
+    @EnvironmentObject private var calendarService: CalendarService
     @Environment(\.dismiss) private var dismiss
     @AppStorage("onboardingComplete") private var onboardingComplete = false
     @State private var showUpdateInterests = false
@@ -94,6 +96,8 @@ struct SettingsView: View {
                         SportsSettingsView(followedTeams: $viewModel.followedTeams)
                     }
                 }
+
+                calendarSection
 
                 Section("Tune your feed") {
                     VStack(alignment: .leading, spacing: 12) {
@@ -225,6 +229,44 @@ struct SettingsView: View {
                     showUpdateInterests = false
                 }
             }
+        }
+    }
+
+    private var calendarSection: some View {
+        Section {
+            if calendarService.hasAccess {
+                HStack {
+                    Label("Calendar connected", systemImage: "calendar.badge.checkmark")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+                Text("Upcoming events shape your feed — sports, travel, fitness and more surface automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Anticipatory feed", systemImage: "calendar.badge.clock")
+                    Text("Connect your calendar so the feed knows what's coming up — a game tonight, a flight tomorrow, a dinner reservation.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Connect Calendar") {
+                        Task {
+                            let granted = await calendarService.requestAccess()
+                            if granted {
+                                let events = calendarService.fetchUpcomingEvents(days: 7)
+                                await apiService.syncCalendarContext(events)
+                            }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .padding(.vertical, 4)
+            }
+        } header: {
+            Text("Anticipatory Feed")
         }
     }
 

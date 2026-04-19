@@ -121,5 +121,19 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS digest_hour INT NOT NULL DEFAULT 8")
 
+	// User intent signals extracted from calendar events (and future sources).
+	// active_from / active_until provide TTL-based expiry so stale signals auto-retire.
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_intents (
+		id          TEXT PRIMARY KEY,
+		user_id     TEXT NOT NULL REFERENCES users(id),
+		signal_type TEXT NOT NULL DEFAULT 'calendar',
+		intent_type TEXT NOT NULL,
+		payload     JSONB,
+		active_from  TIMESTAMPTZ NOT NULL,
+		active_until TIMESTAMPTZ NOT NULL,
+		created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_intents_user_active ON user_intents(user_id, active_from, active_until)")
+
 	return db, nil
 }

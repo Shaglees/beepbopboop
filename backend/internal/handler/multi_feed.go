@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
@@ -17,9 +18,10 @@ type MultiFeedHandler struct {
 	weightsRepo      *repository.WeightsRepo
 	eventRepo        *repository.EventRepo
 	reactionRepo     *repository.ReactionRepo
+	intentRepo       *repository.IntentRepo
 }
 
-func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo, eventRepo *repository.EventRepo, reactionRepo *repository.ReactionRepo) *MultiFeedHandler {
+func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo, eventRepo *repository.EventRepo, reactionRepo *repository.ReactionRepo, intentRepo *repository.IntentRepo) *MultiFeedHandler {
 	return &MultiFeedHandler{
 		userRepo:         userRepo,
 		postRepo:         postRepo,
@@ -27,6 +29,7 @@ func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.Pos
 		weightsRepo:      weightsRepo,
 		eventRepo:        eventRepo,
 		reactionRepo:     reactionRepo,
+		intentRepo:       intentRepo,
 	}
 }
 
@@ -186,6 +189,17 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 		feedWeights.FollowedTeams = make(map[string]bool, len(settings.FollowedTeams))
 		for _, t := range settings.FollowedTeams {
 			feedWeights.FollowedTeams[t] = true
+		}
+	}
+
+	// Apply anticipatory boosts from active calendar intents.
+	if h.intentRepo != nil {
+		if intents, err := h.intentRepo.GetActive(user.ID); err == nil && len(intents) > 0 {
+			boosts := calendar.IntentLabelBoosts(intents)
+			for label, boost := range boosts {
+				feedWeights.LabelWeights[label] += boost
+			}
+			slog.Debug("calendar intent boosts applied", "user_id", user.ID, "intents", len(intents))
 		}
 	}
 

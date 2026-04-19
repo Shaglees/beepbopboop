@@ -192,3 +192,35 @@ type LabelCount struct {
 	Label string `json:"label"`
 	Count int    `json:"count"`
 }
+
+// CalendarEvent represents a single upcoming calendar event received from iOS.
+type CalendarEvent struct {
+	Title     string    `json:"title"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+	Location  string    `json:"location,omitempty"`
+	Notes     string    `json:"notes,omitempty"`
+}
+
+// UserIntent represents a structured intent signal extracted from a calendar event.
+// It drives feed ranking boosts without storing raw event text.
+type UserIntent struct {
+	ID          string          `json:"id"`
+	UserID      string          `json:"user_id"`
+	SignalType  string          `json:"signal_type"`  // e.g. "calendar"
+	IntentType  string          `json:"intent_type"`  // e.g. "sports", "travel", "fitness"
+	Payload     json.RawMessage `json:"payload"`      // structured details (e.g. team abbr, destination city)
+	ActiveFrom  time.Time       `json:"active_from"`
+	ActiveUntil time.Time       `json:"active_until"`
+	CreatedAt   time.Time       `json:"created_at"`
+}
+
+// CalendarContextRequest is the body sent by iOS to POST /user/calendar-context.
+type CalendarContextRequest struct {
+	Events []CalendarEvent `json:"events"`
+}
+
+// CalendarContextResponse is returned after storing calendar context.
+type CalendarContextResponse struct {
+	IntentsExtracted int `json:"intents_extracted"`
+}

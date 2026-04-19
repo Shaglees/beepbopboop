@@ -67,6 +67,7 @@ func main() {
 	templateRepo := repository.NewTemplateRepo(db)
 	reactionRepo := repository.NewReactionRepo(db)
 	pushTokenRepo := repository.NewPushTokenRepo(db)
+	intentRepo := repository.NewIntentRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -74,7 +75,8 @@ func main() {
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo)
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
-	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo)
+	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo, intentRepo)
+	calendarH := handler.NewCalendarHandler(userRepo, intentRepo)
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
 	weightsH := handler.NewWeightsHandler(agentRepo, userRepo, weightsRepo)
@@ -112,6 +114,8 @@ func main() {
 		r.Get("/user/weights", weightsH.GetWeightsFirebase)
 		r.Put("/user/weights", weightsH.UpdateWeightsFirebase)
 		r.Put("/user/push-token", pushTokenH.RegisterPushToken)
+		r.Post("/user/calendar-context", calendarH.PostCalendarContext)
+		r.Get("/user/calendar-context", calendarH.GetCalendarContext)
 		r.Post("/agents", agentH.CreateAgent)
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
 		r.Post("/posts/{postID}/events", eventsH.TrackEvent)

@@ -330,6 +330,50 @@ class APIService: ObservableObject {
         _ = try? await URLSession.shared.data(for: request)
     }
 
+    // MARK: - Calendar Context
+
+    /// Sends upcoming calendar events to the backend so it can extract intent signals
+    /// and boost relevant feed categories. Fire-and-forget: errors are silently swallowed.
+    @MainActor
+    func syncCalendarContext(_ events: [CalendarEventPayload]) async {
+        guard !events.isEmpty else { return }
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/calendar-context") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let body = try? encoder.encode(CalendarContextRequest(events: events)) else { return }
+        request.httpBody = body
+
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
+    /// Returns the user's currently-active intent signals (for debugging / context panel).
+    @MainActor
+    func getCalendarContext() async throws -> [UserIntent] {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/calendar-context") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let envelope = try decoder.decode([String: [UserIntent]].self, from: data)
+        return envelope["intents"] ?? []
+    }
+
     enum APIError: LocalizedError {
         case invalidURL
         case invalidResponse

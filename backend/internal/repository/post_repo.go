@@ -795,7 +795,7 @@ func (r *PostRepo) Stats(userID string, days int) (*model.PeriodStats, error) {
 func (r *PostRepo) PublishScheduled() (int64, error) {
 	result, err := r.db.Exec(`
 		UPDATE posts
-		SET status = 'published', created_at = CURRENT_TIMESTAMP
+		SET status = 'published', created_at = scheduled_at
 		WHERE status = 'scheduled' AND scheduled_at <= CURRENT_TIMESTAMP`)
 	if err != nil {
 		return 0, fmt.Errorf("publish scheduled: %w", err)

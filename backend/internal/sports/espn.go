@@ -67,15 +67,27 @@ type cacheEntry struct {
 
 // Service fetches live scores from the ESPN public scoreboard API.
 type Service struct {
-	client *http.Client
-	mu     sync.RWMutex
-	cache  map[string]cacheEntry
+	client  *http.Client
+	baseURL string
+	mu      sync.RWMutex
+	cache   map[string]cacheEntry
 }
 
 func NewService() *Service {
 	return &Service{
-		client: &http.Client{Timeout: 10 * time.Second},
-		cache:  make(map[string]cacheEntry),
+		client:  &http.Client{Timeout: 10 * time.Second},
+		baseURL: espnBaseURL,
+		cache:   make(map[string]cacheEntry),
+	}
+}
+
+// NewServiceWithBaseURL creates a Service with a custom base URL and HTTP client,
+// intended for tests that mock the ESPN scoreboard API.
+func NewServiceWithBaseURL(baseURL string, client *http.Client) *Service {
+	return &Service{
+		client:  client,
+		baseURL: baseURL,
+		cache:   make(map[string]cacheEntry),
 	}
 }
 
@@ -121,7 +133,7 @@ func (s *Service) fetchLeagueCached(lg leagueDef) ([]FetchedGame, error) {
 }
 
 func (s *Service) fetchLeague(lg leagueDef) ([]FetchedGame, error) {
-	url := fmt.Sprintf("%s/%s/scoreboard", espnBaseURL, lg.espnPath)
+	url := fmt.Sprintf("%s/%s/scoreboard", s.baseURL, lg.espnPath)
 	resp, err := s.client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("espn %s request: %w", lg.name, err)

@@ -24,6 +24,11 @@ func (r *ReactionRepo) Upsert(postID, userID, reaction string) (*model.PostReact
 	}
 	defer tx.Rollback()
 
+	// Lock the post row to serialize concurrent reaction count updates.
+	if _, err := tx.Exec("SELECT id FROM posts WHERE id = $1 FOR UPDATE", postID); err != nil {
+		return nil, fmt.Errorf("lock post row: %w", err)
+	}
+
 	var pr model.PostReaction
 	err = tx.QueryRow(`
 		INSERT INTO post_reactions (post_id, user_id, reaction)
@@ -55,6 +60,11 @@ func (r *ReactionRepo) Delete(postID, userID string) error {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
+
+	// Lock the post row to serialize concurrent reaction count updates.
+	if _, err := tx.Exec("SELECT id FROM posts WHERE id = $1 FOR UPDATE", postID); err != nil {
+		return fmt.Errorf("lock post row: %w", err)
+	}
 
 	_, err = tx.Exec(`DELETE FROM post_reactions WHERE post_id = $1 AND user_id = $2`, postID, userID)
 	if err != nil {

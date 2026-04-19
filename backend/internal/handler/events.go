@@ -11,11 +11,12 @@ import (
 )
 
 var validEventTypes = map[string]bool{
-	"view":   true,
-	"save":   true,
-	"unsave": true,
-	"click":  true,
-	"share":  true,
+	"view":       true,
+	"save":       true,
+	"unsave":     true,
+	"click":      true,
+	"share":      true,
+	"impression": true,
 }
 
 // EventsHandler handles engagement event endpoints.

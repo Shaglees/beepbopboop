@@ -31,7 +31,7 @@ func OpenTestDB(t *testing.T) *sql.DB {
 
 	ctx := context.Background()
 
-	pgContainer, err := postgres.Run(ctx, "postgres:17-alpine",
+	pgContainer, err := postgres.Run(ctx, "pgvector/pgvector:pg17",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("test"),
 		postgres.WithPassword("test"),

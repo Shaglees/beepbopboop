@@ -6,7 +6,7 @@ struct ScienceCard: View {
     let post: Post
     let science: ScienceData
     @State private var activeReaction: String?
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
     @EnvironmentObject private var apiService: APIService
 
     init?(post: Post) {
@@ -14,7 +14,7 @@ struct ScienceCard: View {
         self.post = post
         self.science = sd
         self._activeReaction = State(initialValue: post.myReaction)
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
     }
 
     var body: some View {
@@ -246,7 +246,12 @@ struct ScienceCard: View {
                 )
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    let wasSaved = isBookmarked
                     isBookmarked.toggle()
+                    Task {
+                        do { try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save") }
+                        catch { isBookmarked = wasSaved }
+                    }
                 } label: {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                         .font(.caption)

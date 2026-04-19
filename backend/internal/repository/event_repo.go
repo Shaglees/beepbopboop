@@ -190,6 +190,52 @@ func (r *EventRepo) Summary(userID string, days int) (*model.EventSummary, error
 	return summary, nil
 }
 
+// GetSavedForPosts returns the set of postIDs that userID currently has saved.
+func (r *EventRepo) GetSavedForPosts(postIDs []string, userID string) (map[string]bool, error) {
+	if len(postIDs) == 0 {
+		return nil, nil
+	}
+
+	var b strings.Builder
+	b.WriteString(`
+		SELECT DISTINCT pe.post_id
+		FROM post_events pe
+		LEFT JOIN post_events unsave ON unsave.post_id = pe.post_id
+			AND unsave.user_id = pe.user_id
+			AND unsave.event_type = 'unsave'
+			AND unsave.created_at > pe.created_at
+		WHERE pe.user_id = $1
+			AND pe.event_type = 'save'
+			AND unsave.id IS NULL
+			AND pe.post_id IN (`)
+
+	args := []any{userID}
+	for i, id := range postIDs {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "$%d", i+2)
+		args = append(args, id)
+	}
+	b.WriteString(")")
+
+	rows, err := r.db.Query(b.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("query saved posts for user: %w", err)
+	}
+	defer rows.Close()
+
+	saved := make(map[string]bool)
+	for rows.Next() {
+		var postID string
+		if err := rows.Scan(&postID); err != nil {
+			return nil, fmt.Errorf("scan saved post: %w", err)
+		}
+		saved[postID] = true
+	}
+	return saved, rows.Err()
+}
+
 // CountsForPosts returns view and save counts for a list of post IDs.
 func (r *EventRepo) CountsForPosts(postIDs []string) (map[string][2]int, error) {
 	if len(postIDs) == 0 {

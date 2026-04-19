@@ -268,14 +268,14 @@ private struct RestaurantFooter: View {
     let post: Post
     let coral: Color
     @Binding var activeReaction: String?
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
     @EnvironmentObject private var apiService: APIService
 
     init(post: Post, coral: Color, activeReaction: Binding<String?>) {
         self.post = post
         self.coral = coral
         self._activeReaction = activeReaction
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
     }
 
     var body: some View {
@@ -301,8 +301,13 @@ private struct RestaurantFooter: View {
             )
 
             Button {
+                let wasSaved = isBookmarked
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()
+                Task {
+                    do { try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save") }
+                    catch { isBookmarked = wasSaved }
+                }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)

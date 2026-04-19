@@ -171,6 +171,7 @@ struct Post: Codable, Identifiable {
     let images: [PostImage]?
     let labels: [String]?
     let myReaction: String?
+    let saved: Bool?
     let createdAt: String
 
 
@@ -447,6 +448,7 @@ struct Post: Codable, Identifiable {
         case images
         case labels
         case myReaction = "my_reaction"
+        case saved
         case createdAt = "created_at"
     }
 

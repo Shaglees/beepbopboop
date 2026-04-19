@@ -180,14 +180,14 @@ private struct CardHeader: View {
 
 private struct CardFooter: View {
     let post: Post
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
     @State private var activeReaction: String?
     @EnvironmentObject private var apiService: APIService
     @EnvironmentObject private var eventTracker: EventTracker
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
         self._activeReaction = State(initialValue: post.myReaction)
     }
 
@@ -1036,14 +1036,14 @@ private struct OutfitFooter: View {
 private struct OutfitBookmarkButton: View {
     let post: Post
     let tintColor: Color
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
     @EnvironmentObject private var eventTracker: EventTracker
     @EnvironmentObject private var apiService: APIService
 
     init(post: Post, tintColor: Color) {
         self.post = post
         self.tintColor = tintColor
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
     }
 
     var body: some View {

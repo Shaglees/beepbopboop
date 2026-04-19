@@ -325,23 +325,30 @@ struct DestinationCard: View {
     }
 }
 
-// MARK: - Bookmark (separate to isolate @AppStorage)
+// MARK: - Bookmark
 
 private struct DestinationBookmark: View {
     let post: Post
     let accent: Color
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
 
     init(post: Post, accent: Color) {
         self.post = post
         self.accent = accent
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
     }
+
+    @EnvironmentObject private var apiService: APIService
 
     var body: some View {
         Button {
+            let wasSaved = isBookmarked
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             isBookmarked.toggle()
+            Task {
+                do { try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save") }
+                catch { isBookmarked = wasSaved }
+            }
         } label: {
             Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                 .font(.caption)

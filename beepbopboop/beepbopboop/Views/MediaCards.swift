@@ -321,17 +321,26 @@ private func streamingColor(for platform: String) -> Color {
 
 private struct MediaBookmarkButton: View {
     let post: Post
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
+    @EnvironmentObject private var apiService: APIService
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
     }
 
     var body: some View {
         Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            let wasSaved = isBookmarked
             isBookmarked.toggle()
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            Task {
+                do {
+                    try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save")
+                } catch {
+                    isBookmarked = wasSaved
+                }
+            }
         } label: {
             Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                 .font(.caption)

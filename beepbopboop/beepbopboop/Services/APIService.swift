@@ -206,6 +206,30 @@ class APIService: ObservableObject {
     // MARK: - Push Notifications
 
     @MainActor
+    func fetchDigestPosts() async throws -> [DigestPostPreview] {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/digest") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+
+        struct RawDigest: Decodable {
+            let id: String
+            let title: String
+            let body: String
+        }
+        let raw = try JSONDecoder().decode([RawDigest].self, from: data)
+        return raw.map { DigestPostPreview(id: $0.id, title: $0.title, body: $0.body) }
+    }
+
+    @MainActor
     func registerPushToken(_ token: String, platform: String = "apns") async throws {
         let authToken = authService.getToken()
         guard let url = URL(string: "\(baseURL)/user/push-token") else {

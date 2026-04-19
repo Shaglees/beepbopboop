@@ -85,8 +85,15 @@ struct FeedView: View {
         guard !forYouVM.posts.isEmpty else { return }
         hasRequestedNotifications = true
         await ns.checkStatus()
-        guard ns.authorizationStatus == .notDetermined else { return }
-        _ = await ns.requestAuthorization()
+        if ns.authorizationStatus == .notDetermined {
+            _ = await ns.requestAuthorization()
+        }
+        if ns.authorizationStatus == .authorized {
+            let digestHour = UserDefaults.standard.object(forKey: "settings_digestHour") as? Int ?? 8
+            if let posts = try? await apiService.fetchDigestPosts() {
+                await ns.scheduleDailyDigest(posts: posts, digestHour: digestHour)
+            }
+        }
     }
 
     // MARK: - Title Bar

@@ -72,6 +72,8 @@ struct PostDetailView: View {
             PetSpotlightDetailView(post: post)
         case .fitness:
             FitnessDetailView(post: post)
+        case .feedback:
+            FeedbackDetailView(post: post)
         default:
             standardDetailBody
         }

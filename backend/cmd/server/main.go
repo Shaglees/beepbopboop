@@ -67,6 +67,7 @@ func main() {
 	templateRepo := repository.NewTemplateRepo(db)
 	reactionRepo := repository.NewReactionRepo(db)
 	pushTokenRepo := repository.NewPushTokenRepo(db)
+	feedbackRepo := repository.NewFeedbackRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -82,6 +83,7 @@ func main() {
 	templatesH := handler.NewTemplatesHandler(userRepo, agentRepo, templateRepo)
 	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
 	pushTokenH := handler.NewPushTokenHandler(userRepo, pushTokenRepo)
+	feedbackH := handler.NewFeedbackHandler(userRepo, feedbackRepo)
 	weatherSvc := weather.NewService()
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
@@ -118,6 +120,8 @@ func main() {
 		r.Post("/events/batch", eventsH.BatchTrack)
 		r.Put("/posts/{postID}/reaction", reactionsH.SetReaction)
 		r.Delete("/posts/{postID}/reaction", reactionsH.RemoveReaction)
+		r.Post("/posts/{postID}/response", feedbackH.SubmitResponse)
+		r.Get("/posts/{postID}/responses", feedbackH.GetResponses)
 		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
 		r.Get("/user/weights/summary", weightsSummaryH.GetSummary)
 		r.Get("/sports/scores", sportsH.GetScores)

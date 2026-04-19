@@ -121,5 +121,23 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE")
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS digest_hour INT NOT NULL DEFAULT 8")
 
+	// Feedback posts: user_feedback stores raw responses to poll/survey/freeform/rating posts
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_feedback (
+		id          BIGSERIAL PRIMARY KEY,
+		post_id     TEXT NOT NULL REFERENCES posts(id),
+		user_id     TEXT NOT NULL REFERENCES users(id),
+		response    JSONB NOT NULL,
+		created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_feedback_post_id ON user_feedback(post_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_feedback_user_id ON user_feedback(user_id)")
+	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_feedback_post_user ON user_feedback(post_id, user_id)")
+
+	// preference_context: agent-writable distilled preference summary for prompt injection
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS preference_context JSONB")
+
+	// Register feedback display hints
+	db.Exec("SELECT 1") // no-op; hints are validated in the handler layer
+
 	return db, nil
 }

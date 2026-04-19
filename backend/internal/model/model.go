@@ -303,6 +303,23 @@ type TrainingPair struct {
 	Reaction   string  `json:"reaction,omitempty"`
 }
 
+// PostEmbedding holds a dense float vector for a post produced by an embedding model.
+type PostEmbedding struct {
+	PostID       string    `json:"post_id"`
+	ModelVersion string    `json:"model_version"`
+	CreatedAt    time.Time `json:"created_at"`
+	Embedding    []float32 `json:"-"`
+}
+
+// UserEmbedding holds a user's interest vector, computed as a weighted average
+// of the post embeddings the user engaged with in the last 14 days.
+type UserEmbedding struct {
+	UserID     string    `json:"user_id"`
+	PostCount  int       `json:"post_count"`
+	ComputedAt time.Time `json:"computed_at"`
+	Embedding  []float32 `json:"-"`
+}
+
 // CreateCreatorRequest is the agent-facing request body for POST /creators.
 type CreateCreatorRequest struct {
 	Name         string          `json:"name"`

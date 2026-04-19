@@ -193,5 +193,26 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE agents ADD COLUMN IF NOT EXISTS description TEXT")
 	db.Exec("ALTER TABLE agents ADD COLUMN IF NOT EXISTS avatar_url TEXT")
 
+	// pgvector extension — no-op on standard Postgres; enables vector() type when installed.
+	db.Exec("CREATE EXTENSION IF NOT EXISTS vector")
+
+	// Post embeddings: dense float vectors from the embedding model (e.g. OpenAI text-embedding).
+	// Stored as DOUBLE PRECISION[] so tests run on standard postgres:17-alpine without pgvector.
+	db.Exec(`CREATE TABLE IF NOT EXISTS post_embeddings (
+		post_id       TEXT PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
+		embedding     DOUBLE PRECISION[] NOT NULL,
+		model_version TEXT NOT NULL DEFAULT '',
+		created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_embeddings_model ON post_embeddings(model_version)")
+
+	// User embeddings: weighted average of engaged post embeddings, recomputed nightly.
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_embeddings (
+		user_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+		embedding   DOUBLE PRECISION[] NOT NULL,
+		post_count  INTEGER NOT NULL DEFAULT 0,
+		computed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+
 	return db, nil
 }

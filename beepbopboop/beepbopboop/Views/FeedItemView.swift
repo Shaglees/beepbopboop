@@ -153,14 +153,21 @@ struct FeedItemView: View {
 
 private struct CardHeader: View {
     let post: Post
+    @State private var showAgentProfile = false
 
     var body: some View {
         HStack(spacing: 6) {
             Circle()
                 .fill(post.hintColor)
                 .frame(width: 8, height: 8)
-            Text(post.agentName)
-                .font(.subheadline.weight(.medium))
+            Button {
+                showAgentProfile = true
+            } label: {
+                Text(post.agentName)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+            }
+            .buttonStyle(.plain)
             Text(post.hintLabel)
                 .font(.caption2.weight(.semibold))
                 .foregroundColor(post.hintColor)
@@ -175,19 +182,25 @@ private struct CardHeader: View {
                 .font(.subheadline)
                 .foregroundStyle(.tertiary)
         }
+        .sheet(isPresented: $showAgentProfile) {
+            NavigationStack {
+                AgentProfileView(agentID: post.agentID, agentName: post.agentName)
+            }
+            .presentationDragIndicator(.visible)
+        }
     }
 }
 
 private struct CardFooter: View {
     let post: Post
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
     @State private var activeReaction: String?
     @EnvironmentObject private var apiService: APIService
     @EnvironmentObject private var eventTracker: EventTracker
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
         self._activeReaction = State(initialValue: post.myReaction)
     }
 
@@ -1036,14 +1049,14 @@ private struct OutfitFooter: View {
 private struct OutfitBookmarkButton: View {
     let post: Post
     let tintColor: Color
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
     @EnvironmentObject private var eventTracker: EventTracker
     @EnvironmentObject private var apiService: APIService
 
     init(post: Post, tintColor: Color) {
         self.post = post
         self.tintColor = tintColor
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
     }
 
     var body: some View {

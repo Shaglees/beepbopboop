@@ -344,14 +344,14 @@ private func tipCardHeader(post: Post) -> some View {
 private struct PetCardFooter: View {
     let post: Post
     let accentColor: Color
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
     @State private var activeReaction: String?
     @EnvironmentObject private var apiService: APIService
 
     init(post: Post, accentColor: Color) {
         self.post = post
         self.accentColor = accentColor
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
         self._activeReaction = State(initialValue: post.myReaction)
     }
 
@@ -366,8 +366,13 @@ private struct PetCardFooter: View {
             Spacer()
             ReactionPicker(activeReaction: $activeReaction, postID: post.id, style: .feedCompact)
             Button {
+                let wasSaved = isBookmarked
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()
+                Task {
+                    do { try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save") }
+                    catch { isBookmarked = wasSaved }
+                }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)

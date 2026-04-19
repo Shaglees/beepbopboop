@@ -18,8 +18,14 @@ func NewReactionRepo(db *sql.DB) *ReactionRepo {
 
 // Upsert sets or replaces a user's reaction on a post (last one wins).
 func (r *ReactionRepo) Upsert(postID, userID, reaction string) (*model.PostReaction, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
 	var pr model.PostReaction
-	err := r.db.QueryRow(`
+	err = tx.QueryRow(`
 		INSERT INTO post_reactions (post_id, user_id, reaction)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (post_id, user_id)
@@ -30,28 +36,41 @@ func (r *ReactionRepo) Upsert(postID, userID, reaction string) (*model.PostReact
 	if err != nil {
 		return nil, fmt.Errorf("upsert reaction: %w", err)
 	}
+
 	// Keep denormalized reaction_count in sync (count only positive "more" reactions).
-	if err := r.syncReactionCount(postID); err != nil {
+	if err := syncReactionCountTx(tx, postID); err != nil {
 		return nil, fmt.Errorf("sync reaction_count: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
 	}
 	return &pr, nil
 }
 
 // Delete removes a user's reaction from a post.
 func (r *ReactionRepo) Delete(postID, userID string) error {
-	_, err := r.db.Exec(`DELETE FROM post_reactions WHERE post_id = $1 AND user_id = $2`, postID, userID)
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`DELETE FROM post_reactions WHERE post_id = $1 AND user_id = $2`, postID, userID)
 	if err != nil {
 		return fmt.Errorf("delete reaction: %w", err)
 	}
-	if err := r.syncReactionCount(postID); err != nil {
+
+	if err := syncReactionCountTx(tx, postID); err != nil {
 		return fmt.Errorf("sync reaction_count: %w", err)
 	}
-	return nil
+
+	return tx.Commit()
 }
 
-// syncReactionCount updates the denormalized reaction_count on the post.
-func (r *ReactionRepo) syncReactionCount(postID string) error {
-	_, err := r.db.Exec(`
+// syncReactionCountTx updates the denormalized reaction_count on the post within a transaction.
+func syncReactionCountTx(tx *sql.Tx, postID string) error {
+	_, err := tx.Exec(`
 		UPDATE posts SET reaction_count = (
 			SELECT COUNT(*) FROM post_reactions WHERE post_id = $1 AND reaction = 'more'
 		) WHERE id = $1`, postID)

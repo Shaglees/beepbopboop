@@ -2,7 +2,7 @@ import SwiftUI
 
 struct BriefDetailView: View {
     let post: Post
-    @AppStorage private var isBookmarked: Bool
+    @State private var isBookmarked: Bool
     @State private var activeReaction: String?
     @Environment(\.dismiss) private var dismiss
     @State private var expandedSections: Set<Int> = [0]
@@ -10,7 +10,7 @@ struct BriefDetailView: View {
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
         self._activeReaction = State(initialValue: post.myReaction)
     }
 

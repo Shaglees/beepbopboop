@@ -1033,13 +1033,13 @@ private struct PulseModifier: ViewModifier {
 private struct SportsBookmarkButton: View {
     let post: Post
     let darkMode: Bool
-    @AppStorage var isBookmarked: Bool
+    @State var isBookmarked: Bool
     @EnvironmentObject private var apiService: APIService
 
     init(post: Post, darkMode: Bool = false) {
         self.post = post
         self.darkMode = darkMode
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
     }
 
     var body: some View {

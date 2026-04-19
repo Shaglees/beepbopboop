@@ -19,6 +19,21 @@ type Agent struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// AgentProfile is a richer agent view including follower/post counts and profile fields.
+type AgentProfile struct {
+	ID            string    `json:"id"`
+	UserID        string    `json:"user_id"`
+	Name          string    `json:"name"`
+	Status        string    `json:"status"`
+	Description   string    `json:"description,omitempty"`
+	AvatarURL     string    `json:"avatar_url,omitempty"`
+	FollowerCount int       `json:"follower_count"`
+	PostCount     int       `json:"post_count"`
+	CreatedAt     time.Time `json:"created_at"`
+	// IsFollowing is populated per-request (not stored).
+	IsFollowing bool `json:"is_following,omitempty"`
+}
+
 type AgentToken struct {
 	ID        string    `json:"id"`
 	AgentID   string    `json:"agent_id"`
@@ -82,6 +97,7 @@ type Post struct {
 	SaveCount         int             `json:"save_count"`
 	ReactionCount     int             `json:"reaction_count"`
 	MyReaction        *string         `json:"my_reaction,omitempty"`
+	Saved             bool            `json:"saved"`
 }
 
 type DisplayTemplate struct {

@@ -271,6 +271,20 @@ func validatePost(req *createPostRequest) validationResult {
 			validateFoodData(req.ExternalURL, &errs, &warns)
 		case "fitness":
 			validateFitnessData(req.ExternalURL, &errs, &warns)
+		case "album", "concert":
+			validateMusicData(req.ExternalURL, req.DisplayHint, &errs, &warns)
+		case "movie", "show":
+			validateMediaData(req.ExternalURL, req.DisplayHint, &errs, &warns)
+		case "player_spotlight":
+			validatePlayerData(req.ExternalURL, &errs, &warns)
+		case "box_score":
+			validateBoxScoreData(req.ExternalURL, &errs, &warns)
+		case "pet_spotlight":
+			validatePetData(req.ExternalURL, &errs, &warns)
+		case "destination":
+			validateTravelData(req.ExternalURL, &errs, &warns)
+		case "science":
+			validateScienceData(req.ExternalURL, &errs, &warns)
 		}
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" ||
@@ -580,6 +594,191 @@ func validateFitnessData(externalURL string, errs *[]validationIssue, warns *[]v
 	}
 	if f.Activity == nil || *f.Activity == "" {
 		*warns = append(*warns, validationIssue{Field: "external_url.activity", Code: "missing", Message: "fitness data missing activity"})
+	}
+}
+
+// --- Music data validation (album / concert) ---
+
+type musicDataValidation struct {
+	Type   *string `json:"type"`
+	Artist *string `json:"artist"`
+	Title  *string `json:"title"`
+	Venue  *string `json:"venue"`
+	Date   *string `json:"date"`
+}
+
+func validateMusicData(externalURL string, hint string, errs *[]validationIssue, warns *[]validationIssue) {
+	var m musicDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &m); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for " + hint + " hint"})
+		return
+	}
+	if m.Type == nil || *m.Type == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.type", Code: "required", Message: "music data type is required (album | concert)"})
+	}
+	if m.Artist == nil || *m.Artist == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.artist", Code: "required", Message: "artist is required"})
+	}
+	if hint == "album" && (m.Title == nil || *m.Title == "") {
+		*warns = append(*warns, validationIssue{Field: "external_url.title", Code: "missing", Message: "album missing title"})
+	}
+	if hint == "concert" && m.Venue == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.venue", Code: "missing", Message: "concert missing venue"})
+	}
+	if hint == "concert" && m.Date == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.date", Code: "missing", Message: "concert missing date"})
+	}
+}
+
+// --- Media data validation (movie / show) ---
+
+type mediaDataValidation struct {
+	TmdbId *int    `json:"tmdbId"`
+	Type   *string `json:"type"`
+	Title  *string `json:"title"`
+}
+
+func validateMediaData(externalURL string, hint string, errs *[]validationIssue, warns *[]validationIssue) {
+	var m mediaDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &m); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for " + hint + " hint"})
+		return
+	}
+	if m.TmdbId == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.tmdbId", Code: "required", Message: "tmdbId is required"})
+	}
+	if m.Title == nil || *m.Title == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.title", Code: "required", Message: "title is required"})
+	}
+	if m.Type == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.type", Code: "missing", Message: "type field missing (movie | show)"})
+	}
+}
+
+// --- Player spotlight data validation ---
+
+type playerDataValidation struct {
+	PlayerName *string `json:"playerName"`
+	Sport      *string `json:"sport"`
+	Team       *string `json:"team"`
+}
+
+func validatePlayerData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var p playerDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &p); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for player_spotlight hint"})
+		return
+	}
+	if p.PlayerName == nil || *p.PlayerName == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.playerName", Code: "required", Message: "playerName is required"})
+	}
+	if p.Sport == nil || *p.Sport == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.sport", Code: "required", Message: "sport is required"})
+	}
+	if p.Team == nil || *p.Team == "" {
+		*warns = append(*warns, validationIssue{Field: "external_url.team", Code: "missing", Message: "player_spotlight missing team"})
+	}
+}
+
+// --- Box score data validation ---
+
+type boxScoreTeamValidation struct {
+	Name *string `json:"name"`
+	Abbr *string `json:"abbr"`
+}
+
+type boxScoreDataValidation struct {
+	Sport  *string                 `json:"sport"`
+	Status *string                 `json:"status"`
+	Home   *boxScoreTeamValidation `json:"home"`
+	Away   *boxScoreTeamValidation `json:"away"`
+}
+
+func validateBoxScoreData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var b boxScoreDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &b); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for box_score hint"})
+		return
+	}
+	if b.Status == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.status", Code: "required", Message: "game status is required"})
+	}
+	if b.Home == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.home", Code: "required", Message: "home team is required"})
+	}
+	if b.Away == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.away", Code: "required", Message: "away team is required"})
+	}
+	if b.Sport == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.sport", Code: "missing", Message: "missing sport field on box_score data"})
+	}
+}
+
+// --- Pet data validation ---
+
+type petDataValidation struct {
+	Type *string `json:"type"`
+}
+
+func validatePetData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var p petDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &p); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for pet_spotlight hint"})
+		return
+	}
+	if p.Type == nil || *p.Type == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.type", Code: "required", Message: "pet data type is required (adoption | tip | breed)"})
+	}
+}
+
+// --- Travel data validation (destination) ---
+
+type travelDataValidation struct {
+	City      *string  `json:"city"`
+	Country   *string  `json:"country"`
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
+}
+
+func validateTravelData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var t travelDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &t); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for destination hint"})
+		return
+	}
+	if t.City == nil || *t.City == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.city", Code: "required", Message: "city is required"})
+	}
+	if t.Country == nil || *t.Country == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.country", Code: "required", Message: "country is required"})
+	}
+	if t.Latitude == nil || t.Longitude == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.latitude", Code: "missing", Message: "destination data missing coordinates"})
+	}
+}
+
+// --- Science data validation ---
+
+type scienceDataValidation struct {
+	Category *string `json:"category"`
+	Source   *string `json:"source"`
+	Headline *string `json:"headline"`
+}
+
+func validateScienceData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var s scienceDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &s); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for science hint"})
+		return
+	}
+	if s.Category == nil || *s.Category == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.category", Code: "required", Message: "category is required"})
+	}
+	if s.Source == nil || *s.Source == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.source", Code: "required", Message: "source is required"})
+	}
+	if s.Headline == nil || *s.Headline == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.headline", Code: "required", Message: "headline is required"})
 	}
 }
 

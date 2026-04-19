@@ -78,6 +78,12 @@ func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error 
 		return nil
 	}
 
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
 	var b strings.Builder
 	b.WriteString("INSERT INTO post_events (post_id, user_id, event_type, dwell_ms) VALUES ")
 
@@ -91,7 +97,7 @@ func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error 
 		args = append(args, e.PostID, userID, e.EventType, e.DwellMs)
 	}
 
-	_, err := r.db.Exec(b.String(), args...)
+	_, err = tx.Exec(b.String(), args...)
 	if err != nil {
 		return fmt.Errorf("batch insert post_events: %w", err)
 	}
@@ -104,11 +110,22 @@ func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error 
 		}
 	}
 	for postID := range synced {
-		if err := r.syncSaveCount(postID); err != nil {
-			return err
+		_, err := tx.Exec(`
+			UPDATE posts SET save_count = (
+				SELECT COUNT(*)
+				FROM (
+					SELECT DISTINCT ON (user_id) event_type
+					FROM post_events
+					WHERE post_id = $1 AND event_type IN ('save', 'unsave')
+					ORDER BY user_id, created_at DESC
+				) latest
+				WHERE event_type = 'save'
+			) WHERE id = $1`, postID)
+		if err != nil {
+			return fmt.Errorf("sync save_count for post %s: %w", postID, err)
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 // Summary returns aggregated engagement stats for a user's posts over the last N days.
@@ -188,6 +205,52 @@ func (r *EventRepo) Summary(userID string, days int) (*model.EventSummary, error
 	}
 
 	return summary, nil
+}
+
+// GetSavedForPosts returns the set of postIDs that userID currently has saved.
+func (r *EventRepo) GetSavedForPosts(postIDs []string, userID string) (map[string]bool, error) {
+	if len(postIDs) == 0 {
+		return nil, nil
+	}
+
+	var b strings.Builder
+	b.WriteString(`
+		SELECT DISTINCT pe.post_id
+		FROM post_events pe
+		LEFT JOIN post_events unsave ON unsave.post_id = pe.post_id
+			AND unsave.user_id = pe.user_id
+			AND unsave.event_type = 'unsave'
+			AND unsave.created_at > pe.created_at
+		WHERE pe.user_id = $1
+			AND pe.event_type = 'save'
+			AND unsave.id IS NULL
+			AND pe.post_id IN (`)
+
+	args := []any{userID}
+	for i, id := range postIDs {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "$%d", i+2)
+		args = append(args, id)
+	}
+	b.WriteString(")")
+
+	rows, err := r.db.Query(b.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("query saved posts for user: %w", err)
+	}
+	defer rows.Close()
+
+	saved := make(map[string]bool)
+	for rows.Next() {
+		var postID string
+		if err := rows.Scan(&postID); err != nil {
+			return nil, fmt.Errorf("scan saved post: %w", err)
+		}
+		saved[postID] = true
+	}
+	return saved, rows.Err()
 }
 
 // CountsForPosts returns view and save counts for a list of post IDs.

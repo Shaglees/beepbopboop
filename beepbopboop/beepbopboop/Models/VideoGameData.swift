@@ -28,23 +28,34 @@ extension VideoGameData {
     var isUpcoming: Bool { status == "upcoming" }
     var isEarlyAccess: Bool { status == "early_access" }
 
+    private static let releaseDateParser: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+    private static let releaseDateParserUTC: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
+    private static let releaseDateDisplay: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, yyyy"
+        return f
+    }()
+
     /// Formatted release date for display (e.g. "May 30, 2026").
     var formattedReleaseDate: String? {
-        guard let dateStr = releaseDate else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let date = formatter.date(from: dateStr) else { return dateStr }
-        formatter.dateFormat = "MMM d, yyyy"
-        return formatter.string(from: date)
+        guard let dateStr = releaseDate,
+              let date = VideoGameData.releaseDateParser.date(from: dateStr) else { return releaseDate }
+        return VideoGameData.releaseDateDisplay.string(from: date)
     }
 
     /// Days until release (positive) or days since release (negative).
     var daysUntilRelease: Int? {
-        guard let dateStr = releaseDate else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        guard let date = formatter.date(from: dateStr) else { return nil }
+        guard let dateStr = releaseDate,
+              let date = VideoGameData.releaseDateParserUTC.date(from: dateStr) else { return nil }
         return Calendar.current.dateComponents([.day], from: Date(), to: date).day
     }
 

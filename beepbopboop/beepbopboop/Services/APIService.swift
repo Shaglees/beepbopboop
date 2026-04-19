@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 enum FeedType {
-    case forYou, community, personal, saved
+    case forYou, community, personal, saved, following
 
     var path: String {
         switch self {
@@ -10,6 +10,7 @@ enum FeedType {
         case .community: return "/feeds/community"
         case .personal: return "/feeds/personal"
         case .saved: return "/posts/saved"
+        case .following: return "/feeds/following"
         }
     }
 }
@@ -206,6 +207,30 @@ class APIService: ObservableObject {
     // MARK: - Push Notifications
 
     @MainActor
+    func fetchDigestPosts() async throws -> [DigestPostPreview] {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/digest") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+
+        struct RawDigest: Decodable {
+            let id: String
+            let title: String
+            let body: String
+        }
+        let raw = try JSONDecoder().decode([RawDigest].self, from: data)
+        return raw.map { DigestPostPreview(id: $0.id, title: $0.title, body: $0.body) }
+    }
+
+    @MainActor
     func registerPushToken(_ token: String, platform: String = "apns") async throws {
         let authToken = authService.getToken()
         guard let url = URL(string: "\(baseURL)/user/push-token") else {
@@ -291,6 +316,78 @@ class APIService: ObservableObject {
               (200...299).contains(httpResponse.statusCode) else {
             throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
         }
+    }
+
+    // MARK: - Agent Following
+
+    @MainActor
+    func followAgent(agentID: String) async throws -> FollowResponse {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/agents/\(agentID)/follow") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        return try JSONDecoder().decode(FollowResponse.self, from: data)
+    }
+
+    @MainActor
+    func unfollowAgent(agentID: String) async throws -> FollowResponse {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/agents/\(agentID)/follow") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        return try JSONDecoder().decode(FollowResponse.self, from: data)
+    }
+
+    @MainActor
+    func getAgentProfile(agentID: String) async throws -> AgentProfile {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/agents/\(agentID)") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        return try JSONDecoder().decode(AgentProfile.self, from: data)
+    }
+
+    @MainActor
+    func listFollowingAgents() async throws -> [AgentProfile] {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/agents/following") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        return try JSONDecoder().decode([AgentProfile].self, from: data)
     }
 
     @MainActor

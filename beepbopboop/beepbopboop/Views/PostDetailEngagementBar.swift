@@ -4,14 +4,13 @@ import SwiftUI
 /// Provides bookmark, reactions, share, and external link actions.
 struct PostDetailEngagementBar: View {
     let post: Post
-    @AppStorage private var isBookmarked: Bool
+    @State private var isBookmarked: Bool
     @State private var activeReaction: String?
     @EnvironmentObject private var apiService: APIService
-    @EnvironmentObject private var eventTracker: EventTracker
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = State(initialValue: post.saved ?? false)
         self._activeReaction = State(initialValue: post.myReaction)
     }
 

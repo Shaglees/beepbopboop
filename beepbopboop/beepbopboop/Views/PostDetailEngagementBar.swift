@@ -7,7 +7,6 @@ struct PostDetailEngagementBar: View {
     @State private var isBookmarked: Bool
     @State private var activeReaction: String?
     @EnvironmentObject private var apiService: APIService
-    @EnvironmentObject private var eventTracker: EventTracker
 
     init(post: Post) {
         self.post = post

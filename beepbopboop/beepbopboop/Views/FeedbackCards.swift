@@ -345,6 +345,10 @@ struct FreeformCardView: View {
     @FocusState private var isFocused: Bool
     @EnvironmentObject private var apiService: APIService
 
+    private var isSubmittable: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             FeedbackCardHeader(post: post, icon: "text.cursor")
@@ -394,20 +398,19 @@ struct FreeformCardView: View {
                 }
 
                 Button {
-                    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
                     Task { await submitFreeform() }
                 } label: {
                     Text("Submit")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(!text.isEmpty ? .white : .white.opacity(0.3))
+                        .foregroundColor(isSubmittable ? .white : .white.opacity(0.3))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(
                             RoundedRectangle(cornerRadius: 10)
-                                .fill(!text.isEmpty ? feedbackBlue : feedbackBlue.opacity(0.2))
+                                .fill(isSubmittable ? feedbackBlue : feedbackBlue.opacity(0.2))
                         )
                 }
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!isSubmittable)
                 .buttonStyle(.plain)
             } else {
                 HStack(spacing: 6) {
@@ -602,36 +605,25 @@ struct SurveyCardView: View {
     }
 
     private func submitSurvey() async {
-        // Build a combined answer set
-        struct SurveyAnswer: Codable {
-            let question: String
-            let type: String
-            let selected: [String]?
-            let text: String?
-            let value: Double?
-        }
-
         var answers: [SurveyAnswer] = []
         for q in questions {
             switch q.type {
             case "poll":
                 let sel = pollAnswers[q.key].map { [$0] } ?? []
-                answers.append(SurveyAnswer(question: q.key, type: "poll", selected: sel, text: nil, value: nil))
+                answers.append(SurveyAnswer(question: q.key, type: "poll", selected: sel))
             case "freeform":
                 let t = freeformAnswers[q.key] ?? ""
-                answers.append(SurveyAnswer(question: q.key, type: "freeform", selected: nil, text: t, value: nil))
+                answers.append(SurveyAnswer(question: q.key, type: "freeform", text: t))
             case "rating":
                 let v = Double(ratingAnswers[q.key] ?? 0)
-                answers.append(SurveyAnswer(question: q.key, type: "rating", selected: nil, text: nil, value: v))
+                answers.append(SurveyAnswer(question: q.key, type: "rating", value: v))
             default:
                 break
             }
         }
 
-        // Use first poll answer's selected for the top-level selected field
-        let topSelected = pollAnswers.values.map { $0 }
         var response = FeedbackResponse(type: "survey")
-        response.selected = topSelected
+        response.answers = answers
 
         do {
             try await apiService.submitFeedback(postID: post.id, response: response)

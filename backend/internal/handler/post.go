@@ -58,6 +58,7 @@ var ValidDisplayHints = map[string]bool{
 	"pet_spotlight":    true,
 	"fitness":          true,
 	"box_score":        true,
+	"feedback":         true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -189,7 +190,8 @@ func validatePost(req *createPostRequest) validationResult {
 		req.DisplayHint == "restaurant" || req.DisplayHint == "destination" ||
 		req.DisplayHint == "pet_spotlight" || req.DisplayHint == "fitness" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
-		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score"
+		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" ||
+		req.DisplayHint == "feedback"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -264,12 +266,14 @@ func validatePost(req *createPostRequest) validationResult {
 			validateFoodData(req.ExternalURL, &errs, &warns)
 		case "fitness":
 			validateFitnessData(req.ExternalURL, &errs, &warns)
+		case "feedback":
+			validateFeedbackData(req.ExternalURL, &errs, &warns)
 		}
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" ||
 		req.DisplayHint == "destination" || req.DisplayHint == "fitness" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
-		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" || req.DisplayHint == "pet_spotlight" {
+		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" || req.DisplayHint == "pet_spotlight" || req.DisplayHint == "feedback" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",
@@ -573,6 +577,34 @@ func validateFitnessData(externalURL string, errs *[]validationIssue, warns *[]v
 	}
 	if f.Activity == nil || *f.Activity == "" {
 		*warns = append(*warns, validationIssue{Field: "external_url.activity", Code: "missing", Message: "fitness data missing activity"})
+	}
+}
+
+// --- Feedback data validation ---
+
+type feedbackDataValidation struct {
+	FeedbackType *string `json:"feedback_type"`
+	Question     *string `json:"question"`
+}
+
+func validateFeedbackData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var f feedbackDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &f); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "feedback external_url must be valid JSON"})
+		return
+	}
+	if f.FeedbackType == nil || *f.FeedbackType == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.feedback_type", Code: "required", Message: "feedback_type is required (poll, survey, freeform, rating)"})
+	} else {
+		switch *f.FeedbackType {
+		case "poll", "survey", "freeform", "rating":
+			// valid
+		default:
+			*errs = append(*errs, validationIssue{Field: "external_url.feedback_type", Code: "invalid", Message: fmt.Sprintf("unknown feedback_type %q; must be poll, survey, freeform, or rating", *f.FeedbackType)})
+		}
+	}
+	if f.Question == nil || *f.Question == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.question", Code: "required", Message: "feedback question is required"})
 	}
 }
 

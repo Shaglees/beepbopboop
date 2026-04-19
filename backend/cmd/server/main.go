@@ -67,6 +67,7 @@ func main() {
 	templateRepo := repository.NewTemplateRepo(db)
 	reactionRepo := repository.NewReactionRepo(db)
 	pushTokenRepo := repository.NewPushTokenRepo(db)
+	feedbackRepo := repository.NewFeedbackRepo(db)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -85,6 +86,7 @@ func main() {
 	weatherSvc := weather.NewService()
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
+	feedbackH := handler.NewFeedbackHandler(userRepo, feedbackRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -121,6 +123,8 @@ func main() {
 		r.Get("/user/templates", templatesH.ListTemplatesFirebase)
 		r.Get("/user/weights/summary", weightsSummaryH.GetSummary)
 		r.Get("/sports/scores", sportsH.GetScores)
+		r.Post("/posts/{postID}/response", feedbackH.SubmitResponse)
+		r.Get("/posts/{postID}/responses", feedbackH.GetResponses)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)

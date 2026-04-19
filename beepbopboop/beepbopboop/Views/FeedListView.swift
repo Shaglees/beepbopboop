@@ -123,6 +123,8 @@ struct FeedListView: View {
     private var emptyView: some View {
         if viewModel.feedType == .personal {
             AgentEmptyStateView()
+        } else if viewModel.feedType == .following {
+            FollowingEmptyStateView()
         } else {
             VStack(spacing: 12) {
                 Image(systemName: "tray")

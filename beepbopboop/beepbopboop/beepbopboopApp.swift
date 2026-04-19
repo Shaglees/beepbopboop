@@ -3,19 +3,29 @@ import SwiftUI
 
 @main
 struct beepbopboopApp: App {
-    @StateObject private var authService = AuthService()
+    @StateObject private var authService: AuthService
+    @StateObject private var notificationService: NotificationService
+    @StateObject private var api: APIService
+    @StateObject private var tracker: EventTracker
+    @StateObject private var calendarService: CalendarService
     @AppStorage("onboardingComplete") private var onboardingComplete = false
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var notificationService = NotificationService()
-    @StateObject private var calendarService = CalendarService()
+
+    init() {
+        let auth = AuthService()
+        let apiSvc = APIService(authService: auth)
+        _authService = StateObject(wrappedValue: auth)
+        _notificationService = StateObject(wrappedValue: NotificationService())
+        _api = StateObject(wrappedValue: apiSvc)
+        _tracker = StateObject(wrappedValue: EventTracker { events in
+            try? await apiSvc.postEventsBatch(events)
+        })
+        _calendarService = StateObject(wrappedValue: CalendarService())
+    }
 
     var body: some Scene {
         WindowGroup {
             if authService.isSignedIn {
-                let api = APIService(authService: authService)
-                let tracker = EventTracker { events in
-                    try? await api.postEventsBatch(events)
-                }
                 FeedView(
                     authService: authService,
                     apiService: api,

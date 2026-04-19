@@ -66,44 +66,54 @@ struct MusicData: Codable {
         return "\(count)"
     }
 
+    private static let dateParser: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+    private static let concertDateDisplay: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
+    private static let albumDateDisplay: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, yyyy"
+        return f
+    }()
+    private static let monthAbbrevDisplay: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM"
+        return f
+    }()
+    private static let dayNumberDisplay: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "d"
+        return f
+    }()
+
     var formattedDate: String? {
-        guard let dateStr = date else { return nil }
-        let parser = DateFormatter()
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let parsed = parser.date(from: dateStr) else { return dateStr }
-        let display = DateFormatter()
-        display.dateFormat = "MMM d"
-        return display.string(from: parsed)
+        guard let dateStr = date,
+              let parsed = MusicData.dateParser.date(from: dateStr) else { return date }
+        return MusicData.concertDateDisplay.string(from: parsed)
     }
 
     var formattedReleaseDate: String? {
-        guard let dateStr = releaseDate else { return nil }
-        let parser = DateFormatter()
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let parsed = parser.date(from: dateStr) else { return dateStr }
-        let display = DateFormatter()
-        display.dateFormat = "MMM d, yyyy"
-        return display.string(from: parsed)
+        guard let dateStr = releaseDate,
+              let parsed = MusicData.dateParser.date(from: dateStr) else { return releaseDate }
+        return MusicData.albumDateDisplay.string(from: parsed)
     }
 
     var monthAbbrev: String? {
-        guard let dateStr = date else { return nil }
-        let parser = DateFormatter()
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let parsed = parser.date(from: dateStr) else { return nil }
-        let display = DateFormatter()
-        display.dateFormat = "MMM"
-        return display.string(from: parsed).uppercased()
+        guard let dateStr = date,
+              let parsed = MusicData.dateParser.date(from: dateStr) else { return nil }
+        return MusicData.monthAbbrevDisplay.string(from: parsed).uppercased()
     }
 
     var dayNumber: String? {
-        guard let dateStr = date else { return nil }
-        let parser = DateFormatter()
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let parsed = parser.date(from: dateStr) else { return nil }
-        let display = DateFormatter()
-        display.dateFormat = "d"
-        return display.string(from: parsed)
+        guard let dateStr = date,
+              let parsed = MusicData.dateParser.date(from: dateStr) else { return nil }
+        return MusicData.dayNumberDisplay.string(from: parsed)
     }
 }
 

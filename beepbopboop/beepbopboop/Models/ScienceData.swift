@@ -60,16 +60,24 @@ struct ScienceData: Codable {
         }
     }
 
+    private static let dateParsers: [DateFormatter] = {
+        ["yyyy-MM-dd", "yyyy-MM-dd'T'HH:mm:ssZ", "yyyy-MM-dd'T'HH:mm:ss.SSSZ"].map { fmt in
+            let f = DateFormatter()
+            f.dateFormat = fmt
+            return f
+        }
+    }()
+    private static let dateDisplay: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, yyyy"
+        return f
+    }()
+
     var formattedDate: String? {
         guard let raw = publishedAt else { return nil }
-        let formats = ["yyyy-MM-dd", "yyyy-MM-dd'T'HH:mm:ssZ", "yyyy-MM-dd'T'HH:mm:ss.SSSZ"]
-        let output = DateFormatter()
-        output.dateFormat = "MMM d, yyyy"
-        for format in formats {
-            let parser = DateFormatter()
-            parser.dateFormat = format
+        for parser in ScienceData.dateParsers {
             if let date = parser.date(from: raw) {
-                return output.string(from: date)
+                return ScienceData.dateDisplay.string(from: date)
             }
         }
         return raw

@@ -257,12 +257,24 @@ Instead of individual scoreboard posts for every game, create a single standings
   Include ALL games from that league on that day, not just the user's preferred team. The `headline` should highlight the most notable outcome.
 - `labels`: `["sports", "<league>", "digest"]`
 
-**Team news (always check):**
-- `WebSearch "<team-name> news today"` for trades, injuries, signings, milestones
-- If newsworthy items found, generate **article** posts:
-  - `post_type`: `article`
-  - `display_hint`: `article`
-  - `labels`: `["sports", "<league>", "<team-slug>", "news"]`
+**Team news (always check, with date guardrail):**
+1. Gather 5-10 candidate links:
+   - `WebSearch "<team-name> latest news"` and `WebSearch "<team-name> injury update"`
+   - For each candidate, extract `title`, `url`, and `published_at` (ISO-8601 if available)
+2. Validate publication date against the user's local date before writing:
+   ```bash
+   cat /tmp/sports_news_candidates.json | \
+     python3 ./scripts/filter_sports_news_by_date.py \
+       --timezone America/Vancouver \
+       --max-age-days 10 > /tmp/sports_news_filtered.json
+   ```
+3. Only use items from `fresh[]` (published within the last 10 days in local timezone). Never use `stale[]` or `invalid[]` items.
+4. If `fresh[]` is empty, skip team-news article generation for that team (do not infer from old stories).
+5. If newsworthy fresh items exist, generate **article** posts:
+   - `post_type`: `article`
+   - `display_hint`: `article`
+   - `labels`: `["sports", "<league>", "<team-slug>", "news"]`
+   - Mention the publication date in body when context could be time-sensitive (injury, lineup, playoff status).
 
 ---
 

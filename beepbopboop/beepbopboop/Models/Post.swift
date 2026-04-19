@@ -171,6 +171,7 @@ struct Post: Codable, Identifiable {
     let images: [PostImage]?
     let labels: [String]?
     let myReaction: String?
+    let sourcePublishedAt: String?
     let saved: Bool?
     let createdAt: String
 
@@ -393,22 +394,25 @@ struct Post: Codable, Identifiable {
 
     // MARK: - Relative Time
 
-    var relativeTime: String {
-        let formatters: [ISO8601DateFormatter] = {
-            let withFractional = ISO8601DateFormatter()
-            withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let withoutFractional = ISO8601DateFormatter()
-            withoutFractional.formatOptions = [.withInternetDateTime]
-            return [withFractional, withoutFractional]
-        }()
+    private static let isoWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoWithoutFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+    private static let relativeMonthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
 
-        var date: Date?
-        for formatter in formatters {
-            if let d = formatter.date(from: createdAt) {
-                date = d
-                break
-            }
-        }
+    var relativeTime: String {
+        let date = Post.isoWithFractional.date(from: createdAt)
+            ?? Post.isoWithoutFractional.date(from: createdAt)
 
         guard let date = date else { return createdAt }
 
@@ -425,9 +429,7 @@ struct Post: Codable, Identifiable {
         let weeks = days / 7
         if weeks < 4 { return "\(weeks)w" }
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter.string(from: date)
+        return Post.relativeMonthDayFormatter.string(from: date)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -448,6 +450,7 @@ struct Post: Codable, Identifiable {
         case images
         case labels
         case myReaction = "my_reaction"
+        case sourcePublishedAt = "source_published_at"
         case saved
         case createdAt = "created_at"
     }

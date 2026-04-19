@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS posts (
     body TEXT NOT NULL,
     image_url TEXT,
     external_url TEXT,
+    source_published_at TIMESTAMPTZ,
     locality TEXT,
     latitude DOUBLE PRECISION,
     longitude DOUBLE PRECISION,

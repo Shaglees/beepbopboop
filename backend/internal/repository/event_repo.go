@@ -78,6 +78,12 @@ func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error 
 		return nil
 	}
 
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
 	var b strings.Builder
 	b.WriteString("INSERT INTO post_events (post_id, user_id, event_type, dwell_ms) VALUES ")
 
@@ -91,7 +97,7 @@ func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error 
 		args = append(args, e.PostID, userID, e.EventType, e.DwellMs)
 	}
 
-	_, err := r.db.Exec(b.String(), args...)
+	_, err = tx.Exec(b.String(), args...)
 	if err != nil {
 		return fmt.Errorf("batch insert post_events: %w", err)
 	}
@@ -104,11 +110,22 @@ func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error 
 		}
 	}
 	for postID := range synced {
-		if err := r.syncSaveCount(postID); err != nil {
-			return err
+		_, err := tx.Exec(`
+			UPDATE posts SET save_count = (
+				SELECT COUNT(*)
+				FROM (
+					SELECT DISTINCT ON (user_id) event_type
+					FROM post_events
+					WHERE post_id = $1 AND event_type IN ('save', 'unsave')
+					ORDER BY user_id, created_at DESC
+				) latest
+				WHERE event_type = 'save'
+			) WHERE id = $1`, postID)
+		if err != nil {
+			return fmt.Errorf("sync save_count for post %s: %w", postID, err)
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 // Summary returns aggregated engagement stats for a user's posts over the last N days.

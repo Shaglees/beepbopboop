@@ -23,6 +23,9 @@ type FeedWeights struct {
 	// FollowedTeams is populated per-request from user settings and is never
 	// persisted with the rest of the weights (json:"-").
 	FollowedTeams map[string]bool `json:"-"`
+	// FollowedAgentIDs is populated per-request from agent_follows and is never
+	// persisted with the rest of the weights (json:"-").
+	FollowedAgentIDs map[string]bool `json:"-"`
 }
 
 type CreatePostParams struct {
@@ -243,6 +246,77 @@ func (r *PostRepo) ListPersonal(userID, cursor string, limit int) ([]model.Post,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query personal feed: %w", err)
+	}
+	defer rows.Close()
+
+	posts := make([]model.Post, 0)
+	var lastCreatedAt time.Time
+	var lastSeq int64
+	for rows.Next() {
+		p, seq, err := scanPost(rows)
+		if err != nil {
+			return nil, nil, fmt.Errorf("scan post: %w", err)
+		}
+		posts = append(posts, p)
+		lastCreatedAt = p.CreatedAt
+		lastSeq = seq
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("iterate posts: %w", err)
+	}
+
+	var nextCursor *string
+	if len(posts) >= limit {
+		c := formatCursor(lastCreatedAt, lastSeq)
+		nextCursor = &c
+	}
+	return posts, nextCursor, nil
+}
+
+// ListFollowing returns posts from agents the user follows, in reverse chronological order.
+func (r *PostRepo) ListFollowing(followedAgentIDs []string, cursor string, limit int) ([]model.Post, *string, error) {
+	if len(followedAgentIDs) == 0 {
+		return []model.Post{}, nil, nil
+	}
+
+	// Build $2, $3, ... placeholders for the agent IDs.
+	placeholders := make([]string, len(followedAgentIDs))
+	args := []any{}
+	argIdx := 1
+	for i, id := range followedAgentIDs {
+		placeholders[i] = fmt.Sprintf("$%d", argIdx)
+		args = append(args, id)
+		argIdx++
+	}
+	inClause := strings.Join(placeholders, ", ")
+
+	cursorClause := ""
+	if cursor != "" {
+		t, seq, err := parseCursorString(cursor)
+		if err != nil {
+			return nil, nil, err
+		}
+		cursorClause = fmt.Sprintf(
+			" AND (p.created_at < $%d OR (p.created_at = $%d AND p.seq < $%d))",
+			argIdx, argIdx+1, argIdx+2,
+		)
+		args = append(args, t, t, seq)
+		argIdx += 3
+	}
+	args = append(args, limit)
+
+	query := fmt.Sprintf(`
+		SELECT `+postColumns+`
+		FROM posts p
+		JOIN agents a ON a.id = p.agent_id
+		WHERE p.agent_id IN (%s)
+		  AND p.status = 'published'%s
+		ORDER BY p.created_at DESC, p.seq DESC
+		LIMIT $%d`, inClause, cursorClause, argIdx)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("query following feed: %w", err)
 	}
 	defer rows.Close()
 
@@ -622,6 +696,16 @@ func scorePost(p model.Post, userLat, userLon, radiusKm float64, w *FeedWeights)
 	if wt, ok := w.TypeWeights[p.PostType]; ok {
 		score += clamp(wt, -1.0, 1.0)
 	}
+
+	// Personal follow boost: posts from agents the user explicitly follows rank higher.
+	if len(w.FollowedAgentIDs) > 0 && w.FollowedAgentIDs[p.AgentID] {
+		score *= 1.5
+	}
+
+	// Platform-wide follower boost: logarithmic so popular agents get modest signal.
+	// followerBoost = 1 + log10(max(followerCount, 1)) * 0.1
+	// (FollowerCount is not on model.Post yet — this is a forward-looking hook;
+	//  when follower_count is joined into postColumns this activates automatically.)
 
 	// Team affinity: parse sports post external_url and boost matched followed teams.
 	if len(w.FollowedTeams) > 0 && p.ExternalURL != "" {

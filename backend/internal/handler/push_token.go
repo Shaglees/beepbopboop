@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
+	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
 
@@ -56,4 +57,25 @@ func (h *PushTokenHandler) RegisterPushToken(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *PushTokenHandler) GetDigestPosts(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.FirebaseUIDFromContext(r.Context())
+
+	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
+		return
+	}
+
+	posts, err := h.pushTokenRepo.TopUnseenPosts(user.ID, 5)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch digest posts"})
+		return
+	}
+
+	if posts == nil {
+		posts = []model.DigestPost{}
+	}
+	writeJSON(w, http.StatusOK, posts)
 }

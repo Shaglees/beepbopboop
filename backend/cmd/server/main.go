@@ -115,6 +115,7 @@ func main() {
 		r.Get("/user/weights", weightsH.GetWeightsFirebase)
 		r.Put("/user/weights", weightsH.UpdateWeightsFirebase)
 		r.Put("/user/push-token", pushTokenH.RegisterPushToken)
+		r.Get("/user/digest", pushTokenH.GetDigestPosts)
 		r.Post("/agents", agentH.CreateAgent)
 		r.Post("/agents/{agentID}/tokens", agentH.CreateToken)
 		r.Get("/agents/following", followH.ListFollowing)

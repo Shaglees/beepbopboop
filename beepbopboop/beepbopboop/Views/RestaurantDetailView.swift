@@ -374,7 +374,7 @@ private struct RestaurantEngagementBar: View {
     @EnvironmentObject private var eventTracker: EventTracker
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = AppStorage(wrappedValue: post.mySaved, "bookmark_\(post.id)")
         self._activeReaction = State(initialValue: post.myReaction)
     }
     var body: some View {
@@ -384,8 +384,13 @@ private struct RestaurantEngagementBar: View {
                 withAnimation(.bouncy) { isBookmarked.toggle() }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 Task {
-                    do { try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save") }
-                    catch { withAnimation(.bouncy) { isBookmarked = wasSaved } }
+                    do {
+                        if wasSaved {
+                            try await apiService.unsavePost(postID: post.id)
+                        } else {
+                            try await apiService.savePost(postID: post.id)
+                        }
+                    } catch { withAnimation(.bouncy) { isBookmarked = wasSaved } }
                 }
             } label: {
                 Label(isBookmarked ? "Bookmarked" : "Bookmark", systemImage: isBookmarked ? "bookmark.fill" : "bookmark")

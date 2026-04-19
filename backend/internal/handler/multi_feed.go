@@ -17,9 +17,10 @@ type MultiFeedHandler struct {
 	weightsRepo      *repository.WeightsRepo
 	eventRepo        *repository.EventRepo
 	reactionRepo     *repository.ReactionRepo
+	saveRepo         *repository.SaveRepo
 }
 
-func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo, eventRepo *repository.EventRepo, reactionRepo *repository.ReactionRepo) *MultiFeedHandler {
+func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo, eventRepo *repository.EventRepo, reactionRepo *repository.ReactionRepo, saveRepo *repository.SaveRepo) *MultiFeedHandler {
 	return &MultiFeedHandler{
 		userRepo:         userRepo,
 		postRepo:         postRepo,
@@ -27,10 +28,11 @@ func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.Pos
 		weightsRepo:      weightsRepo,
 		eventRepo:        eventRepo,
 		reactionRepo:     reactionRepo,
+		saveRepo:         saveRepo,
 	}
 }
 
-// enrichAndFilter batch-looks up reactions, sets MyReaction on each post,
+// enrichAndFilter batch-looks up reactions and saves, sets MyReaction and MySaved on each post,
 // and removes posts that the user has negatively reacted to.
 func (h *MultiFeedHandler) enrichAndFilter(posts []model.Post, userID string) []model.Post {
 	if len(posts) == 0 {
@@ -45,10 +47,11 @@ func (h *MultiFeedHandler) enrichAndFilter(posts []model.Post, userID string) []
 	reactions, err := h.reactionRepo.GetForPosts(postIDs, userID)
 	if err != nil {
 		slog.Warn("failed to lookup reactions for feed", "error", err)
-		return posts
 	}
-	if len(reactions) == 0 {
-		return posts
+
+	saved, err := h.saveRepo.GetSavedForPosts(postIDs, userID)
+	if err != nil {
+		slog.Warn("failed to lookup saved state for feed", "error", err)
 	}
 
 	filtered := make([]model.Post, 0, len(posts))
@@ -58,6 +61,9 @@ func (h *MultiFeedHandler) enrichAndFilter(posts []model.Post, userID string) []
 				continue // hide negatively-reacted posts
 			}
 			posts[i].MyReaction = &r
+		}
+		if saved[posts[i].ID] {
+			posts[i].MySaved = true
 		}
 		filtered = append(filtered, posts[i])
 	}

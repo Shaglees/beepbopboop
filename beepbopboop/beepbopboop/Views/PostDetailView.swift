@@ -12,7 +12,7 @@ struct PostDetailView: View {
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = AppStorage(wrappedValue: post.mySaved, "bookmark_\(post.id)")
         self._activeReaction = State(initialValue: post.myReaction)
     }
 
@@ -830,10 +830,11 @@ struct PostDetailView: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 Task {
                     do {
-                        try await apiService.trackEvent(
-                            postID: post.id,
-                            eventType: wasSaved ? "unsave" : "save"
-                        )
+                        if wasSaved {
+                            try await apiService.unsavePost(postID: post.id)
+                        } else {
+                            try await apiService.savePost(postID: post.id)
+                        }
                     } catch {
                         withAnimation(.bouncy) { isBookmarked = wasSaved }
                     }
@@ -1283,10 +1284,11 @@ struct PostDetailView: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 Task {
                     do {
-                        try await apiService.trackEvent(
-                            postID: post.id,
-                            eventType: wasSaved ? "unsave" : "save"
-                        )
+                        if wasSaved {
+                            try await apiService.unsavePost(postID: post.id)
+                        } else {
+                            try await apiService.savePost(postID: post.id)
+                        }
                     } catch {
                         withAnimation(.bouncy) { isBookmarked = wasSaved }
                     }

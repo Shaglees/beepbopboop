@@ -187,7 +187,7 @@ private struct CardFooter: View {
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = AppStorage(wrappedValue: post.mySaved, "bookmark_\(post.id)")
         self._activeReaction = State(initialValue: post.myReaction)
     }
 
@@ -225,13 +225,14 @@ private struct CardFooter: View {
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 let wasSaved = isBookmarked
-                isBookmarked.toggle()
+                withAnimation(.bouncy) { isBookmarked.toggle() }
                 Task {
                     do {
-                        try await apiService.trackEvent(
-                            postID: post.id,
-                            eventType: wasSaved ? "unsave" : "save"
-                        )
+                        if wasSaved {
+                            try await apiService.unsavePost(postID: post.id)
+                        } else {
+                            try await apiService.savePost(postID: post.id)
+                        }
                     } catch {
                         isBookmarked = wasSaved
                     }
@@ -1043,20 +1044,21 @@ private struct OutfitBookmarkButton: View {
     init(post: Post, tintColor: Color) {
         self.post = post
         self.tintColor = tintColor
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = AppStorage(wrappedValue: post.mySaved, "bookmark_\(post.id)")
     }
 
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             let wasSaved = isBookmarked
-            isBookmarked.toggle()
+            withAnimation(.bouncy) { isBookmarked.toggle() }
             Task {
                 do {
-                    try await apiService.trackEvent(
-                        postID: post.id,
-                        eventType: wasSaved ? "unsave" : "save"
-                    )
+                    if wasSaved {
+                        try await apiService.unsavePost(postID: post.id)
+                    } else {
+                        try await apiService.savePost(postID: post.id)
+                    }
                 } catch {
                     isBookmarked = wasSaved
                 }

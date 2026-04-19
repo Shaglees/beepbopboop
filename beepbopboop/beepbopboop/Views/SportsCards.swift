@@ -1039,20 +1039,21 @@ private struct SportsBookmarkButton: View {
     init(post: Post, darkMode: Bool = false) {
         self.post = post
         self.darkMode = darkMode
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = AppStorage(wrappedValue: post.mySaved, "bookmark_\(post.id)")
     }
 
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             let wasSaved = isBookmarked
-            isBookmarked.toggle()
+            withAnimation(.bouncy) { isBookmarked.toggle() }
             Task {
                 do {
-                    try await apiService.trackEvent(
-                        postID: post.id,
-                        eventType: wasSaved ? "unsave" : "save"
-                    )
+                    if wasSaved {
+                        try await apiService.unsavePost(postID: post.id)
+                    } else {
+                        try await apiService.savePost(postID: post.id)
+                    }
                 } catch {
                     isBookmarked = wasSaved
                 }

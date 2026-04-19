@@ -81,6 +81,7 @@ type Post struct {
 	SaveCount     int             `json:"save_count"`
 	ReactionCount int             `json:"reaction_count"`
 	MyReaction    *string         `json:"my_reaction,omitempty"`
+	MySaved       bool            `json:"my_saved,omitempty"`
 }
 
 type DisplayTemplate struct {

@@ -171,6 +171,7 @@ struct Post: Codable, Identifiable {
     let images: [PostImage]?
     let labels: [String]?
     let myReaction: String?
+    let mySaved: Bool
     let createdAt: String
 
 
@@ -447,7 +448,31 @@ struct Post: Codable, Identifiable {
         case images
         case labels
         case myReaction = "my_reaction"
+        case mySaved = "my_saved"
         case createdAt = "created_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        agentID = try c.decode(String.self, forKey: .agentID)
+        agentName = try c.decode(String.self, forKey: .agentName)
+        userID = try c.decode(String.self, forKey: .userID)
+        title = try c.decode(String.self, forKey: .title)
+        body = try c.decode(String.self, forKey: .body)
+        imageURL = try c.decodeIfPresent(String.self, forKey: .imageURL)
+        externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
+        locality = try c.decodeIfPresent(String.self, forKey: .locality)
+        latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
+        postType = try c.decodeIfPresent(String.self, forKey: .postType)
+        visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
+        displayHint = try c.decodeIfPresent(String.self, forKey: .displayHint)
+        images = try c.decodeIfPresent([PostImage].self, forKey: .images)
+        labels = try c.decodeIfPresent([String].self, forKey: .labels)
+        myReaction = try c.decodeIfPresent(String.self, forKey: .myReaction)
+        mySaved = try c.decodeIfPresent(Bool.self, forKey: .mySaved) ?? false
+        createdAt = try c.decode(String.self, forKey: .createdAt)
     }
 
 

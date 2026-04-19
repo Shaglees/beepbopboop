@@ -349,16 +349,29 @@ struct ConcertCard: View {
 private struct MusicBookmarkButton: View {
     let post: Post
     @AppStorage var isBookmarked: Bool
+    @EnvironmentObject private var apiService: APIService
 
     init(post: Post) {
         self.post = post
-        self._isBookmarked = AppStorage(wrappedValue: false, "bookmark_\(post.id)")
+        self._isBookmarked = AppStorage(wrappedValue: post.mySaved, "bookmark_\(post.id)")
     }
 
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            isBookmarked.toggle()
+            let wasSaved = isBookmarked
+            withAnimation(.bouncy) { isBookmarked.toggle() }
+            Task {
+                do {
+                    if wasSaved {
+                        try await apiService.unsavePost(postID: post.id)
+                    } else {
+                        try await apiService.savePost(postID: post.id)
+                    }
+                } catch {
+                    isBookmarked = wasSaved
+                }
+            }
         } label: {
             Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                 .font(.caption)

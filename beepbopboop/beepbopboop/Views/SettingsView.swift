@@ -10,11 +10,12 @@ struct SettingsView: View {
     @State private var showUpdateInterests = false
     private let apiService: APIService
 
-    init(apiService: APIService, notificationService: NotificationService? = nil) {
+    init(apiService: APIService, notificationService: NotificationService? = nil, calendarService: CalendarService) {
         self.apiService = apiService
         _viewModel = StateObject(wrappedValue: SettingsViewModel(
             apiService: apiService,
-            notificationService: notificationService
+            notificationService: notificationService,
+            calendarService: calendarService
         ))
     }
 
@@ -295,12 +296,13 @@ class SettingsViewModel: NSObject, ObservableObject, MKLocalSearchCompleterDeleg
     private var cachedWeights: FeedWeights = .defaults
     private let apiService: APIService
     private let notificationService: NotificationService?
+    private let calendarService: CalendarService
     private let completer = MKLocalSearchCompleter()
-    private let calendarService = CalendarService()
 
-    init(apiService: APIService, notificationService: NotificationService? = nil) {
+    init(apiService: APIService, notificationService: NotificationService? = nil, calendarService: CalendarService) {
         self.apiService = apiService
         self.notificationService = notificationService
+        self.calendarService = calendarService
         super.init()
         completer.delegate = self
         completer.resultTypes = .address

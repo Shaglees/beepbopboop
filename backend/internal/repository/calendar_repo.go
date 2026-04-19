@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
@@ -16,8 +17,9 @@ func NewCalendarRepo(db *sql.DB) *CalendarRepo {
 	return &CalendarRepo{db: db}
 }
 
-// UpsertEvents replaces the synced calendar events for a user. Existing rows for
-// the user are deleted first so stale events (cancelled, moved) are removed.
+// UpsertEvents syncs calendar events for a user. Each incoming event is upserted,
+// then any stored events not present in the new set are pruned. This avoids the
+// DELETE+INSERT race where a concurrent reader sees an empty table mid-transaction.
 func (r *CalendarRepo) UpsertEvents(userID string, events []model.CalendarEvent) error {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -25,11 +27,9 @@ func (r *CalendarRepo) UpsertEvents(userID string, events []model.CalendarEvent)
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(`DELETE FROM calendar_events WHERE user_id = $1`, userID); err != nil {
-		return fmt.Errorf("delete calendar events: %w", err)
-	}
-
+	ids := make([]string, 0, len(events))
 	for _, e := range events {
+		ids = append(ids, e.ID)
 		var endTime sql.NullTime
 		if e.EndTime != nil {
 			endTime = sql.NullTime{Time: *e.EndTime, Valid: true}
@@ -49,6 +49,28 @@ func (r *CalendarRepo) UpsertEvents(userID string, events []model.CalendarEvent)
 		)
 		if err != nil {
 			return fmt.Errorf("upsert event %s: %w", e.ID, err)
+		}
+	}
+
+	// Prune events that were removed or cancelled on device.
+	if len(ids) > 0 {
+		placeholders := make([]string, len(ids))
+		args := make([]any, len(ids)+1)
+		args[0] = userID
+		for i, id := range ids {
+			placeholders[i] = fmt.Sprintf("$%d", i+2)
+			args[i+1] = id
+		}
+		query := fmt.Sprintf(
+			`DELETE FROM calendar_events WHERE user_id = $1 AND id NOT IN (%s)`,
+			strings.Join(placeholders, ","),
+		)
+		if _, err := tx.Exec(query, args...); err != nil {
+			return fmt.Errorf("prune stale events: %w", err)
+		}
+	} else {
+		if _, err := tx.Exec(`DELETE FROM calendar_events WHERE user_id = $1`, userID); err != nil {
+			return fmt.Errorf("delete all events: %w", err)
 		}
 	}
 

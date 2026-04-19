@@ -49,7 +49,7 @@ class CalendarService: ObservableObject {
         let events = store.events(matching: predicate)
 
         return events.compactMap { event in
-            guard !event.isAllDay || event.title != nil else { return nil }
+            guard !event.isAllDay && event.title != nil else { return nil }
             return CalendarEventPayload(
                 id: event.eventIdentifier,
                 title: event.title ?? "(No title)",

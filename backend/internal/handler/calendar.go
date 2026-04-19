@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -88,7 +89,9 @@ func (h *CalendarHandler) SyncCalendarEvents(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Enable calendar integration for this user automatically on first sync.
-	_ = h.userSettingsRepo.SetCalendarEnabled(user.ID, true)
+	if err := h.userSettingsRepo.SetCalendarEnabled(user.ID, true); err != nil {
+		slog.Warn("calendar: failed to set calendar_enabled", "user_id", user.ID, "error", err)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"synced": len(events)})
 }

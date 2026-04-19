@@ -13,11 +13,13 @@ struct FeedView: View {
     private let authService: AuthService
     private let apiService: APIService
     private let notificationService: NotificationService?
+    private let calendarService: CalendarService
 
-    init(authService: AuthService, apiService: APIService, notificationService: NotificationService? = nil) {
+    init(authService: AuthService, apiService: APIService, notificationService: NotificationService? = nil, calendarService: CalendarService) {
         self.authService = authService
         self.apiService = apiService
         self.notificationService = notificationService
+        self.calendarService = calendarService
         _forYouVM = StateObject(wrappedValue: FeedListViewModel(feedType: .forYou, apiService: apiService))
         _communityVM = StateObject(wrappedValue: FeedListViewModel(feedType: .community, apiService: apiService))
         _personalVM = StateObject(wrappedValue: FeedListViewModel(feedType: .personal, apiService: apiService))
@@ -59,7 +61,7 @@ struct FeedView: View {
             .toolbar(.hidden, for: .navigationBar)
             .animation(.easeInOut(duration: 0.25), value: isHeaderVisible)
             .sheet(isPresented: $showSettings) {
-                SettingsView(apiService: apiService, notificationService: notificationService)
+                SettingsView(apiService: apiService, notificationService: notificationService, calendarService: calendarService)
                     .onDisappear {
                         // Refresh geo-dependent feeds after settings change
                         Task {

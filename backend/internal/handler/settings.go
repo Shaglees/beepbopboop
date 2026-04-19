@@ -93,12 +93,7 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	calendarEnabled := false
-	if req.CalendarEnabled != nil {
-		calendarEnabled = *req.CalendarEnabled
-	}
-
-	settings, err := h.userSettingsRepo.Upsert(user.ID, req.LocationName, req.Latitude, req.Longitude, req.RadiusKm, req.FollowedTeams, notificationsEnabled, digestHour, calendarEnabled)
+	settings, err := h.userSettingsRepo.Upsert(user.ID, req.LocationName, req.Latitude, req.Longitude, req.RadiusKm, req.FollowedTeams, notificationsEnabled, digestHour, req.CalendarEnabled)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save settings"})
 		return

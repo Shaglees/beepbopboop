@@ -60,8 +60,9 @@ func (r *UserSettingsRepo) Get(userID string) (*model.UserSettings, error) {
 	return &s, nil
 }
 
-// Upsert inserts or updates the user's settings.
-func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64, followedTeams []string, notificationsEnabled bool, digestHour int, calendarEnabled bool) (*model.UserSettings, error) {
+// Upsert inserts or updates the user's settings. calendarEnabled is optional;
+// nil means "preserve whatever is already stored".
+func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64, radiusKm float64, followedTeams []string, notificationsEnabled bool, digestHour int, calendarEnabled *bool) (*model.UserSettings, error) {
 	var followedTeamsJSON sql.NullString
 	if len(followedTeams) > 0 {
 		b, err := json.Marshal(followedTeams)
@@ -69,6 +70,11 @@ func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64
 			return nil, fmt.Errorf("marshal followed_teams: %w", err)
 		}
 		followedTeamsJSON = sql.NullString{String: string(b), Valid: true}
+	}
+
+	var calendarEnabledNull sql.NullBool
+	if calendarEnabled != nil {
+		calendarEnabledNull = sql.NullBool{Bool: *calendarEnabled, Valid: true}
 	}
 
 	_, err := r.db.Exec(`
@@ -82,10 +88,10 @@ func (r *UserSettingsRepo) Upsert(userID, locationName string, lat, lon *float64
 			followed_teams        = excluded.followed_teams,
 			notifications_enabled = excluded.notifications_enabled,
 			digest_hour           = excluded.digest_hour,
-			calendar_enabled      = excluded.calendar_enabled,
+			calendar_enabled      = COALESCE(excluded.calendar_enabled, user_settings.calendar_enabled),
 			updated_at            = CURRENT_TIMESTAMP`,
 		userID, nullString(locationName), nullFloat64(lat), nullFloat64(lon), radiusKm,
-		followedTeamsJSON, notificationsEnabled, digestHour, calendarEnabled,
+		followedTeamsJSON, notificationsEnabled, digestHour, calendarEnabledNull,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("upsert user_settings: %w", err)

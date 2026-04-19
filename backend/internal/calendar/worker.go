@@ -70,7 +70,7 @@ func (w *Worker) cycle() {
 
 	var ok, failed int
 	for _, userID := range userIDs {
-		if err := w.processUser(userID, now, lookahead); err != nil {
+		if err := w.processUser(userID, now, lookahead, now); err != nil {
 			slog.Warn("calendar worker: user failed", "user_id", userID, "error", err)
 			failed++
 		} else {
@@ -80,7 +80,7 @@ func (w *Worker) cycle() {
 	slog.Info("calendar worker: cycle complete", "users", len(userIDs), "ok", ok, "failed", failed)
 }
 
-func (w *Worker) processUser(userID string, from, to time.Time) error {
+func (w *Worker) processUser(userID string, from, to, cycleTime time.Time) error {
 	events, err := w.calendarRepo.UpcomingEvents(userID, from, to)
 	if err != nil {
 		return fmt.Errorf("upcoming events: %w", err)
@@ -91,7 +91,7 @@ func (w *Worker) processUser(userID string, from, to time.Time) error {
 			continue
 		}
 		postKey := fmt.Sprintf("anticipatory-%s-%s", userID, e.ID)
-		title, body := buildPost(*intent, e)
+		title, body := buildPost(*intent, e, cycleTime)
 		if err := w.postRepo.UpsertAnticipatoryPost(postKey, userID, title, body, intent.postType, intent.labels); err != nil {
 			slog.Warn("calendar worker: upsert post failed", "user_id", userID, "event_id", e.ID, "error", err)
 		}
@@ -169,8 +169,8 @@ func extractCity(e model.CalendarEvent) string {
 	return ""
 }
 
-func buildPost(i intent, e model.CalendarEvent) (title, body string) {
-	when := timeLabel(e.StartTime)
+func buildPost(i intent, e model.CalendarEvent, now time.Time) (title, body string) {
+	when := timeLabel(e.StartTime, now)
 	switch i.kind {
 	case "travel":
 		city := i.payload["city"]
@@ -201,8 +201,7 @@ func buildPost(i intent, e model.CalendarEvent) (title, body string) {
 	return
 }
 
-func timeLabel(t time.Time) string {
-	now := time.Now()
+func timeLabel(t, now time.Time) string {
 	diff := t.Sub(now)
 	switch {
 	case diff < 24*time.Hour:

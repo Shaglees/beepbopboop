@@ -19,7 +19,8 @@ struct beepbopboopApp: App {
                 FeedView(
                     authService: authService,
                     apiService: api,
-                    notificationService: notificationService
+                    notificationService: notificationService,
+                    calendarService: calendarService
                 )
                 .environmentObject(api)
                 .environmentObject(tracker)
@@ -39,7 +40,6 @@ struct beepbopboopApp: App {
                         onboardingComplete = true
                     }
                 }
-                .task { await syncCalendarIfEnabled(api: api) }
             } else {
                 LoginView(authService: authService)
             }

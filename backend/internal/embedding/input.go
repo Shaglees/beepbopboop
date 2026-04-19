@@ -85,18 +85,21 @@ func summariseScoreboard(raw string) string {
 func summariseWeather(raw string) string {
 	var w struct {
 		Current struct {
-			TempC     float64 `json:"temp_c"`
-			TempF     float64 `json:"temp_f"`
-			Condition string  `json:"condition"`
+			TempC     *float64 `json:"temp_c"`
+			TempF     *float64 `json:"temp_f"`
+			Condition string   `json:"condition"`
 		} `json:"current"`
 	}
 	if err := json.Unmarshal([]byte(raw), &w); err != nil {
 		return ""
 	}
-	temp := w.Current.TempC
+	var temp float64
 	unit := "C"
-	if temp == 0 && w.Current.TempF != 0 {
-		temp = w.Current.TempF
+	switch {
+	case w.Current.TempC != nil:
+		temp = *w.Current.TempC
+	case w.Current.TempF != nil:
+		temp = *w.Current.TempF
 		unit = "F"
 	}
 	condition := w.Current.Condition

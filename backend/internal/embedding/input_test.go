@@ -104,3 +104,12 @@ func TestSummariseForEmbedding_Weather(t *testing.T) {
 		t.Errorf("expected 'weather' in output, got: %q", out)
 	}
 }
+
+func TestSummariseForEmbedding_Weather_ZeroCelsius(t *testing.T) {
+	// 0°C is a valid temperature and must not be treated as "missing"
+	raw := `{"current":{"temp_c":0,"temp_f":32,"condition":"Clear"}}`
+	out := embedding.SummariseForEmbedding("weather", raw)
+	if !strings.Contains(out, "0°C") {
+		t.Errorf("expected 0°C in output (not falling back to Fahrenheit), got: %q", out)
+	}
+}

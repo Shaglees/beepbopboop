@@ -178,6 +178,62 @@ func TestFindSimilar_ReturnsCosineNearest(t *testing.T) {
 	}
 }
 
+func TestStoreEmbedding_NonExistentPost_ReturnsError(t *testing.T) {
+	db := database.OpenTestDB(t)
+	embRepo := embedding.NewEmbeddingRepo(db)
+
+	err := embRepo.StoreEmbedding("does-not-exist", makeVec(1536, 0))
+	if err == nil {
+		t.Error("expected error when storing embedding for non-existent post, got nil")
+	}
+}
+
+func TestFindSimilar_ExcludesNonPublishedPosts(t *testing.T) {
+	db := database.OpenTestDB(t)
+	userRepo := repository.NewUserRepo(db)
+	agentRepo := repository.NewAgentRepo(db)
+	postRepo := repository.NewPostRepo(db)
+	embRepo := embedding.NewEmbeddingRepo(db)
+
+	// Post A: will be set to non-published status via SQL after creation
+	idA := seedPost(t, postRepo, userRepo, agentRepo, 30)
+	// Post B: stays published
+	idB := seedPost(t, postRepo, userRepo, agentRepo, 31)
+
+	vec := makeVec(1536, 5)
+	if err := embRepo.StoreEmbedding(idA, vec); err != nil {
+		t.Fatalf("StoreEmbedding A: %v", err)
+	}
+	if err := embRepo.StoreEmbedding(idB, vec); err != nil {
+		t.Fatalf("StoreEmbedding B: %v", err)
+	}
+
+	// Mark post A as archived (non-published)
+	if _, err := db.Exec(`UPDATE posts SET status = 'archived' WHERE id = $1`, idA); err != nil {
+		t.Fatalf("update status: %v", err)
+	}
+
+	results, err := embRepo.FindSimilar(vec, 10)
+	if err != nil {
+		t.Fatalf("FindSimilar: %v", err)
+	}
+
+	for _, p := range results {
+		if p.ID == idA {
+			t.Errorf("FindSimilar returned non-published post %s", idA)
+		}
+	}
+	found := false
+	for _, p := range results {
+		if p.ID == idB {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("FindSimilar did not return published post %s", idB)
+	}
+}
+
 func TestFindSimilar_EmptyTableReturnsEmpty(t *testing.T) {
 	db := database.OpenTestDB(t)
 	embRepo := embedding.NewEmbeddingRepo(db)

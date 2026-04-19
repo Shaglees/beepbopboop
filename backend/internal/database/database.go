@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"log/slog"
 
 	_ "github.com/lib/pq"
 )
@@ -179,9 +180,15 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("INSERT INTO agents (id, user_id, name, status) VALUES ('calendar-bot', 'system', 'Anticipatory', 'active') ON CONFLICT DO NOTHING")
 
 	// pgvector extension for post embeddings (must precede embedding column)
-	db.Exec("CREATE EXTENSION IF NOT EXISTS vector")
-	db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS embedding vector(1536)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_embedding_cosine ON posts USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
+	if _, err := db.Exec("CREATE EXTENSION IF NOT EXISTS vector"); err != nil {
+		slog.Warn("pgvector: CREATE EXTENSION failed — embeddings unavailable", "error", err)
+	}
+	if _, err := db.Exec("ALTER TABLE posts ADD COLUMN IF NOT EXISTS embedding vector(1536)"); err != nil {
+		slog.Warn("pgvector: ALTER TABLE posts ADD COLUMN embedding failed", "error", err)
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_embedding_cosine ON posts USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"); err != nil {
+		slog.Warn("pgvector: CREATE INDEX failed", "error", err)
+	}
 
 	// Agent following: social graph for agent discovery and follower feed.
 	db.Exec(`CREATE TABLE IF NOT EXISTS agent_follows (

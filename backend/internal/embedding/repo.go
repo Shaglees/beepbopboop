@@ -23,15 +23,26 @@ func NewEmbeddingRepo(db *sql.DB) *EmbeddingRepo {
 
 // StoreEmbedding writes a 1536-dim embedding for the given post.
 // Calling it twice for the same post overwrites the first value (idempotent UPDATE).
+// Returns an error if postID does not exist.
 func (r *EmbeddingRepo) StoreEmbedding(postID string, vec []float32) error {
 	if len(vec) == 0 {
 		return fmt.Errorf("embedding: empty vector for post %s", postID)
 	}
-	_, err := r.db.Exec(
+	result, err := r.db.Exec(
 		`UPDATE posts SET embedding = $1::vector WHERE id = $2`,
 		vecToString(vec), postID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("embedding: post %s not found", postID)
+	}
+	return nil
 }
 
 // GetEmbedding retrieves the stored embedding for a post. Returns nil if not set.
@@ -60,6 +71,7 @@ func (r *EmbeddingRepo) GetUnembedded(limit int) ([]model.Post, error) {
 		FROM posts p
 		JOIN agents a ON a.id = p.agent_id
 		WHERE p.embedding IS NULL
+		  AND p.status = 'published'
 		ORDER BY p.seq DESC
 		LIMIT $1`, limit)
 	if err != nil {
@@ -83,6 +95,7 @@ func (r *EmbeddingRepo) FindSimilar(queryVec []float32, limit int) ([]model.Post
 		FROM posts p
 		JOIN agents a ON a.id = p.agent_id
 		WHERE p.embedding IS NOT NULL
+		  AND p.status = 'published'
 		ORDER BY p.embedding <=> $1::vector
 		LIMIT $2`, vecToString(queryVec), limit)
 	if err != nil {

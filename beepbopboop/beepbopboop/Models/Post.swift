@@ -191,6 +191,7 @@ struct Post: Codable, Identifiable {
         case petSpotlight
         case fitness
         case boxScore
+        case feedback
     }
 
     var displayHintValue: DisplayHintValue {
@@ -222,6 +223,7 @@ struct Post: Codable, Identifiable {
         case "pet_spotlight": return .petSpotlight
         case "fitness": return .fitness
         case "box_score": return .boxScore
+        case "feedback": return .feedback
         default: return .card
         }
     }
@@ -305,6 +307,7 @@ struct Post: Codable, Identifiable {
         case .petSpotlight: return Color(red: 0.976, green: 0.451, blue: 0.086)
         case .fitness: return Color(red: 0.133, green: 0.773, blue: 0.369)
         case .boxScore: return Color(red: 0.055, green: 0.337, blue: 0.188)
+        case .feedback: return Color(red: 0.365, green: 0.376, blue: 0.996)
         }
     }
 
@@ -338,6 +341,7 @@ struct Post: Codable, Identifiable {
         case .petSpotlight: return "pawprint"
         case .fitness: return "figure.run"
         case .boxScore: return "figure.baseball"
+        case .feedback: return feedbackData?.feedbackType == "rating" ? "star.fill" : "checklist"
         }
     }
 
@@ -371,6 +375,7 @@ struct Post: Codable, Identifiable {
         case .petSpotlight: return "Adoption"
         case .fitness: return "Fitness"
         case .boxScore: return "Box Score"
+        case .feedback: return "Quick Question"
         }
     }
 
@@ -570,6 +575,14 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(FitnessData.self, from: data)
+    }
+
+    /// Parsed feedback data from externalURL (for feedback display_hint posts).
+    var feedbackData: FeedbackData? {
+        guard displayHintValue == .feedback,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(FeedbackData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

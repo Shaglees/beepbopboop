@@ -221,3 +221,55 @@ type LabelCount struct {
 	Label string `json:"label"`
 	Count int    `json:"count"`
 }
+
+// UserFeedback stores a raw response to a feedback post.
+type UserFeedback struct {
+	ID        int64           `json:"id"`
+	PostID    string          `json:"post_id"`
+	UserID    string          `json:"user_id"`
+	Response  json.RawMessage `json:"response"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
+// FeedbackResponseBody is the request body for POST /posts/{postID}/response.
+type FeedbackResponseBody struct {
+	Type     string          `json:"type"`     // "poll", "freeform", "rating", "survey"
+	Selected []string        `json:"selected"` // poll: selected option keys
+	Text     string          `json:"text"`     // freeform: free text answer
+	Value    *float64        `json:"value"`    // rating: numeric value
+	Answers  json.RawMessage `json:"answers"`  // survey: raw answer payload stored for future use; tally uses Selected
+}
+
+// FeedbackSummary is the aggregated response summary for GET /posts/{postID}/responses.
+type FeedbackSummary struct {
+	PostID         string          `json:"post_id"`
+	TotalResponses int             `json:"total_responses"`
+	MyResponse     json.RawMessage `json:"my_response,omitempty"`
+	Tally          map[string]int  `json:"tally,omitempty"` // poll: option key → count
+	AvgRating      *float64        `json:"avg_rating,omitempty"`
+}
+
+// FeedbackData is parsed from external_url for feedback display hints.
+type FeedbackData struct {
+	FeedbackType string           `json:"feedback_type"` // "poll", "freeform", "rating", "survey"
+	Question     string           `json:"question"`
+	Reason       string           `json:"reason,omitempty"`
+	Options      []FeedbackOption `json:"options,omitempty"`
+	MinValue     *float64         `json:"min_value,omitempty"`
+	MaxValue     *float64         `json:"max_value,omitempty"`
+	Questions    []SurveyQuestion `json:"questions,omitempty"`
+}
+
+// FeedbackOption is one choice in a poll.
+type FeedbackOption struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+}
+
+// SurveyQuestion is one question in a multi-question survey.
+type SurveyQuestion struct {
+	Key     string           `json:"key"`
+	Text    string           `json:"text"`
+	Type    string           `json:"type"` // "poll", "freeform", "rating"
+	Options []FeedbackOption `json:"options,omitempty"`
+}

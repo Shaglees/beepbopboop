@@ -450,6 +450,45 @@ class APIService: ObservableObject {
         _ = try? await URLSession.shared.data(for: request)
     }
 
+    // MARK: - Feedback
+
+    /// Submit a response to a feedback post.
+    @MainActor
+    func submitFeedback(postID: String, response: FeedbackResponse) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/posts/\(postID)/response") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(response)
+
+        let (_, httpResponse) = try await URLSession.shared.data(for: request)
+        guard let http = httpResponse as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
+            throw APIError.httpError((httpResponse as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
+    /// Fetch aggregated responses for a feedback post.
+    @MainActor
+    func getFeedbackSummary(postID: String) async throws -> FeedbackSummary {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/posts/\(postID)/responses") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, httpResponse) = try await URLSession.shared.data(for: request)
+        guard let http = httpResponse as? HTTPURLResponse, http.statusCode == 200 else {
+            throw APIError.httpError((httpResponse as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+        return try JSONDecoder().decode(FeedbackSummary.self, from: data)
+    }
+
     enum APIError: LocalizedError {
         case invalidURL
         case invalidResponse

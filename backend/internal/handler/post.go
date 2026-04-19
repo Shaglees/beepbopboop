@@ -58,6 +58,7 @@ var ValidDisplayHints = map[string]bool{
 	"pet_spotlight":    true,
 	"fitness":          true,
 	"box_score":        true,
+	"feedback":         true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -196,7 +197,8 @@ func validatePost(req *createPostRequest) validationResult {
 		req.DisplayHint == "restaurant" || req.DisplayHint == "destination" ||
 		req.DisplayHint == "pet_spotlight" || req.DisplayHint == "fitness" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
-		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score"
+		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" ||
+		req.DisplayHint == "feedback"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -271,6 +273,8 @@ func validatePost(req *createPostRequest) validationResult {
 			validateFoodData(req.ExternalURL, &errs, &warns)
 		case "fitness":
 			validateFitnessData(req.ExternalURL, &errs, &warns)
+		case "feedback":
+			validateFeedbackData(req.ExternalURL, &errs, &warns)
 		case "album", "concert":
 			validateMusicData(req.ExternalURL, req.DisplayHint, &errs, &warns)
 		case "movie", "show":
@@ -290,7 +294,7 @@ func validatePost(req *createPostRequest) validationResult {
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" ||
 		req.DisplayHint == "destination" || req.DisplayHint == "fitness" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
-		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" || req.DisplayHint == "pet_spotlight" {
+		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" || req.DisplayHint == "pet_spotlight" || req.DisplayHint == "feedback" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",
@@ -597,6 +601,34 @@ func validateFitnessData(externalURL string, errs *[]validationIssue, warns *[]v
 	}
 }
 
+// --- Feedback data validation ---
+
+type feedbackDataValidation struct {
+	FeedbackType *string `json:"feedback_type"`
+	Question     *string `json:"question"`
+}
+
+func validateFeedbackData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var f feedbackDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &f); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "feedback external_url must be valid JSON"})
+		return
+	}
+	if f.FeedbackType == nil || *f.FeedbackType == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.feedback_type", Code: "required", Message: "feedback_type is required (poll, survey, freeform, rating)"})
+	} else {
+		switch *f.FeedbackType {
+		case "poll", "survey", "freeform", "rating":
+			// valid
+		default:
+			*errs = append(*errs, validationIssue{Field: "external_url.feedback_type", Code: "invalid", Message: fmt.Sprintf("unknown feedback_type %q; must be poll, survey, freeform, or rating", *f.FeedbackType)})
+		}
+	}
+	if f.Question == nil || *f.Question == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.question", Code: "required", Message: "feedback question is required"})
+	}
+}
+
 // --- Music data validation (album / concert) ---
 
 type musicDataValidation struct {
@@ -782,7 +814,6 @@ func validateScienceData(externalURL string, errs *[]validationIssue, warns *[]v
 	}
 }
 
-// --- Handlers ---
 
 func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	agentID := middleware.AgentIDFromContext(r.Context())

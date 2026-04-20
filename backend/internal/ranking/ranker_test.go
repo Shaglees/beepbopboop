@@ -112,17 +112,18 @@ func TestRanker_Score_WrongDim_ReturnsError(t *testing.T) {
 }
 
 // TestRanker_Score_IdenticalVecs_ScoresHigh verifies that scoring a user
-// against an identical post vector produces the maximum possible score (1.0)
-// when using identity-like projection weights.
+// against an identical all-positive post vector produces score ≈ 1.0.
+// A fixed all-positive vector is used so ReLU in the hidden layer is a no-op
+// and the result is deterministic regardless of random seed.
 func TestRanker_Score_IdenticalVecs_ScoresHigh(t *testing.T) {
 	r, _ := ranking.NewRanker("testdata/ranker.json")
-	dim := r.InputDim()
-	v := randomUnitVec(dim)
+	// [0.5,0.5,0.5,0.5] is a 4-dim unit vector (|v|=√(4×0.25)=1).
+	v := []float32{0.5, 0.5, 0.5, 0.5}
 	score, err := r.Score(v, v)
 	if err != nil {
 		t.Fatalf("Score: %v", err)
 	}
-	// With identity weights, identical vectors project to the same repr → dot=1 → score=1.
+	// Identical inputs → identical reprs → dot=1 → score=1.
 	if score < 0.9 {
 		t.Errorf("identical vecs scored %f, expected >= 0.9 with identity weights", score)
 	}
@@ -225,5 +226,90 @@ func TestRanker_ScoreBatch_Latency(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
 		t.Errorf("ScoreBatch(250) took %v, want < 20ms", elapsed)
+	}
+}
+
+// --- validateCheckpoint ---
+
+// TestScore_MismatchedCheckpointColWidth_ReturnsError verifies that NewRanker
+// returns a descriptive error when a weight matrix row has the wrong number of
+// columns rather than allowing a later project() index-out-of-bounds panic.
+func TestScore_MismatchedCheckpointColWidth_ReturnsError(t *testing.T) {
+	_, err := ranking.NewRanker("testdata/mismatched_cols.json")
+	if err == nil {
+		t.Fatal("expected error for checkpoint with mismatched column width, got nil")
+	}
+}
+
+// --- ScoreBatchFromReprs ---
+
+// TestScoreBatchFromReprs_MismatchedReprDims verifies ScoreBatchFromReprs
+// returns an error when the user repr or a post repr has the wrong dimension.
+func TestScoreBatchFromReprs_MismatchedReprDims(t *testing.T) {
+	r, err := ranking.NewRanker("testdata/ranker.json")
+	if err != nil {
+		t.Fatalf("NewRanker: %v", err)
+	}
+	reprDim := r.ReprDim()
+
+	correctRepr := make([]float32, reprDim)
+	shortRepr := make([]float32, reprDim-1)
+
+	// wrong user repr dimension
+	_, err = r.ScoreBatchFromReprs(shortRepr, [][]float32{correctRepr})
+	if err == nil {
+		t.Error("expected error for short user repr, got nil")
+	}
+
+	// wrong post repr dimension
+	_, err = r.ScoreBatchFromReprs(correctRepr, [][]float32{shortRepr})
+	if err == nil {
+		t.Error("expected error for short post repr, got nil")
+	}
+}
+
+// --- two-layer projection ---
+
+// TestScore_TwoLayerProjection verifies that the Go Ranker applies ReLU
+// between the two projection layers, matching the Python Tower architecture.
+//
+// With identity weights and zero biases, and input vectors:
+//   user = [1, -1, 0, 0]  post = [1, 1, 0, 0]
+//
+// The expected two-layer forward pass:
+//   user: W1→[1,-1,0,0] ReLU→[1,0,0,0] W2→[1,0,0,0] L2→[1,0,0,0]
+//   post: W1→[1, 1,0,0] ReLU→[1,1,0,0] W2→[1,1,0,0] L2→[1/√2,1/√2,0,0]
+//   dot  = 1/√2 ≈ 0.707   score = (0.707+1)/2 ≈ 0.854
+//
+// A single-layer ranker (no ReLU) would produce score=0.5 for these inputs.
+func TestScore_TwoLayerProjection(t *testing.T) {
+	r, err := ranking.NewRanker("testdata/ranker.json")
+	if err != nil {
+		t.Fatalf("NewRanker: %v", err)
+	}
+	userVec := []float32{1, -1, 0, 0}
+	postVec := []float32{1, 1, 0, 0}
+	score, err := r.Score(userVec, postVec)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	const want = float32(0.854)
+	if score < want-0.01 || score > want+0.01 {
+		t.Errorf("Score([1,-1,0,0],[1,1,0,0]) = %f, want ≈ %f (two-layer with ReLU)", score, want)
+	}
+}
+
+// TestRanker_Score_IdenticalVecs_ScoresHigh_AllPositive verifies that scoring
+// a user against an identical all-positive post vector produces score ≈ 1.0.
+// Using a fixed positive vector avoids ReLU zeroing negative components.
+func TestRanker_Score_IdenticalVecs_ScoresHigh_AllPositive(t *testing.T) {
+	r, _ := ranking.NewRanker("testdata/ranker.json")
+	v := []float32{0.5, 0.5, 0.5, 0.5} // all-positive unit vector (|v|=1)
+	score, err := r.Score(v, v)
+	if err != nil {
+		t.Fatalf("Score: %v", err)
+	}
+	if score < 0.9 {
+		t.Errorf("identical all-positive vecs scored %f, expected >= 0.9", score)
 	}
 }

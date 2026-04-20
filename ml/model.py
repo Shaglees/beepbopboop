@@ -41,6 +41,7 @@ class TwoTowerModel(nn.Module):
     ):
         super().__init__()
         self.input_dim = input_dim
+        self.hidden = hidden
         self.repr_dim = repr_dim
         self.user_tower = Tower(input_dim, hidden, repr_dim)
         self.post_tower = Tower(input_dim, hidden, repr_dim)
@@ -61,18 +62,25 @@ class TwoTowerModel(nn.Module):
         return (dot + 1.0) / 2.0               # map to [0, 1]
 
     def export_weights(self) -> dict:
-        """
-        Return the first linear layer's weights for Go JSON checkpoint.
-
-        The Go Ranker uses a single-layer projection (no activation) followed
-        by L2 normalisation — a lightweight approximation of the full tower.
-        For higher fidelity, export via ONNX instead.
-        """
-        uw = self.user_tower.net[0].weight.detach().cpu().numpy()
-        pw = self.post_tower.net[0].weight.detach().cpu().numpy()
+        """Return both projection layers and biases for the Go JSON checkpoint."""
+        uw1 = self.user_tower.net[0].weight.detach().cpu().numpy()
+        ub1 = self.user_tower.net[0].bias.detach().cpu().numpy()
+        uw2 = self.user_tower.net[2].weight.detach().cpu().numpy()
+        ub2 = self.user_tower.net[2].bias.detach().cpu().numpy()
+        pw1 = self.post_tower.net[0].weight.detach().cpu().numpy()
+        pb1 = self.post_tower.net[0].bias.detach().cpu().numpy()
+        pw2 = self.post_tower.net[2].weight.detach().cpu().numpy()
+        pb2 = self.post_tower.net[2].bias.detach().cpu().numpy()
         return {
-            "input_dim": int(uw.shape[1]),
-            "repr_dim": int(uw.shape[0]),
-            "user_weights": uw.tolist(),
-            "post_weights": pw.tolist(),
+            "input_dim": int(uw1.shape[1]),
+            "hidden_dim": int(uw1.shape[0]),
+            "repr_dim": int(uw2.shape[0]),
+            "user_weights_1": uw1.tolist(),
+            "user_bias_1": ub1.tolist(),
+            "user_weights_2": uw2.tolist(),
+            "user_bias_2": ub2.tolist(),
+            "post_weights_1": pw1.tolist(),
+            "post_bias_1": pb1.tolist(),
+            "post_weights_2": pw2.tolist(),
+            "post_bias_2": pb2.tolist(),
         }

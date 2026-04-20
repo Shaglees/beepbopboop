@@ -35,29 +35,30 @@ def export_json(model: "TwoTowerModel", path: str) -> None:
 
 def load_json_ranker(path: str) -> "TwoTowerModel":
     """
-    Load a model whose first-layer weights were serialised to JSON.
+    Load a model from a two-layer JSON checkpoint.
     Useful for round-trip testing: export → load → compare outputs.
     """
     import torch
-    import numpy as np
     from model import TwoTowerModel
 
     with open(path) as f:
         ckpt = json.load(f)
 
-    input_dim = ckpt["input_dim"]
-    repr_dim = ckpt["repr_dim"]
+    model = TwoTowerModel(
+        input_dim=ckpt["input_dim"],
+        hidden=ckpt["hidden_dim"],
+        repr_dim=ckpt["repr_dim"],
+    )
 
-    # Build a model with repr_dim as both hidden and output (no second layer)
-    model = TwoTowerModel(input_dim=input_dim, hidden=repr_dim, repr_dim=repr_dim)
+    def _load_tower(tower, prefix: str) -> None:
+        with torch.no_grad():
+            tower.net[0].weight.copy_(torch.tensor(ckpt[f"{prefix}_weights_1"], dtype=torch.float32))
+            tower.net[0].bias.copy_(torch.tensor(ckpt[f"{prefix}_bias_1"], dtype=torch.float32))
+            tower.net[2].weight.copy_(torch.tensor(ckpt[f"{prefix}_weights_2"], dtype=torch.float32))
+            tower.net[2].bias.copy_(torch.tensor(ckpt[f"{prefix}_bias_2"], dtype=torch.float32))
 
-    uw = torch.tensor(ckpt["user_weights"], dtype=torch.float32)
-    pw = torch.tensor(ckpt["post_weights"], dtype=torch.float32)
-
-    with torch.no_grad():
-        model.user_tower.net[0].weight.copy_(uw)
-        model.post_tower.net[0].weight.copy_(pw)
-
+    _load_tower(model.user_tower, "user")
+    _load_tower(model.post_tower, "post")
     return model
 
 

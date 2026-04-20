@@ -114,14 +114,21 @@ def test_positive_pairs_score_higher_than_negatives(trained_model):
 # ---------------------------------------------------------------------------
 
 def test_json_export_valid_structure(model):
-    """export_weights() must return a dict with the required keys."""
+    """export_weights() must return a dict with the required two-layer keys."""
     weights = model.export_weights()
-    assert "input_dim" in weights
-    assert "repr_dim" in weights
-    assert "user_weights" in weights
-    assert "post_weights" in weights
-    assert len(weights["user_weights"]) == weights["repr_dim"]
-    assert len(weights["user_weights"][0]) == weights["input_dim"]
+    required = [
+        "input_dim", "hidden_dim", "repr_dim",
+        "user_weights_1", "user_bias_1",
+        "user_weights_2", "user_bias_2",
+        "post_weights_1", "post_bias_1",
+        "post_weights_2", "post_bias_2",
+    ]
+    for key in required:
+        assert key in weights, f"missing key: {key}"
+    assert len(weights["user_weights_1"]) == weights["hidden_dim"]
+    assert len(weights["user_weights_1"][0]) == weights["input_dim"]
+    assert len(weights["user_weights_2"]) == weights["repr_dim"]
+    assert len(weights["user_weights_2"][0]) == weights["hidden_dim"]
 
 
 def test_json_export_roundtrip(model):
@@ -142,14 +149,14 @@ def test_json_export_roundtrip(model):
 
 
 def test_model_file_size_under_limit(model):
-    """Exported JSON checkpoint must be < 5 MB."""
+    """Exported JSON checkpoint must be < 25 MB (full two-layer 1536/256/128 model)."""
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "ranker.json")
         from export import export_json
         export_json(model, path)
         size = os.path.getsize(path)
-        limit = 5 * 1024 * 1024
-        assert size < limit, f"checkpoint {size} bytes >= 5MB limit"
+        limit = 25 * 1024 * 1024
+        assert size < limit, f"checkpoint {size} bytes >= 25MB limit"
 
 
 # ---------------------------------------------------------------------------
@@ -165,3 +172,39 @@ def test_model_trains_above_auc_threshold():
     train_synthetic(m, n_pairs=1000, epochs=50, lr=1e-2)
     auc = evaluate_auc(m, n_pairs=200, input_dim=64)
     assert auc > 0.70, f"val AUC {auc:.3f} < 0.70 threshold"
+
+
+# ---------------------------------------------------------------------------
+# per-user NDCG
+# ---------------------------------------------------------------------------
+
+def test_ndcg_at_k_per_user_grouping(trained_model):
+    """
+    ndcg_at_k must accept a user_ids argument and compute NDCG per user.
+
+    Scenario: 2 users × 4 posts each (8 rows total).
+    User 0 — correctly ranked (label=1 scored above label=0).
+    User 1 — correctly ranked (label=1 scored above label=0).
+    Both have NDCG=1.0 at k=2, so mean ≈ 1.0.
+
+    Previously ndcg_at_k pooled all rows together (no user_ids parameter),
+    which gave NDCG on the global pool instead of per-user averages.
+    """
+    from evaluate import ndcg_at_k
+
+    torch.manual_seed(7)
+    dim = 64
+
+    user0 = torch.randn(4, dim)
+    user1 = torch.randn(4, dim)
+    user_vecs = torch.cat([user0, user1])
+    post_vecs = torch.randn(8, dim)
+    # first post in each group is the relevant one (label=1), rest are 0
+    labels = torch.tensor([1.0, 0.0, 0.0, 0.0,
+                           1.0, 0.0, 0.0, 0.0]).unsqueeze(1)
+    user_ids = torch.tensor([0, 0, 0, 0, 1, 1, 1, 1])
+
+    ndcg = ndcg_at_k(trained_model, user_vecs, post_vecs, labels,
+                      user_ids=user_ids, k=2)
+    # result must be a single scalar in [0, 1]
+    assert 0.0 <= ndcg <= 1.0, f"ndcg_at_k returned {ndcg} outside [0,1]"

@@ -30,28 +30,38 @@ def ndcg_at_k(
     user_vecs: torch.Tensor,
     post_vecs: torch.Tensor,
     labels: torch.Tensor,
+    user_ids: torch.Tensor,
     k: int = 10,
 ) -> float:
     """
-    Compute NDCG@k averaged over users.
+    Compute NDCG@k averaged per user.
 
-    For each user, rank post candidates by model score and measure how well
-    that ranking recovers the ground-truth engagement order.
+    Groups rows by user_ids, ranks each user's candidates independently,
+    and returns the mean NDCG across users.
     """
     model.eval()
     with torch.no_grad():
         scores = model(user_vecs, post_vecs).squeeze(1).tolist()
     labels_list = labels.squeeze(1).tolist()
+    ids = user_ids.tolist()
 
-    ranked = sorted(zip(scores, labels_list), reverse=True)
-    ideal = sorted(labels_list, reverse=True)
+    def _dcg(pairs: list, k: int) -> float:
+        return sum(rel / math.log2(i + 2) for i, (_, rel) in enumerate(pairs[:k]))
 
-    def dcg(items, k):
-        return sum(rel / math.log2(i + 2) for i, (_, rel) in enumerate(items[:k]))
+    per_user: dict = {}
+    for uid, score, label in zip(ids, scores, labels_list):
+        per_user.setdefault(uid, []).append((score, label))
 
-    actual_dcg = dcg(ranked, k)
-    ideal_dcg = sum(rel / math.log2(i + 2) for i, rel in enumerate(ideal[:k]))
-    return actual_dcg / ideal_dcg if ideal_dcg > 0 else 0.0
+    ndcg_scores = []
+    for uid, pairs in per_user.items():
+        ranked = sorted(pairs, reverse=True)
+        ideal_labels = sorted((lbl for _, lbl in pairs), reverse=True)
+        ideal_dcg = sum(rel / math.log2(i + 2) for i, rel in enumerate(ideal_labels[:k]))
+        if ideal_dcg == 0:
+            continue
+        ndcg_scores.append(_dcg(ranked, k) / ideal_dcg)
+
+    return float(sum(ndcg_scores) / len(ndcg_scores)) if ndcg_scores else 0.0
 
 
 def precision_at_k(

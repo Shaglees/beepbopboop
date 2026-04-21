@@ -361,6 +361,18 @@ type VideoSourceIngest struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// VideoSourcePage stores the raw crawl record for a discovered source page.
+// This preserves provenance and failure/debugging context separately from the
+// normalized candidate stored in video_catalog.
+type VideoSourcePage struct {
+	SourceName string          `json:"source_name"`
+	SourceURL  string          `json:"source_url"`
+	ArchiveURL string          `json:"archive_url"`
+	RawPayload json.RawMessage `json:"raw_payload,omitempty"`
+	LastError  string          `json:"last_error,omitempty"`
+	FetchedAt  time.Time       `json:"fetched_at"`
+}
+
 // CreateCreatorRequest is the agent-facing request body for POST /creators.
 type CreateCreatorRequest struct {
 	Name         string          `json:"name"`

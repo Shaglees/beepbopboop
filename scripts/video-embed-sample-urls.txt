@@ -1,0 +1,6 @@
+# Fixed Wimp sample set for reproducible embed-viability measurements.
+https://www.wimp.com/flyingbike/
+https://www.wimp.com/a-blooper-reel-of-beatles-recordings/
+https://www.wimp.com/a-japanese-cover-of-country-roads/
+https://www.wimp.com/a-surprisingly-good-cover-of-nirvanas-dumb/
+https://www.wimp.com/betty-boop-in-the-old-man-of-the-mountain/

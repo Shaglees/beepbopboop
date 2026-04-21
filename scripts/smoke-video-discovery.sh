@@ -6,7 +6,7 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/load-repo-env.sh"
 
-API_URL="${BEEPBOPBOOP_API_URL:-http://192.168.2.52:8080}"
+API_URL="${BEEPBOPBOOP_API_URL:-http://localhost:8080}"
 TOKEN="${BEEPBOPBOOP_AGENT_TOKEN:-}"
 DISCOVERY_URL="${1:-https://www.wimp.com/a-blooper-reel-of-beatles-recordings/}"
 

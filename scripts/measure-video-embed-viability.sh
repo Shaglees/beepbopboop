@@ -24,13 +24,12 @@ if [[ "$sample_size" -le 0 ]]; then
   echo "error: sample_size must be > 0" >&2
   exit 1
 fi
-if [[ "$provider_count" -le 0 ]]; then
-  echo "error: expected at least one provider in report" >&2
-  exit 1
-fi
 if [[ -z "$recommendation" || "$recommendation" == "null" ]]; then
   echo "error: recommendation missing" >&2
   exit 1
+fi
+if [[ "$provider_count" -le 0 ]]; then
+  echo "warning: no providers reported (all samples may be no_live_embed/error)" >&2
 fi
 
 {

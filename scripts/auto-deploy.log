@@ -1,0 +1,3279 @@
+2026-04-21 00:34:21 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 00:34:22 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.8s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 113.75kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 3/6] COPY go.mod go.sum ./
+#11 CACHED
+
+#12 [builder 2/6] WORKDIR /build
+#12 CACHED
+
+#13 [builder 4/6] RUN go mod download
+#13 CACHED
+
+#14 [builder 5/6] COPY . .
+#14 DONE 0.2s
+
+#15 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#15 DONE 48.2s
+
+#16 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 DONE 0.1s
+
+#18 exporting to image
+#18 exporting layers 0.1s done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.1s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 00:35:22 deploy successful: 9e9fa47
+2026-04-21 00:50:23 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 00:50:23 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.8s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 4/6] RUN go mod download
+#11 CACHED
+
+#12 [builder 2/6] WORKDIR /build
+#12 CACHED
+
+#13 [builder 5/6] COPY . .
+#13 CACHED
+
+#14 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#14 CACHED
+
+#15 [builder 3/6] COPY go.mod go.sum ./
+#15 CACHED
+
+#16 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 00:50:33 deploy successful: 9e9fa47
+2026-04-21 01:05:34 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 01:05:34 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 30B
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [builder 4/6] RUN go mod download
+#13 CACHED
+
+#14 [builder 2/6] WORKDIR /build
+#14 CACHED
+
+#15 [builder 3/6] COPY go.mod go.sum ./
+#15 CACHED
+
+#16 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 01:05:42 deploy successful: 9e9fa47
+2026-04-21 01:20:42 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 01:20:43 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#10 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#10 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 6.63kB 0.0s done
+#8 DONE 0.0s
+
+#11 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#11 CACHED
+
+#12 [builder 2/6] WORKDIR /build
+#12 CACHED
+
+#13 [builder 4/6] RUN go mod download
+#13 CACHED
+
+#14 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#14 CACHED
+
+#15 [builder 5/6] COPY . .
+#15 CACHED
+
+#16 [builder 3/6] COPY go.mod go.sum ./
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 01:20:51 deploy successful: 9e9fa47
+2026-04-21 01:35:51 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 01:35:51 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#11 CACHED
+
+#12 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#12 CACHED
+
+#13 [builder 5/6] COPY . .
+#13 CACHED
+
+#14 [builder 4/6] RUN go mod download
+#14 CACHED
+
+#15 [builder 3/6] COPY go.mod go.sum ./
+#15 CACHED
+
+#16 [builder 2/6] WORKDIR /build
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 01:35:59 deploy successful: 9e9fa47
+2026-04-21 01:51:00 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 01:51:00 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/alpine:3.21
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/alpine:3.21
+#3 DONE 0.7s
+
+#6 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#6 DONE 0.9s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#8 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#8 DONE 0.0s
+
+#9 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#9 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 2/6] WORKDIR /build
+#11 CACHED
+
+#12 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#12 CACHED
+
+#13 [builder 3/6] COPY go.mod go.sum ./
+#13 CACHED
+
+#14 [builder 5/6] COPY . .
+#14 CACHED
+
+#15 [builder 4/6] RUN go mod download
+#15 CACHED
+
+#16 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 01:51:08 deploy successful: 9e9fa47
+2026-04-21 02:06:09 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 02:06:09 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#8 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#8 DONE 0.0s
+
+#9 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#9 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#11 CACHED
+
+#12 [builder 3/6] COPY go.mod go.sum ./
+#12 CACHED
+
+#13 [builder 5/6] COPY . .
+#13 CACHED
+
+#14 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#14 CACHED
+
+#15 [builder 4/6] RUN go mod download
+#15 CACHED
+
+#16 [builder 2/6] WORKDIR /build
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 02:06:17 deploy successful: 9e9fa47
+2026-04-21 02:21:17 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 02:21:18 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 3/6] COPY go.mod go.sum ./
+#11 CACHED
+
+#12 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#12 CACHED
+
+#13 [builder 5/6] COPY . .
+#13 CACHED
+
+#14 [builder 4/6] RUN go mod download
+#14 CACHED
+
+#15 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#15 CACHED
+
+#16 [builder 2/6] WORKDIR /build
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 02:21:26 deploy successful: 9e9fa47
+2026-04-21 02:36:26 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 02:36:27 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 4/6] RUN go mod download
+#11 CACHED
+
+#12 [builder 2/6] WORKDIR /build
+#12 CACHED
+
+#13 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#13 CACHED
+
+#14 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#14 CACHED
+
+#15 [builder 3/6] COPY go.mod go.sum ./
+#15 CACHED
+
+#16 [builder 5/6] COPY . .
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 02:36:35 deploy successful: 9e9fa47
+2026-04-21 02:51:35 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 02:51:35 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 4/6] RUN go mod download
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [builder 3/6] COPY go.mod go.sum ./
+#13 CACHED
+
+#14 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#14 CACHED
+
+#15 [builder 2/6] WORKDIR /build
+#15 CACHED
+
+#16 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 02:51:43 deploy successful: 9e9fa47
+2026-04-21 03:06:44 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 03:06:44 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 5/6] COPY . .
+#11 CACHED
+
+#12 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#12 CACHED
+
+#13 [builder 3/6] COPY go.mod go.sum ./
+#13 CACHED
+
+#14 [builder 2/6] WORKDIR /build
+#14 CACHED
+
+#15 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#15 CACHED
+
+#16 [builder 4/6] RUN go mod download
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 03:06:52 deploy successful: 9e9fa47
+2026-04-21 03:21:53 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 03:21:53 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 3/6] COPY go.mod go.sum ./
+#11 CACHED
+
+#12 [builder 4/6] RUN go mod download
+#12 CACHED
+
+#13 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#13 CACHED
+
+#14 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#14 CACHED
+
+#15 [builder 5/6] COPY . .
+#15 CACHED
+
+#16 [builder 2/6] WORKDIR /build
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 03:22:01 deploy successful: 9e9fa47
+2026-04-21 03:37:02 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 03:37:02 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [builder 3/6] COPY go.mod go.sum ./
+#13 CACHED
+
+#14 [builder 2/6] WORKDIR /build
+#14 CACHED
+
+#15 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#15 CACHED
+
+#16 [builder 4/6] RUN go mod download
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 03:37:10 deploy successful: 9e9fa47
+2026-04-21 03:52:10 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 03:52:11 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [builder 2/6] WORKDIR /build
+#13 CACHED
+
+#14 [builder 4/6] RUN go mod download
+#14 CACHED
+
+#15 [builder 3/6] COPY go.mod go.sum ./
+#15 CACHED
+
+#16 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 03:52:19 deploy successful: 9e9fa47
+2026-04-21 04:07:19 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 04:07:19 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 4/6] RUN go mod download
+#11 CACHED
+
+#12 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#12 CACHED
+
+#13 [builder 2/6] WORKDIR /build
+#13 CACHED
+
+#14 [builder 5/6] COPY . .
+#14 CACHED
+
+#15 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#15 CACHED
+
+#16 [builder 3/6] COPY go.mod go.sum ./
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 0.0s done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 04:07:28 deploy successful: 9e9fa47
+2026-04-21 04:22:28 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 04:22:28 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#8 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#8 DONE 0.0s
+
+#9 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#9 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 4/6] RUN go mod download
+#11 CACHED
+
+#12 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#12 CACHED
+
+#13 [builder 2/6] WORKDIR /build
+#13 CACHED
+
+#14 [builder 3/6] COPY go.mod go.sum ./
+#14 CACHED
+
+#15 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#15 CACHED
+
+#16 [builder 5/6] COPY . .
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 04:22:36 deploy successful: 9e9fa47
+2026-04-21 04:37:37 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 04:37:37 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#11 CACHED
+
+#12 [builder 2/6] WORKDIR /build
+#12 CACHED
+
+#13 [builder 3/6] COPY go.mod go.sum ./
+#13 CACHED
+
+#14 [builder 5/6] COPY . .
+#14 CACHED
+
+#15 [builder 4/6] RUN go mod download
+#15 CACHED
+
+#16 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 04:37:45 deploy successful: 9e9fa47
+2026-04-21 04:52:46 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 04:52:46 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 4/6] RUN go mod download
+#11 CACHED
+
+#12 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#12 CACHED
+
+#13 [builder 5/6] COPY . .
+#13 CACHED
+
+#14 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#14 CACHED
+
+#15 [builder 3/6] COPY go.mod go.sum ./
+#15 CACHED
+
+#16 [builder 2/6] WORKDIR /build
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 04:52:54 deploy successful: 9e9fa47
+2026-04-21 05:07:55 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 05:07:55 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 3/6] COPY go.mod go.sum ./
+#11 CACHED
+
+#12 [builder 4/6] RUN go mod download
+#12 CACHED
+
+#13 [builder 5/6] COPY . .
+#13 CACHED
+
+#14 [builder 2/6] WORKDIR /build
+#14 CACHED
+
+#15 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#15 CACHED
+
+#16 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 05:08:03 deploy successful: 9e9fa47
+2026-04-21 05:23:04 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 05:23:04 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#10 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#10 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 6.63kB 0.0s done
+#8 DONE 0.0s
+
+#11 [builder 2/6] WORKDIR /build
+#11 CACHED
+
+#12 [builder 3/6] COPY go.mod go.sum ./
+#12 CACHED
+
+#13 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#13 CACHED
+
+#14 [builder 5/6] COPY . .
+#14 CACHED
+
+#15 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#15 CACHED
+
+#16 [builder 4/6] RUN go mod download
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 05:23:12 deploy successful: 9e9fa47
+2026-04-21 05:38:12 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 05:38:13 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 DONE 0.0s
+
+#10 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#10 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#10 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#10 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 6.63kB 0.0s done
+#8 DONE 0.0s
+
+#11 [builder 5/6] COPY . .
+#11 CACHED
+
+#12 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#12 CACHED
+
+#13 [builder 4/6] RUN go mod download
+#13 CACHED
+
+#14 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#14 CACHED
+
+#15 [builder 3/6] COPY go.mod go.sum ./
+#15 CACHED
+
+#16 [builder 2/6] WORKDIR /build
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 05:38:21 deploy successful: 9e9fa47
+2026-04-21 05:53:21 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 05:53:21 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.8s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#11 CACHED
+
+#12 [builder 4/6] RUN go mod download
+#12 CACHED
+
+#13 [builder 2/6] WORKDIR /build
+#13 CACHED
+
+#14 [builder 5/6] COPY . .
+#14 CACHED
+
+#15 [builder 3/6] COPY go.mod go.sum ./
+#15 CACHED
+
+#16 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 05:53:29 deploy successful: 9e9fa47
+2026-04-21 06:08:30 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 06:08:30 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 2/6] WORKDIR /build
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [builder 3/6] COPY go.mod go.sum ./
+#13 CACHED
+
+#14 [builder 4/6] RUN go mod download
+#14 CACHED
+
+#15 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#15 CACHED
+
+#16 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 06:08:38 deploy successful: 9e9fa47
+2026-04-21 06:23:39 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 06:23:39 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 5/6] COPY . .
+#11 CACHED
+
+#12 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#12 CACHED
+
+#13 [builder 4/6] RUN go mod download
+#13 CACHED
+
+#14 [builder 2/6] WORKDIR /build
+#14 CACHED
+
+#15 [builder 3/6] COPY go.mod go.sum ./
+#15 CACHED
+
+#16 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 06:23:47 deploy successful: 9e9fa47
+2026-04-21 06:38:48 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 06:38:48 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 3/6] COPY go.mod go.sum ./
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#13 CACHED
+
+#14 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#14 CACHED
+
+#15 [builder 2/6] WORKDIR /build
+#15 CACHED
+
+#16 [builder 4/6] RUN go mod download
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 06:38:56 deploy successful: 9e9fa47
+2026-04-21 06:53:56 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 06:53:57 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 2/6] WORKDIR /build
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [builder 3/6] COPY go.mod go.sum ./
+#13 CACHED
+
+#14 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#14 CACHED
+
+#15 [builder 4/6] RUN go mod download
+#15 CACHED
+
+#16 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 06:54:05 deploy successful: 9e9fa47
+2026-04-21 07:09:05 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 07:09:06 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#11 CACHED
+
+#12 [builder 2/6] WORKDIR /build
+#12 CACHED
+
+#13 [builder 3/6] COPY go.mod go.sum ./
+#13 CACHED
+
+#14 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#14 CACHED
+
+#15 [builder 5/6] COPY . .
+#15 CACHED
+
+#16 [builder 4/6] RUN go mod download
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 07:09:14 deploy successful: 9e9fa47
+2026-04-21 07:24:14 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 07:24:15 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#11 CACHED
+
+#12 [builder 2/6] WORKDIR /build
+#12 CACHED
+
+#13 [builder 4/6] RUN go mod download
+#13 CACHED
+
+#14 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#14 CACHED
+
+#15 [builder 5/6] COPY . .
+#15 CACHED
+
+#16 [builder 3/6] COPY go.mod go.sum ./
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 07:24:23 deploy successful: 9e9fa47
+2026-04-21 07:39:23 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 07:39:23 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.6s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 3/6] COPY go.mod go.sum ./
+#11 CACHED
+
+#12 [builder 4/6] RUN go mod download
+#12 CACHED
+
+#13 [builder 2/6] WORKDIR /build
+#13 CACHED
+
+#14 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#14 CACHED
+
+#15 [builder 5/6] COPY . .
+#15 CACHED
+
+#16 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 07:39:31 deploy successful: 9e9fa47
+2026-04-21 07:54:32 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 07:54:32 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/golang:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/alpine:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 ...
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 3/6] COPY go.mod go.sum ./
+#11 CACHED
+
+#12 [builder 2/6] WORKDIR /build
+#12 CACHED
+
+#13 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#13 CACHED
+
+#14 [builder 4/6] RUN go mod download
+#14 CACHED
+
+#15 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#15 CACHED
+
+#16 [builder 5/6] COPY . .
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 07:54:40 deploy successful: 9e9fa47
+2026-04-21 08:09:41 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 08:09:41 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.7s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#10 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#10 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 6.63kB 0.0s done
+#8 DONE 0.0s
+
+#11 [builder 4/6] RUN go mod download
+#11 CACHED
+
+#12 [builder 5/6] COPY . .
+#12 CACHED
+
+#13 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#13 CACHED
+
+#14 [builder 3/6] COPY go.mod go.sum ./
+#14 CACHED
+
+#15 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#15 CACHED
+
+#16 [builder 2/6] WORKDIR /build
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 08:09:49 deploy successful: 9e9fa47
+2026-04-21 08:24:50 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 08:24:50 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.8s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#11 CACHED
+
+#12 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#12 CACHED
+
+#13 [builder 2/6] WORKDIR /build
+#13 CACHED
+
+#14 [builder 4/6] RUN go mod download
+#14 CACHED
+
+#15 [builder 5/6] COPY . .
+#15 CACHED
+
+#16 [builder 3/6] COPY go.mod go.sum ./
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 08:24:59 deploy successful: 9e9fa47
+2026-04-21 08:39:59 new commits detected: 9e9fa4739221d4197d170867f6af79d1689468bc -> 00ffb72969a5049767eee742dc8dd21f8daed83d
+From https://github.com/shaglees/beepbopboop
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+2026-04-21 08:40:00 rebuilding backend...
+ Container backend-server-1  Stopping
+ Container backend-server-1  Stopped
+ Container backend-server-1  Removing
+ Container backend-server-1  Removed
+ Container backend-db-1  Stopping
+ Container backend-db-1  Stopped
+ Container backend-db-1  Removing
+ Container backend-db-1  Removed
+ Network backend_default  Removing
+ Network backend_default  Removed
+#1 [internal] load local bake definitions
+#1 reading from stdin 373B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 403B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 ...
+
+#4 [auth] library/alpine:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#5 [auth] library/golang:pull token for registry-1.docker.io
+#5 DONE 0.0s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.21
+#6 DONE 0.8s
+
+#3 [internal] load metadata for docker.io/library/golang:1.25-alpine
+#3 DONE 0.8s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 112B done
+#7 DONE 0.0s
+
+#8 [builder 1/6] FROM docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f
+#8 resolve docker.io/library/golang:1.25-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f 0.0s done
+#8 DONE 0.0s
+
+#9 [stage-1 1/3] FROM docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+#9 resolve docker.io/library/alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d 0.0s done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 6.63kB 0.0s done
+#10 DONE 0.0s
+
+#11 [builder 3/6] COPY go.mod go.sum ./
+#11 CACHED
+
+#12 [builder 2/6] WORKDIR /build
+#12 CACHED
+
+#13 [builder 4/6] RUN go mod download
+#13 CACHED
+
+#14 [builder 5/6] COPY . .
+#14 CACHED
+
+#15 [stage-1 2/3] RUN apk add --no-cache ca-certificates tzdata &&     adduser -D -u 1000 appuser
+#15 CACHED
+
+#16 [builder 6/6] RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+#16 CACHED
+
+#17 [stage-1 3/3] COPY --from=builder /server /server
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:fd6a6dbf8155d2c522f8b7397cf3151e6d0709b7cdbde0efaede797c2631fa68 done
+#18 naming to docker.io/library/backend-server done
+#18 DONE 0.0s
+
+#19 resolving provenance for metadata file
+#19 DONE 0.0s
+ server  Built
+ Network backend_default  Creating
+ Network backend_default  Created
+ Container backend-db-1  Creating
+ Container backend-db-1  Created
+ Container backend-server-1  Creating
+ Container backend-server-1  Created
+ Container backend-db-1  Starting
+ Container backend-db-1  Started
+ Container backend-db-1  Waiting
+ Container backend-db-1  Healthy
+ Container backend-server-1  Starting
+ Container backend-server-1  Started
+2026-04-21 08:40:08 deploy successful: 9e9fa47

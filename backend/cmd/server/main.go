@@ -182,6 +182,7 @@ func main() {
 		r.Use(agentAuth)
 		r.Get("/posts", postH.ListPosts)
 		r.Get("/posts/stats", postH.GetPostStats)
+		r.Get("/posts/hints", postH.GetPostHints)
 		r.Post("/posts", postH.CreatePost)
 		r.Post("/posts/lint", postH.LintPost)
 		r.Post("/creators", creatorsH.Create)

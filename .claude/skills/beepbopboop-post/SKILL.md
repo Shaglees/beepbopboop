@@ -43,38 +43,25 @@ This SKILL.md is a **router**. Each mode lives in its own sibling file. After St
 | Shared publish/dedup/label/report (4a–6) | `COMMON_PUBLISH.md` |
 | Sports schedule sources | `SPORTS_SOURCES.md` |
 | End-to-end worked examples | `EXAMPLES.md` |
+| Load config (cross-skill) | `../_shared/CONFIG.md` |
+| Bootstrap server context (cross-skill) | `../_shared/CONTEXT_BOOTSTRAP.md` |
+| Image pipeline quick reference | `../_shared/IMAGES.md` |
+| Publish envelope (lint → dedup → POST) | `../_shared/PUBLISH_ENVELOPE.md` |
+| Full image pipeline (invokable subskill) | `../beepbopboop-images/SKILL.md` |
 
-**Interest, trending, sports, and source ingestion** are delegated to the sibling `beepbopboop-news` skill. **Fashion** is delegated to `beepbopboop-fashion`.
+**Interest, trending, sports, and source ingestion** are delegated to the sibling `beepbopboop-news` skill. **Fashion** is delegated to `beepbopboop-fashion`. **Image sourcing** is delegated to `beepbopboop-images` (see `../_shared/IMAGES.md` for when to invoke it).
 
 ## Step 0: Load configuration
 
-Configuration is stored persistently at `~/.config/beepbopboop/config`. Load it:
+Read `../_shared/CONFIG.md` and follow it. If the required keys are missing, jump to the Init Wizard (read `INIT_WIZARD.md`), then return here.
 
-```bash
-cat ~/.config/beepbopboop/config 2>/dev/null
-```
+## Step 0d: Bootstrap server context (hints / stats / reactions / events)
 
-The file contains shell-style key=value lines. Parse the output and store values for later. At minimum you need:
+Read `../_shared/CONTEXT_BOOTSTRAP.md` and execute the four parallel fetches it describes. Pin the returned `HINTS`, `STATS`, `REACT`, `EVENTS` into working memory for the rest of this turn — every mode file assumes they are available and every publish path uses them to lint-clean payloads and balance the feed.
 
-- `BEEPBOPBOOP_API_URL` (required)
-- `BEEPBOPBOOP_AGENT_TOKEN` (required)
-- `BEEPBOPBOOP_DEFAULT_LOCATION` (optional — fallback location)
-- `BEEPBOPBOOP_INTERESTS` (optional — comma-separated)
-- `BEEPBOPBOOP_SOURCES` (optional — `hn`, `ph`, `rss:<URL>`, `substack:<URL>`, `reddit:<SUBREDDIT>`)
-- `BEEPBOPBOOP_SCHEDULE` (optional — pipe-separated triplets `DAY|MODE|ARGS`. Days: monday–sunday, `daily`, `weekday`, `weekend`)
-- `BEEPBOPBOOP_BATCH_MIN` / `BEEPBOPBOOP_BATCH_MAX` (optional — defaults 8 / 15)
-- `BEEPBOPBOOP_HOME_ADDRESS` / `BEEPBOPBOOP_HOME_LAT` / `BEEPBOPBOOP_HOME_LON` (optional — precise home location)
-- `BEEPBOPBOOP_FAMILY` (optional — see `FAMILY_CONTEXT.md`)
-- `BEEPBOPBOOP_USER_CONTEXT` (optional — extra personalization)
-- `BEEPBOPBOOP_CALENDAR_URL` (optional — ICS URL)
-- `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` (optional — image search)
-- `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional — image hosting)
-- `BEEPBOPBOOP_SPORTS_TEAMS` (optional — semicolon-separated `league:team-slug`)
-- `BEEPBOPBOOP_FASHION_*` (optional — see `beepbopboop-fashion` skill)
+## Step 0e: Image pipeline awareness
 
-**If the config is missing or lacks required values**, tell the user "Not configured yet. Running setup wizard…" and jump to the Init Wizard (read `INIT_WIZARD.md`). After the wizard completes, continue with Step 0a.
-
-**Do NOT proceed past Step 0 if `BEEPBOPBOOP_API_URL` or `BEEPBOPBOOP_AGENT_TOKEN` are missing.**
+Read `../_shared/IMAGES.md` once. Before publishing, every mode ends up needing an image; the shared file is the single source of truth for which tier to try and when to invoke the `beepbopboop-images` subskill.
 
 ## Step 0a: Parse command and route
 

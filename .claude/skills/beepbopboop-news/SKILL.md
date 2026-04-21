@@ -29,25 +29,23 @@ Each mode lives in its own file. After Step 0a routes, read the matching file an
 | Trending (TR1–TR4) | `MODE_TRENDING.md` |
 | Shared publish/dedup/label/report | `../beepbopboop-post/COMMON_PUBLISH.md` |
 | Sports schedule URLs | `../beepbopboop-post/SPORTS_SOURCES.md` |
+| Load config (cross-skill) | `../_shared/CONFIG.md` |
+| Bootstrap server context (cross-skill) | `../_shared/CONTEXT_BOOTSTRAP.md` |
+| Image pipeline quick reference | `../_shared/IMAGES.md` |
+| Publish envelope (lint → dedup → POST) | `../_shared/PUBLISH_ENVELOPE.md` |
+| Full image pipeline (invokable subskill) | `../beepbopboop-images/SKILL.md` |
 
 ## Step 0: Load configuration
 
-Load the same config as the main post skill:
+Read `../_shared/CONFIG.md` and load the config file. The news skill relies on `BEEPBOPBOOP_INTERESTS`, `BEEPBOPBOOP_SOURCES`, and `BEEPBOPBOOP_SPORTS_TEAMS` in addition to the universal required keys.
 
-```bash
-cat ~/.config/beepbopboop/config 2>/dev/null
-```
+## Step 0d: Bootstrap server context
 
-Required:
-- `BEEPBOPBOOP_API_URL`
-- `BEEPBOPBOOP_AGENT_TOKEN`
+Read `../_shared/CONTEXT_BOOTSTRAP.md` and run the four parallel fetches. The `/posts/stats` response is especially important for news mode — use it to avoid re-posting the same labels the user already saw this week. The `/reactions/summary` response tells you which topics the user has explicitly muted.
 
-Optional:
-- `BEEPBOPBOOP_INTERESTS` (comma-separated)
-- `BEEPBOPBOOP_SOURCES` (`hn`, `ph`, `rss:<URL>`, `substack:<URL>`, `reddit:<SUBREDDIT>`)
-- `BEEPBOPBOOP_SPORTS_TEAMS` (`nhl:canucks;mlb:blue-jays` etc.)
-- `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` (article images)
-- `BEEPBOPBOOP_IMGUR_CLIENT_ID` (image hosting)
+## Step 0e: Image pipeline awareness
+
+Read `../_shared/IMAGES.md`. Article and sports posts should still have hero images — do not skip this step.
 
 ## Step 0a: Parse command and route
 
@@ -73,11 +71,6 @@ Visibility overrides specific to this skill:
 
 Labels follow the format in `COMMON_PUBLISH.md` Step 4c. Every post gets 3–8 labels including a type label (`article`/`video`/`discovery`), a source label (`hacker-news`, `product-hunt`, `trending`, `sports`, `reddit`, …), and 2–4 topic labels.
 
-For images, use Unsplash when `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` is set:
+For images, invoke the `beepbopboop-images` subskill (see `../_shared/IMAGES.md`) with `mode=auto` and the post's topic/keywords. It handles Unsplash, AI fallback, poster rehost, etc. — never call Unsplash directly from a news mode, or the pipeline stays "invisible" and easy to skip.
 
-```bash
-curl -s "https://api.unsplash.com/search/photos?query=<TOPIC>&per_page=3&orientation=landscape" \
-  -H "Authorization: Client-ID $BEEPBOPBOOP_UNSPLASH_ACCESS_KEY" | jq -r '.results[0].urls.regular'
-```
-
-For sports: search for team/league imagery. Skip image if nothing relevant — better no image than a generic one.
+For sports: pass team / league identifiers as keywords. If nothing relevant is found, prefer an empty `image_url` over a generic one.

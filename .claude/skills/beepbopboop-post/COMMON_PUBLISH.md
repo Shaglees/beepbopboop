@@ -2,6 +2,8 @@
 
 Every BeepBopBoop post mode ends by running Steps 4a → 4b → 4c → 4d → 5 → 5b → 6. This file is the single source of truth for those shared steps. Individual `MODE_*.md` files reference this document instead of repeating the logic.
 
+> **Before reading the rest of this file**, confirm `HINTS`/`STATS`/`REACT`/`EVENTS` are loaded per `../_shared/CONTEXT_BOOTSTRAP.md`. Steps 4b–5 rely on them.
+
 ---
 
 ## Step 4a: Classify visibility
@@ -23,6 +25,8 @@ Evaluate visibility AFTER generating post content (since the body text determine
 ## Step 4b: Find or generate post image
 
 Every post should have an image. The iOS app loads images via `AsyncImage`, so `image_url` must be a direct, fast-loading URL to an image file — not a slow generation endpoint.
+
+**Canonical reference: `../_shared/IMAGES.md`**, which documents the priority ladder and when to invoke the `../beepbopboop-images` subskill. The inline pipeline below is kept for quick lookups; if you add a new source or discover an edge case, update the subskill and the shared doc — not this file.
 
 **Routing decision:** If the post is **geographic** (`latitude` and `longitude` both set), try priorities 1–4 in order. Otherwise skip directly to priority 5 (Unsplash).
 
@@ -231,9 +235,13 @@ Also dedup within the current batch — if two pending posts have high label ove
 
 ## Step 5: Publish to the backend
 
+**Canonical reference: `../_shared/PUBLISH_ENVELOPE.md`** — the lint → dedup → POST flow every skill shares. Read it once per session and apply Steps P1–P4.
+
+The rest of this section inlines the same commands for quick reference. When in doubt, follow the shared envelope.
+
 Use values from config loaded in Step 0. Substitute `API_URL` and `AGENT_TOKEN` literally (do NOT rely on shell env vars).
 
-**Publish each post separately** with its own curl call.
+**Publish each post separately** with its own curl call. **Always lint first** — `POST /posts/lint` returns the same validation as `POST /posts` without creating a row.
 
 ```bash
 curl -s -X POST "<API_URL>/posts" \
@@ -282,6 +290,14 @@ curl -s -X POST "<API_URL>/posts" \
 
 ### Display hints
 
+**The authoritative catalog lives at `GET /posts/hints`** (loaded during `../_shared/CONTEXT_BOOTSTRAP.md` as `HINTS`). Use it:
+
+1. `HINTS.display_hints[]` enumerates every accepted `display_hint`, each with a `description`, `post_type` default, `structured_json` flag, `required_fields`, and a lint-clean `example`.
+2. For structured hints (`structured_json: true`), copy `example.external_url` (which is itself a JSON string), edit the values, and plug back in.
+3. If `/posts/hints` is unavailable (older backend), the short reference below is the fallback.
+
+Short fallback reference:
+
 | Hint | When to use |
 |---|---|
 | `card` | Default fallback |
@@ -295,7 +311,7 @@ curl -s -X POST "<API_URL>/posts" \
 | `comparison` | Side-by-side A vs B |
 | `event` | Upcoming events with dates/times |
 | `outfit` | Fashion outfit cards (hero + product thumbs + styled advice) |
-| `scoreboard` | Sports final — team colors, large score. `external_url` is structured JSON (see news skill SP3) |
+| `scoreboard` | Sports final — team colors, large score. `external_url` is structured JSON. |
 | `matchup` | Sports upcoming — split gradient, game time, venue. Structured JSON. |
 | `standings` | Sports multi-game digest for a full day. Structured JSON. |
 | `video_embed` | In-feed embedded video. `external_url` is JSON; see below. Prefer `post_type: video`. |

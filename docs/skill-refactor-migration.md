@@ -63,15 +63,26 @@ Estimated typical-case token savings per invocation:
 - `beepbopboop-news`: ~3,000 tokens
 - `beepbopboop-fashion`: ~3,000 tokens
 
-## What's still to do (Phase 2)
+## What landed in Phase 2 (this PR)
+
+On top of Phase 1 we shipped the capabilities/context layer:
+
+- `.claude/skills/_shared/CONFIG.md` — single source of truth for "load `~/.config/beepbopboop/config`." All three router skills (`beepbopboop-post`, `beepbopboop-news`, `beepbopboop-fashion`) now reference it.
+- `.claude/skills/_shared/CONTEXT_BOOTSTRAP.md` — **every skill now runs four parallel fetches at Step 0d** (`/posts/hints`, `/posts/stats`, `/reactions/summary`, `/events/summary`) and pins the result into context before any mode routes. This fixes the "router hides features from the agent" concern: the context is always present even though mode execution is narrow.
+- `.claude/skills/_shared/IMAGES.md` — quick reference for the image priority ladder, linked from every router.
+- `.claude/skills/_shared/PUBLISH_ENVELOPE.md` — the canonical `lint → dedup → POST /posts` flow, referenced from each skill's `COMMON_PUBLISH.md`.
+- `.claude/skills/beepbopboop-images/` — new top-level skill (router + `MODE_REAL.md` + `MODE_AI.md` + `MODE_POSTER.md`). Any skill can now invoke it as a subtask, so no skill silently misses the pipeline.
+- Backend `GET /posts/hints` — authoritative schema for every `display_hint`: required fields, structured-JSON flag, lint-clean example. Tests (`handler/hints_test.go`) enforce that each example round-trips through `validatePost` so the contract cannot drift from the validator.
+- `docs/skill-prompting-playbook.md` — daily/weekly/monthly prompt recipes that respect the bootstrap, spread awareness, and image pipeline.
+
+## What's still to do (Phase 3)
 
 Tracked as follow-up issues off of #180:
 
-1. **Pull the "load config" blurb into `_shared/CONFIG.md`**, have every BeepBopBoop skill reference it. Currently duplicated across post / news / fashion.
-2. **Pull the "publish via curl" snippet into `_shared/PUBLISH_ENVELOPE.md`**. Once every skill points here, the canonical publish contract has a single home.
-3. **Split each `beepbopboop-<sport>` skill** (basketball, baseball, football, soccer) along the same pattern. Each currently has ~200 lines of ESPN-API scaffolding that duplicates logic in `beepbopboop-news/MODE_SPORTS.md`. Candidate: a shared `_shared/SPORTS_COMMON.md` + small sport-specific files.
-4. **Split the design-system skills** (`harden`, `delight`, `overdrive`, `frontend-design`, `optimize`, `adapt`, `onboard`) at the section level. They aren't multi-mode, but they have long sections that could be broken into focused reference files so the agent reads only the relevant subset.
-5. **Rename `INIT_WIZARD.md` → `MODE_INIT.md`** in `beepbopboop-post` (cosmetic, to match the rest of the pattern). Left as-is in Phase 1 to keep the refactor minimally invasive.
+1. **Split each `beepbopboop-<sport>` skill** (basketball, baseball, football, soccer) along the same pattern. Each currently has ~200 lines of ESPN-API scaffolding that duplicates logic in `beepbopboop-news/MODE_SPORTS.md`. Candidate: a shared `_shared/SPORTS_COMMON.md` + small sport-specific files.
+2. **Split the design-system skills** (`harden`, `delight`, `overdrive`, `frontend-design`, `optimize`, `adapt`, `onboard`) at the section level. They aren't multi-mode, but they have long sections that could be broken into focused reference files so the agent reads only the relevant subset.
+3. **Rename `INIT_WIZARD.md` → `MODE_INIT.md`** in `beepbopboop-post` (cosmetic, to match the rest of the pattern).
+4. **Cache `/posts/hints` client-side.** Today every invocation fetches it; a short-TTL cache in the agent's working dir (`~/.cache/beepbopboop/hints.json`) keyed by backend version would remove the round-trip.
 
 ## Checklist for adding a new multi-mode skill
 

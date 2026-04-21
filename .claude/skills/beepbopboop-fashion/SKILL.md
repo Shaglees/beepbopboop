@@ -34,31 +34,33 @@ Each mode lives in its own sibling file. After Step 0a routes, read the matching
 | Capsule wardrobe (CAP1–CAP3) | `MODE_CAPSULE.md` |
 | Sources / retailer / seasonal reference | `FASHION_SOURCES.md` |
 | Cross-skill publish/dedup/label contract | `../beepbopboop-post/COMMON_PUBLISH.md` |
+| Load config (cross-skill) | `../_shared/CONFIG.md` |
+| Bootstrap server context (cross-skill) | `../_shared/CONTEXT_BOOTSTRAP.md` |
+| Image pipeline quick reference | `../_shared/IMAGES.md` |
+| Publish envelope (lint → dedup → POST) | `../_shared/PUBLISH_ENVELOPE.md` |
+| Full image pipeline (invokable subskill, Flex.1/Nanobanana) | `../beepbopboop-images/SKILL.md` |
 
 ## Step 0: Load configuration
 
-```bash
-cat ~/.config/beepbopboop/config 2>/dev/null
-```
+Read `../_shared/CONFIG.md` and load the config file. Fashion-specific keys:
 
-Required:
-- `BEEPBOPBOOP_API_URL`
-- `BEEPBOPBOOP_AGENT_TOKEN`
+- `BEEPBOPBOOP_FASHION_PROFILE` (e.g. `height:5-11;build:normal;hair:brown;age:44;gender:male`)
+- `BEEPBOPBOOP_FASHION_STYLE` (comma-separated archetypes)
+- `BEEPBOPBOOP_FASHION_BUDGET` (`budget`, `moderate`, `premium`, `luxury`)
+- `BEEPBOPBOOP_FASHION_BRANDS` (comma-separated)
+- `BEEPBOPBOOP_FASHION_HEADSHOTS` (semicolon-separated file paths)
+- `BEEPBOPBOOP_FASHION_IMGGEN` (`flex1`, `pollinations`, `nanobanana`. Default `pollinations`)
+- `BEEPBOPBOOP_NANOBANANA_API_KEY`
 
-Fashion values:
-- `BEEPBOPBOOP_FASHION_PROFILE` (optional — `height:5-11;build:normal;hair:brown;age:44;gender:male`)
-- `BEEPBOPBOOP_FASHION_STYLE` (optional — comma-separated style archetypes)
-- `BEEPBOPBOOP_FASHION_BUDGET` (optional — `budget`, `moderate`, `premium`, `luxury`)
-- `BEEPBOPBOOP_FASHION_BRANDS` (optional — comma-separated preferred brands)
-- `BEEPBOPBOOP_FASHION_HEADSHOTS` (optional — semicolon-separated file paths for reference images)
-- `BEEPBOPBOOP_FASHION_IMGGEN` (optional — `flex1`, `pollinations`, `nanobanana`. Default: `pollinations`)
-- `BEEPBOPBOOP_NANOBANANA_API_KEY` (optional — for NanoBanana image gen)
+Fallback: if `FASHION_PROFILE` is unset, parse `BEEPBOPBOOP_USER_CONTEXT` for basics (e.g. "Male, 5'11", 44yo, normal build").
 
-Fallback: if `FASHION_PROFILE` is not set, parse `BEEPBOPBOOP_USER_CONTEXT` for basics (e.g., "Male, 5'11", 44yo, normal build").
+## Step 0d: Bootstrap server context
 
-Image support:
-- `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` (optional — editorial image fallback)
-- `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional — for hosting AI-generated images)
+Read `../_shared/CONTEXT_BOOTSTRAP.md` and run the four parallel fetches. The `outfit` display hint uses `images[]` with roles — confirm the exact `role` enum values from `hints.enums.image_role` before composing, so nothing is hard-coded.
+
+## Step 0e: Image pipeline awareness
+
+Read `../_shared/IMAGES.md` and the dedicated `../beepbopboop-images` subskill. Fashion uses AI-render tiers (Flex.1 / Nanobanana) by default via `MODE_OUTFIT.md`; never inline image pipeline code in a fashion mode file — delegate.
 
 ## Step 0a: Parse command and route
 

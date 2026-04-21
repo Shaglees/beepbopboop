@@ -193,7 +193,7 @@ func (b *Backfiller) videoFromInspection(inspection Inspection) (model.Video, er
 		SourceDesc:      inspection.Metadata.Description,
 		Labels:          buildLabels(inspection.Capture, inspection.Metadata),
 		EmbedHealth:     "unknown",
-		SupportsPrevCap: supportsPreviewCap(inspection.Embed.Provider),
+		SupportsPrevCap: video.PolicyForProvider(inspection.Embed.Provider).SupportsPreviewCap,
 	}
 	if t := inspection.Capture.CaptureTime(); !t.IsZero() {
 		tt := t
@@ -247,13 +247,4 @@ func NormalizeWimpURL(rawURL string) (string, error) {
 	}
 	u.Path = clean
 	return u.String(), nil
-}
-
-func supportsPreviewCap(provider string) bool {
-	switch strings.ToLower(provider) {
-	case "youtube", "vimeo":
-		return true
-	default:
-		return false
-	}
 }

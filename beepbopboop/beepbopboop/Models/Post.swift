@@ -193,6 +193,7 @@ struct Post: Codable, Identifiable {
         case boxScore
         case feedback
         case creatorSpotlight
+        case videoEmbed
     }
 
     var displayHintValue: DisplayHintValue {
@@ -226,6 +227,7 @@ struct Post: Codable, Identifiable {
         case "box_score": return .boxScore
         case "feedback": return .feedback
         case "creator_spotlight": return .creatorSpotlight
+        case "video_embed": return .videoEmbed
         default: return .card
         }
     }
@@ -311,6 +313,7 @@ struct Post: Codable, Identifiable {
         case .boxScore: return Color(red: 0.055, green: 0.337, blue: 0.188)
         case .feedback: return Color(red: 0.365, green: 0.376, blue: 0.996)
         case .creatorSpotlight: return Color(red: 0.541, green: 0.169, blue: 0.886)
+        case .videoEmbed: return Color(red: 0.898, green: 0.051, blue: 0.071)
         }
     }
 
@@ -346,6 +349,7 @@ struct Post: Codable, Identifiable {
         case .boxScore: return "figure.baseball"
         case .feedback: return feedbackData?.feedbackType == "rating" ? "star.fill" : "checklist"
         case .creatorSpotlight: return "paintpalette"
+        case .videoEmbed: return "play.rectangle.fill"
         }
     }
 
@@ -381,6 +385,7 @@ struct Post: Codable, Identifiable {
         case .boxScore: return "Box Score"
         case .feedback: return "Quick Question"
         case .creatorSpotlight: return "Local Creator"
+        case .videoEmbed: return "Video"
         }
     }
 
@@ -395,6 +400,15 @@ struct Post: Codable, Identifiable {
     // MARK: - Share URL
 
     var shareURL: URL {
+        if displayHintValue == .videoEmbed, let d = videoEmbedData {
+            if let w = d.watchUrl, !w.isEmpty, let u = URL(string: w), u.scheme?.hasPrefix("http") == true {
+                return u
+            }
+            let e = d.embedUrl
+            if !e.isEmpty, let u = URL(string: e), u.scheme?.hasPrefix("http") == true {
+                return u
+            }
+        }
         if let raw = externalURL, !raw.isEmpty,
            let url = URL(string: raw), url.scheme?.hasPrefix("http") == true {
             return url
@@ -596,6 +610,14 @@ struct Post: Codable, Identifiable {
               let json = externalURL,
               let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(CreatorData.self, from: data)
+    }
+
+    /// Parsed video embed payload from external_url (for video_embed display_hint posts).
+    var videoEmbedData: VideoEmbedData? {
+        guard displayHintValue == .videoEmbed,
+              let json = externalURL,
+              let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(VideoEmbedData.self, from: data)
     }
 
     /// Images filtered by role, with fallback to imageURL

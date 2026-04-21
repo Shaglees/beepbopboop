@@ -226,5 +226,65 @@ func Open(url string) (*sql.DB, error) {
 		computed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
 
+	// Video catalog: historical corpus of embed-friendly videos surfaced as
+	// in-feed `display_hint: video_embed` posts. Keyed by (provider, video_id)
+	// so ingestion and enrichment are idempotent.
+	db.Exec(`CREATE TABLE IF NOT EXISTS video_catalog (
+		id                   TEXT PRIMARY KEY,
+		provider             TEXT NOT NULL,
+		provider_video_id    TEXT NOT NULL,
+		watch_url            TEXT NOT NULL,
+		embed_url            TEXT NOT NULL,
+		title                TEXT,
+		description          TEXT,
+		channel_title        TEXT,
+		thumbnail_url        TEXT,
+		duration_sec         INTEGER,
+		published_at         TIMESTAMPTZ,
+		source_url           TEXT,
+		source_description   TEXT,
+		labels               JSONB NOT NULL DEFAULT '[]'::jsonb,
+		supports_preview_cap BOOLEAN NOT NULL DEFAULT FALSE,
+		embed_health         TEXT NOT NULL DEFAULT 'unknown',
+		embed_checked_at     TIMESTAMPTZ,
+		created_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (provider, provider_video_id)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_video_catalog_labels ON video_catalog USING GIN (labels)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_video_catalog_embed_health ON video_catalog (embed_health)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_video_catalog_published_at ON video_catalog (published_at DESC)")
+
+	// Video embeddings: 1536-dim vectors stored as pgvector when available.
+	// The test container image (pgvector/pgvector:pg17) ships the extension,
+	// which we also enable above; production Postgres must have pgvector.
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS video_embeddings (
+		video_id      TEXT PRIMARY KEY REFERENCES video_catalog(id) ON DELETE CASCADE,
+		embedding     vector(1536) NOT NULL,
+		model_version TEXT NOT NULL DEFAULT '',
+		created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		slog.Warn("pgvector: CREATE TABLE video_embeddings failed — video similarity unavailable", "error", err)
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_video_embeddings_cosine ON video_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"); err != nil {
+		slog.Warn("pgvector: CREATE INDEX idx_video_embeddings_cosine failed", "error", err)
+	}
+
+	// Video post history: feeds the 180-day per-user dedup in candidate selection.
+	db.Exec(`CREATE TABLE IF NOT EXISTS video_post_history (
+		post_id      TEXT PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
+		video_id     TEXT NOT NULL REFERENCES video_catalog(id) ON DELETE CASCADE,
+		user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		published_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_video_post_history_user_published ON video_post_history (user_id, published_at DESC)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_video_post_history_video ON video_post_history (video_id)")
+
+	// Video source ingest: resumable cursor per source (e.g. wimp.com archive pages).
+	db.Exec(`CREATE TABLE IF NOT EXISTS video_source_ingest (
+		source      TEXT PRIMARY KEY,
+		last_cursor TEXT NOT NULL DEFAULT '',
+		updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+
 	return db, nil
 }

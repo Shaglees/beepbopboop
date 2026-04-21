@@ -76,6 +76,8 @@ struct PostDetailView: View {
             FeedbackDetailView(post: post)
         case .creatorSpotlight:
             CreatorSpotlightDetailView(post: post)
+        case .videoEmbed:
+            VideoEmbedDetailView(post: post)
         default:
             standardDetailBody
         }

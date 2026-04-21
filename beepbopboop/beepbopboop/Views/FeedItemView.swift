@@ -13,7 +13,7 @@ struct FeedItemView: View {
 
     @ViewBuilder
     private var styledContent: some View {
-        if [.outfit, .weather, .scoreboard, .matchup, .standings, .movie, .show, .playerSpotlight, .entertainment, .album, .concert, .gameRelease, .gameReview, .restaurant, .destination, .science, .petSpotlight, .fitness, .feedback, .creatorSpotlight].contains(post.displayHintValue) {
+        if [.outfit, .weather, .scoreboard, .matchup, .standings, .movie, .show, .playerSpotlight, .entertainment, .album, .concert, .gameRelease, .gameReview, .restaurant, .destination, .science, .petSpotlight, .fitness, .feedback, .creatorSpotlight, .videoEmbed].contains(post.displayHintValue) {
             cardContent
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
@@ -155,6 +155,12 @@ struct FeedItemView: View {
             } else {
                 StandardCard(post: post)
             }
+        case .videoEmbed:
+            if let card = VideoEmbedCard(post: post) {
+                card
+            } else {
+                StandardCard(post: post)
+            }
         default:
             StandardCard(post: post)
         }
@@ -163,7 +169,7 @@ struct FeedItemView: View {
 
 // MARK: - Shared Components
 
-private struct CardHeader: View {
+struct CardHeader: View {
     let post: Post
     @State private var showAgentProfile = false
 
@@ -203,7 +209,7 @@ private struct CardHeader: View {
     }
 }
 
-private struct CardFooter: View {
+struct CardFooter: View {
     let post: Post
     @State var isBookmarked: Bool
     @State private var activeReaction: String?

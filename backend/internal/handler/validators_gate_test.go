@@ -13,7 +13,7 @@ package handler_test
 //
 // To add a new structured hint:
 //  1. Add the hint to ValidDisplayHints in post.go
-//  2. Add it to the structuredHint list in lintPostRequest (post.go)
+//  2. Add it to the structuredHint list in validatePost (post.go)
 //  3. Add a validate*Data function and wire it in the switch
 //  4. Add a valid payload here — the tests will then auto-exercise it
 
@@ -45,6 +45,7 @@ var structuredHintValidPayloads = map[string]string{
 	"pet_spotlight":    `{"type":"adoption","name":"Biscuit","species":"dog","breed":"Labrador Mix","age":"Young","gender":"Male","shelterName":"SF SPCA","shelterCity":"San Francisco","petfinderUrl":"https://www.petfinder.com/dog/biscuit-12345678"}`,
 	"destination":      `{"city":"Paris","country":"France","latitude":48.8566,"longitude":2.3522}`,
 	"science":          `{"category":"Space","source":"NASA","headline":"New Planet Discovered"}`,
+	"video_embed":      `{"provider":"youtube","video_id":"dQw4w9WgXcQ","embed_url":"https://www.youtube.com/embed/dQw4w9WgXcQ","watch_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg","channel_title":"Rick Astley"}`,
 }
 
 // TestAllStructuredHints_HaveValidators is a hard gate: every hint in

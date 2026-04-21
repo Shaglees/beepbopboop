@@ -641,14 +641,36 @@ private struct CompactCard: View {
 
 private struct DateCard: View {
     let post: Post
+    // Use openURL from an explicit Button action rather than SwiftUI's Link.
+    // The outer FeedItemView wraps the whole card in a Button for navigation,
+    // and nesting a Link inside produces gesture conflicts: sometimes the tap
+    // activates the outer button (goes to post detail) instead of opening the
+    // URL. An inner Button with its own action reliably consumes the tap.
+    @Environment(\.openURL) private var openURL
 
-    /// Date extracted from the title or body. `nil` means the skill didn't
-    /// supply a real date; we intentionally don't fall back to createdAt
-    /// because a "posted today" badge on an evergreen hike looks fabricated.
+    /// The real date a skill attached to this post, used to render the badge.
+    /// Priority order:
+    ///   1. `scheduled_at` (structured field) — the server's authoritative answer.
+    ///   2. Date token in the title (e.g. "April 16").
+    ///   3. Date token in the body (e.g. "Saturday May 10 at 2pm").
+    /// Returns `nil` for evergreen content so the badge is suppressed rather
+    /// than fabricated from `createdAt`.
     private var parsedDate: Date? {
+        if let iso = post.scheduledAt, let d = Self.parseISODate(iso) { return d }
         if let d = Self.extractDate(from: post.title) { return d }
         if let d = Self.extractDate(from: post.body) { return d }
         return nil
+    }
+
+    /// Parse an ISO-8601 timestamp with or without fractional seconds, matching
+    /// the two formats the backend emits for `scheduled_at` / `created_at`.
+    private static func parseISODate(_ s: String) -> Date? {
+        let f1 = ISO8601DateFormatter()
+        f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f1.date(from: s) { return d }
+        let f2 = ISO8601DateFormatter()
+        f2.formatOptions = [.withInternetDateTime]
+        return f2.date(from: s)
     }
 
     var body: some View {
@@ -690,7 +712,7 @@ private struct DateCard: View {
                         }
                         if let extURL = post.externalURL, !extURL.isEmpty,
                            let url = URL(string: extURL) {
-                            Link(destination: url) {
+                            Button { openURL(url) } label: {
                                 Label("Get Tickets", systemImage: "arrow.up.right.square")
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(post.hintColor)
@@ -794,6 +816,8 @@ private struct DealCard: View {
 
 private struct PlaceCard: View {
     let post: Post
+    // See DateCard for why we use openURL + Button instead of SwiftUI Link.
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -845,7 +869,7 @@ private struct PlaceCard: View {
             // surface — the link was silently dropped.
             if let extURL = post.externalURL, !extURL.isEmpty,
                let url = URL(string: extURL) {
-                Link(destination: url) {
+                Button { openURL(url) } label: {
                     Label(placeCTALabel(for: extURL), systemImage: "arrow.up.right.square")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(post.hintColor)

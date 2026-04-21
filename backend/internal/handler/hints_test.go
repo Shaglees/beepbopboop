@@ -315,15 +315,11 @@ func TestHints_EventHintWarnsOnEvergreen(t *testing.T) {
 	}
 }
 
-// TestHints_PlaceHintWarnsWhenExternalURLDropped catches the second prod bug:
-// we shipped a 'place' post with an external_url for the booking link, lint
-// passed, and the iOS PlaceCard silently dropped the URL. Until the client
-// renders a CTA on PlaceCard, the server should warn when place + external_url
-// are combined so skills at least know to inline the link in the body.
-//
-// When the iOS fix lands, this warning can be removed in the same PR that
-// adds PlaceCard CTA rendering.
-func TestHints_PlaceHintWarnsWhenExternalURLDropped(t *testing.T) {
+// TestHints_PlaceHintDoesNotWarnOnExternalURL pins the contract the other
+// direction: once iOS PlaceCard renders a CTA for external_url, the server
+// must stop warning about it. A regression here would mean skills are being
+// told to drop a link that the client actually displays.
+func TestHints_PlaceHintDoesNotWarnOnExternalURL(t *testing.T) {
 	h := newHintsHandler(t)
 
 	body := []byte(`{
@@ -342,26 +338,17 @@ func TestHints_PlaceHintWarnsWhenExternalURLDropped(t *testing.T) {
 	h.LintPost(rec, req)
 
 	var result struct {
-		Valid    bool `json:"valid"`
 		Warnings []struct {
-			Field   string `json:"field"`
-			Code    string `json:"code"`
-			Message string `json:"message"`
+			Code string `json:"code"`
 		} `json:"warnings"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-
-	found := false
 	for _, w := range result.Warnings {
 		if w.Code == "place_external_url_not_rendered" {
-			found = true
-			break
+			t.Errorf("place_external_url_not_rendered warning fired after PlaceCard started rendering external_url as a CTA: warnings=%+v", result.Warnings)
 		}
-	}
-	if !found {
-		t.Errorf("expected a place_external_url_not_rendered warning; got warnings=%+v", result.Warnings)
 	}
 }
 

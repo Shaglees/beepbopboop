@@ -143,7 +143,7 @@ func buildHintCatalog() []hintDescriptor {
 			Renders: &hintRenderInfo{
 				Card:          "StandardCard",
 				UsesFields:    []string{"title", "body", "image_url", "locality", "labels"},
-				IgnoresFields: []string{"external_url", "scheduled_at"},
+				IgnoresFields: []string{"external_url"},
 			},
 			PickWhen:  "Generic discovery post with no CTA link, no date, no venue coords.",
 			AvoidWhen: "You have a clickable URL (use `article`) or coordinates (use `place`).",

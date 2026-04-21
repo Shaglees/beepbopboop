@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -73,12 +74,18 @@ var ValidImageRoles = map[string]bool{
 type PostHandler struct {
 	agentRepo *repository.AgentRepo
 	postRepo  *repository.PostRepo
+	videoRepo *repository.VideoRepo
 }
 
-func NewPostHandler(agentRepo *repository.AgentRepo, postRepo *repository.PostRepo) *PostHandler {
+func NewPostHandler(agentRepo *repository.AgentRepo, postRepo *repository.PostRepo, videoRepo ...*repository.VideoRepo) *PostHandler {
+	var vr *repository.VideoRepo
+	if len(videoRepo) > 0 {
+		vr = videoRepo[0]
+	}
 	return &PostHandler{
 		agentRepo: agentRepo,
 		postRepo:  postRepo,
+		videoRepo: vr,
 	}
 }
 
@@ -595,6 +602,130 @@ func validateVideoEmbedData(externalURL string, errs *[]validationIssue, warns *
 	}
 }
 
+func (h *PostHandler) maybeLinkVideoPost(post *model.Post, req *createPostRequest) {
+	if h.videoRepo == nil || post == nil || req == nil {
+		return
+	}
+	// Scheduled posts should only contribute to dedup once they actually publish.
+	if post.Status != "published" || req.DisplayHint != "video_embed" || req.ExternalURL == "" {
+		return
+	}
+
+	video, err := decodeVideoEmbedData(req.ExternalURL)
+	if err != nil {
+		slog.Warn("post: skip video link-up; invalid external_url JSON after validation", "post_id", post.ID, "error", err)
+		return
+	}
+
+	videoID := video.catalogVideoID()
+	if videoID == "" {
+		slog.Warn("post: skip video link-up; could not derive provider_video_id", "post_id", post.ID, "provider", video.Provider)
+		return
+	}
+
+	catalog, err := h.videoRepo.GetByProviderID(video.Provider, videoID)
+	if err != nil {
+		slog.Warn("post: video catalog lookup failed", "post_id", post.ID, "provider", video.Provider, "video_id", videoID, "error", err)
+		return
+	}
+	if catalog == nil {
+		created, err := h.videoRepo.UpsertCatalog(model.Video{
+			Provider:        video.Provider,
+			ProviderVideoID: videoID,
+			WatchURL:        video.watchURLWithFallback(),
+			EmbedURL:        video.EmbedURL,
+			Title:           post.Title,
+			Description:     post.Body,
+			ChannelTitle:    video.ChannelTitle,
+			ThumbnailURL:    video.ThumbnailURL,
+			Labels:          append([]string(nil), req.Labels...),
+			EmbedHealth:     "unknown",
+		})
+		if err != nil {
+			slog.Warn("post: video catalog upsert failed", "post_id", post.ID, "provider", video.Provider, "video_id", videoID, "error", err)
+			return
+		}
+		catalog = &created
+	}
+
+	if err := h.videoRepo.InsertPostHistory(post.ID, catalog.ID, post.UserID); err != nil {
+		slog.Warn("post: video post history insert failed", "post_id", post.ID, "video_catalog_id", catalog.ID, "error", err)
+	}
+}
+
+func decodeVideoEmbedData(externalURL string) (videoEmbedDataValidation, error) {
+	var v videoEmbedDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &v); err != nil {
+		return videoEmbedDataValidation{}, err
+	}
+	return v, nil
+}
+
+func (v videoEmbedDataValidation) catalogVideoID() string {
+	if id := strings.TrimSpace(v.VideoID); id != "" {
+		return id
+	}
+
+	switch strings.ToLower(v.Provider) {
+	case "youtube":
+		for _, raw := range []string{v.EmbedURL, v.WatchURL} {
+			if raw == "" {
+				continue
+			}
+			u, err := url.Parse(raw)
+			if err != nil {
+				continue
+			}
+			if id := strings.TrimPrefix(strings.Trim(u.Path, "/"), "embed/"); id != "" && id != u.Path {
+				return id
+			}
+			if id := u.Query().Get("v"); id != "" {
+				return id
+			}
+			if host := strings.ToLower(u.Host); strings.Contains(host, "youtu.be") {
+				if id := strings.Trim(u.Path, "/"); id != "" {
+					return id
+				}
+			}
+		}
+	case "vimeo":
+		for _, raw := range []string{v.EmbedURL, v.WatchURL} {
+			if raw == "" {
+				continue
+			}
+			u, err := url.Parse(raw)
+			if err != nil {
+				continue
+			}
+			if trimmed := strings.Trim(u.Path, "/"); trimmed != "" {
+				parts := strings.Split(trimmed, "/")
+				if last := parts[len(parts)-1]; last != "" {
+					return last
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+func (v videoEmbedDataValidation) watchURLWithFallback() string {
+	if watchURL := strings.TrimSpace(v.WatchURL); watchURL != "" {
+		return watchURL
+	}
+	switch strings.ToLower(v.Provider) {
+	case "youtube":
+		if id := v.catalogVideoID(); id != "" {
+			return "https://www.youtube.com/watch?v=" + id
+		}
+	case "vimeo":
+		if id := v.catalogVideoID(); id != "" {
+			return "https://vimeo.com/" + id
+		}
+	}
+	return ""
+}
+
 // --- Video game data validation (game_release / game_review) ---
 
 type videoGameDataValidation struct {
@@ -929,6 +1060,8 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create post"})
 		return
 	}
+
+	h.maybeLinkVideoPost(post, &req)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

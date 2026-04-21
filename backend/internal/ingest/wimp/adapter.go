@@ -30,6 +30,15 @@ type Adapter struct {
 	http *http.Client
 }
 
+// Inspection is the raw result of looking up a Wimp page in Wayback: the
+// archive capture, extracted metadata, and the first live third-party embed if
+// one exists.
+type Inspection struct {
+	Capture  Capture
+	Metadata Metadata
+	Embed    *Embed
+}
+
 // NewAdapter builds an Adapter with the given config.
 func NewAdapter(cfg Config) *Adapter {
 	if cfg.BaseURL == "" {
@@ -56,42 +65,58 @@ func NewAdapter(cfg Config) *Adapter {
 //   - ErrNoCapture: the archive has no HTTP-200 HTML capture for wimpURL.
 //   - ErrNoLiveEmbed: captured HTML has no YouTube/Vimeo reference.
 func (a *Adapter) FromArchivedURL(ctx context.Context, wimpURL string) (model.Video, error) {
-	cap, err := a.cdx.LatestCapture(ctx, wimpURL)
+	inspection, err := a.InspectArchivedURL(ctx, wimpURL)
 	if err != nil {
 		return model.Video{}, err
 	}
-
-	htmlBytes, err := a.fetchArchived(ctx, cap)
-	if err != nil {
-		return model.Video{}, err
-	}
-
-	embed, ok := ExtractEmbed(htmlBytes)
-	if !ok {
+	if inspection.Embed == nil {
 		return model.Video{}, ErrNoLiveEmbed
 	}
-	md := ExtractMetadata(htmlBytes)
 
 	v := model.Video{
-		Provider:        embed.Provider,
-		ProviderVideoID: embed.VideoID,
-		WatchURL:        embed.WatchURL,
-		EmbedURL:        embed.EmbedURL,
-		Title:           md.Title,
-		Description:     md.Description,
-		ThumbnailURL:    md.ThumbnailURL,
-		SourceURL:       cap.IDURL(), // canonical Wayback permalink, not adapter's BaseURL.
-		SourceDesc:      md.Description,
-		Labels:          buildLabels(cap, md),
+		Provider:        inspection.Embed.Provider,
+		ProviderVideoID: inspection.Embed.VideoID,
+		WatchURL:        inspection.Embed.WatchURL,
+		EmbedURL:        inspection.Embed.EmbedURL,
+		Title:           inspection.Metadata.Title,
+		Description:     inspection.Metadata.Description,
+		ThumbnailURL:    inspection.Metadata.ThumbnailURL,
+		SourceURL:       inspection.Capture.IDURL(), // canonical Wayback permalink, not adapter's BaseURL.
+		SourceDesc:      inspection.Metadata.Description,
+		Labels:          buildLabels(inspection.Capture, inspection.Metadata),
 		EmbedHealth:     "unknown",
 	}
-	if t := cap.CaptureTime(); !t.IsZero() {
+	if t := inspection.Capture.CaptureTime(); !t.IsZero() {
 		// CaptureTime is an UPPER BOUND on the page's publish date, but it's
 		// the best we have without hitting the third-party provider.
 		tt := t
 		v.PublishedAt = &tt
 	}
 	return v, nil
+}
+
+// InspectArchivedURL fetches and parses a Wimp Wayback capture but does not
+// force the page to have a live embed. Callers can use this to persist raw crawl
+// records even when the page cannot yield a normalized candidate.
+func (a *Adapter) InspectArchivedURL(ctx context.Context, wimpURL string) (Inspection, error) {
+	cap, err := a.cdx.LatestCapture(ctx, wimpURL)
+	if err != nil {
+		return Inspection{}, err
+	}
+
+	htmlBytes, err := a.fetchArchived(ctx, cap)
+	if err != nil {
+		return Inspection{}, err
+	}
+
+	inspection := Inspection{
+		Capture:  cap,
+		Metadata: ExtractMetadata(htmlBytes),
+	}
+	if embed, ok := ExtractEmbed(htmlBytes); ok {
+		inspection.Embed = &embed
+	}
+	return inspection, nil
 }
 
 func (a *Adapter) fetchArchived(ctx context.Context, cap Capture) ([]byte, error) {

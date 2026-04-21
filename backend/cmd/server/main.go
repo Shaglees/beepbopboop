@@ -15,14 +15,15 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
-	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
+	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/ranking"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 	"github.com/shanegleeson/beepbopboop/backend/internal/scheduler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/sports"
+	"github.com/shanegleeson/beepbopboop/backend/internal/videohealth"
 	"github.com/shanegleeson/beepbopboop/backend/internal/weather"
 	"google.golang.org/api/option"
 )
@@ -73,6 +74,7 @@ func main() {
 	feedbackRepo := repository.NewFeedbackRepo(db)
 	calendarRepo := repository.NewCalendarRepo(db)
 	followRepo := repository.NewFollowRepo(db)
+	videoRepo := repository.NewVideoRepo(db)
 	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
 	postEmbeddingRepo := repository.NewPostEmbeddingRepo(db)
 
@@ -98,7 +100,7 @@ func main() {
 	healthH := handler.NewHealthHandler()
 	meH := handler.NewMeHandler(userRepo)
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
-	postH := handler.NewPostHandler(agentRepo, postRepo)
+	postH := handler.NewPostHandler(agentRepo, postRepo, videoRepo)
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
 	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo, followRepo, userEmbFront)
 	followH := handler.NewFollowHandler(userRepo, followRepo)
@@ -207,6 +209,9 @@ func main() {
 
 	embeddingWorker := embedding.NewWorker(userEmbedder, 24*time.Hour)
 	go embeddingWorker.Run(workerCtx)
+
+	videoHealthWorker := videohealth.NewScheduledWorker(videoRepo, videohealth.NewHTTPChecker(nil), 6*time.Hour)
+	go videoHealthWorker.Run(workerCtx)
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 

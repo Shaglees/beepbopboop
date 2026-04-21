@@ -12,6 +12,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
+	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
 
@@ -154,6 +155,123 @@ func TestPostHandler_CreatePost_VideoType(t *testing.T) {
 	json.NewDecoder(rec.Body).Decode(&resp)
 	if resp["post_type"] != "video" {
 		t.Errorf("expected post_type video, got %v", resp["post_type"])
+	}
+}
+
+func TestPostHandler_CreatePost_VideoEmbed_WritesVideoPostHistory(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	agentRepo := repository.NewAgentRepo(db)
+	postRepo := repository.NewPostRepo(db)
+	videoRepo := repository.NewVideoRepo(db)
+
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-video-linkup")
+	agent, _ := agentRepo.Create(user.ID, "Video Agent")
+
+	video, err := videoRepo.UpsertCatalog(model.Video{
+		Provider:        "youtube",
+		ProviderVideoID: "jNQXAC9IVRw",
+		WatchURL:        "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+		EmbedURL:        "https://www.youtube.com/embed/jNQXAC9IVRw",
+		Title:           "Me at the zoo",
+		Description:     "Historic YouTube upload.",
+		ThumbnailURL:    "https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
+		Labels:          []string{"sample", "video_embed"},
+		EmbedHealth:     "unknown",
+	})
+	if err != nil {
+		t.Fatalf("seed video catalog: %v", err)
+	}
+
+	h := handler.NewPostHandler(agentRepo, postRepo, videoRepo)
+
+	body := `{"title":"Sample video post","body":"Testing post/video link-up.","post_type":"video","display_hint":"video_embed","external_url":"{\"provider\":\"youtube\",\"video_id\":\"jNQXAC9IVRw\",\"embed_url\":\"https://www.youtube.com/embed/jNQXAC9IVRw\",\"watch_url\":\"https://www.youtube.com/watch?v=jNQXAC9IVRw\",\"thumbnail_url\":\"https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg\",\"channel_title\":\"jawed\"}"}`
+	req := httptest.NewRequest("POST", "/posts", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithAgentID(req.Context(), agent.ID))
+	rec := httptest.NewRecorder()
+
+	h.CreatePost(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	history, err := videoRepo.ListPostHistoryForUserSince(user.ID, time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatalf("list post history: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected 1 video history row, got %d", len(history))
+	}
+	if history[0].PostID != resp.ID {
+		t.Errorf("post_id: got %q want %q", history[0].PostID, resp.ID)
+	}
+	if history[0].VideoID != video.ID {
+		t.Errorf("video_id: got %q want %q", history[0].VideoID, video.ID)
+	}
+	if history[0].UserID != user.ID {
+		t.Errorf("user_id: got %q want %q", history[0].UserID, user.ID)
+	}
+}
+
+func TestPostHandler_CreatePost_VideoEmbed_UpsertsCatalogWhenMissing(t *testing.T) {
+	db := database.OpenTestDB(t)
+
+	userRepo := repository.NewUserRepo(db)
+	agentRepo := repository.NewAgentRepo(db)
+	postRepo := repository.NewPostRepo(db)
+	videoRepo := repository.NewVideoRepo(db)
+
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-video-upsert")
+	agent, _ := agentRepo.Create(user.ID, "Video Agent")
+
+	h := handler.NewPostHandler(agentRepo, postRepo, videoRepo)
+
+	body := `{"title":"Recovered Wimp pick","body":"This should create a minimal catalog row before linking history.","post_type":"video","display_hint":"video_embed","external_url":"{\"provider\":\"vimeo\",\"video_id\":\"76979871\",\"embed_url\":\"https://player.vimeo.com/video/76979871\",\"watch_url\":\"https://vimeo.com/76979871\",\"thumbnail_url\":\"https://example.com/thumb.jpg\",\"channel_title\":\"Vimeo Staff\"}","labels":["wimp","archive"]}`
+	req := httptest.NewRequest("POST", "/posts", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithAgentID(req.Context(), agent.ID))
+	rec := httptest.NewRecorder()
+
+	h.CreatePost(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	got, err := videoRepo.GetByProviderID("vimeo", "76979871")
+	if err != nil {
+		t.Fatalf("get upserted video: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("expected catalog row to be upserted for unknown video")
+	}
+	if got.Title != "Recovered Wimp pick" {
+		t.Errorf("title: got %q", got.Title)
+	}
+	if got.Description != "This should create a minimal catalog row before linking history." {
+		t.Errorf("description: got %q", got.Description)
+	}
+	if got.ThumbnailURL != "https://example.com/thumb.jpg" {
+		t.Errorf("thumbnail_url: got %q", got.ThumbnailURL)
+	}
+
+	history, err := videoRepo.ListPostHistoryForUserSince(user.ID, time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatalf("list post history: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected 1 video history row, got %d", len(history))
+	}
+	if history[0].VideoID != got.ID {
+		t.Errorf("history video_id: got %q want %q", history[0].VideoID, got.ID)
 	}
 }
 
@@ -1068,6 +1186,7 @@ func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
 		"show":              `{"tmdbId":1399,"title":"Game of Thrones"}`,
 		"restaurant":        `{"name":"Test Cafe","latitude":40.7,"longitude":-74.0}`,
 		"creator_spotlight": `{"designation":"Painter","source":"Brooklyn Rail"}`,
+		"video_embed":       `{"provider":"youtube","video_id":"dQw4w9WgXcQ","embed_url":"https://www.youtube.com/embed/dQw4w9WgXcQ","watch_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg","channel_title":"Rick Astley"}`,
 	}
 
 	for hint := range handler.ValidDisplayHints {
@@ -1110,7 +1229,7 @@ func TestValidImageRoles_AllTestedViaLint(t *testing.T) {
 func TestValidationMaps_Sorted(t *testing.T) {
 	expectedPostTypes := []string{"article", "discovery", "event", "place", "video"}
 	expectedVisibility := []string{"personal", "private", "public"}
-	expectedHints := []string{"album", "article", "box_score", "brief", "calendar", "card", "comparison", "concert", "creator_spotlight", "deal", "destination", "digest", "entertainment", "event", "feedback", "fitness", "game_release", "game_review", "matchup", "movie", "outfit", "pet_spotlight", "place", "player_spotlight", "restaurant", "science", "scoreboard", "show", "standings", "weather"}
+	expectedHints := []string{"album", "article", "box_score", "brief", "calendar", "card", "comparison", "concert", "creator_spotlight", "deal", "destination", "digest", "entertainment", "event", "feedback", "fitness", "game_release", "game_review", "matchup", "movie", "outfit", "pet_spotlight", "place", "player_spotlight", "restaurant", "science", "scoreboard", "show", "standings", "video_embed", "weather"}
 	expectedRoles := []string{"detail", "hero", "product"}
 
 	checkMap := func(name string, m map[string]bool, expected []string) {

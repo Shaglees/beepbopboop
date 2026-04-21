@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,12 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
 
+// userEmbeddingGetter loads user vectors for ForYou ML blending (issue #44).
+// Implemented by *repository.UserEmbeddingRepo and *repository.EmbeddingCache.
+type userEmbeddingGetter interface {
+	Get(ctx context.Context, userID string) (*model.UserEmbedding, error)
+}
+
 type MultiFeedHandler struct {
 	userRepo         *repository.UserRepo
 	postRepo         *repository.PostRepo
@@ -18,9 +25,10 @@ type MultiFeedHandler struct {
 	eventRepo        *repository.EventRepo
 	reactionRepo     *repository.ReactionRepo
 	followRepo       *repository.FollowRepo
+	userEmb          userEmbeddingGetter
 }
 
-func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo, eventRepo *repository.EventRepo, reactionRepo *repository.ReactionRepo, followRepo *repository.FollowRepo) *MultiFeedHandler {
+func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.PostRepo, userSettingsRepo *repository.UserSettingsRepo, weightsRepo *repository.WeightsRepo, eventRepo *repository.EventRepo, reactionRepo *repository.ReactionRepo, followRepo *repository.FollowRepo, userEmb userEmbeddingGetter) *MultiFeedHandler {
 	return &MultiFeedHandler{
 		userRepo:         userRepo,
 		postRepo:         postRepo,
@@ -29,6 +37,7 @@ func NewMultiFeedHandler(userRepo *repository.UserRepo, postRepo *repository.Pos
 		eventRepo:        eventRepo,
 		reactionRepo:     reactionRepo,
 		followRepo:       followRepo,
+		userEmb:          userEmb,
 	}
 }
 
@@ -200,7 +209,17 @@ func (h *MultiFeedHandler) GetForYou(w http.ResponseWriter, r *http.Request) {
 		feedWeights.FollowedAgentIDs = followedSet
 	}
 
-	posts, nextCursor, err := h.postRepo.ListForYou(user.ID, *settings.Latitude, *settings.Longitude, settings.RadiusKm, cursor, limit, feedWeights)
+	var userEmbed []float32
+	if h.userEmb != nil {
+		ue, err := h.userEmb.Get(context.Background(), user.ID)
+		if err != nil {
+			slog.Warn("forYou: user embedding lookup failed", "error", err)
+		} else if ue != nil {
+			userEmbed = ue.Embedding
+		}
+	}
+
+	posts, nextCursor, err := h.postRepo.ListForYou(user.ID, *settings.Latitude, *settings.Longitude, settings.RadiusKm, cursor, limit, feedWeights, userEmbed)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load feed"})
 		return

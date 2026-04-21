@@ -96,23 +96,24 @@ post "$(jq -n \
     external_url: ($embed | tojson)
   }')"
 
-# Vimeo — public Creative Commons short (Blender); often embeds more reliably than restricted YT clips.
+# Vimeo — Blender’s Big Buck Bunny (ID 1084537). Older sample used 148751763 which 404s on Vimeo now.
 post "$(jq -n \
   --argjson embed '{
     "provider":"vimeo",
-    "video_id":"148751763",
-    "embed_url":"https://player.vimeo.com/video/148751763",
-    "watch_url":"https://vimeo.com/148751763",
-    "channel_title":"Blender Foundation"
+    "video_id":"1084537",
+    "embed_url":"https://player.vimeo.com/video/1084537",
+    "watch_url":"https://vimeo.com/1084537",
+    "thumbnail_url":"https://i.vimeocdn.com/video/20963649-f02817456fc48e7c317ef4c07ba259cd4b40a3649bd8eb50a4418b59ec3f5af5-d_640",
+    "channel_title":"Blender"
   }' \
   '{
     title: "Sample: Big Buck Bunny (Vimeo)",
-    body: "Vimeo embed test — good for short films / meme-adjacent clips. Hero image is optional; thumbnail can live in JSON.",
+    body: "Vimeo embed test — verify ID with: curl -s \"https://vimeo.com/api/oembed.json?url=https://vimeo.com/1084537\" | jq .title",
     post_type: "video",
     display_hint: "video_embed",
     locality: "Vimeo",
     labels: ["sample","video_embed","vimeo"],
-    image_url: "https://picsum.photos/seed/bbbvimeo/1280/720",
+    image_url: $embed.thumbnail_url,
     external_url: ($embed | tojson)
   }')"
 

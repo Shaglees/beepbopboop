@@ -1427,6 +1427,14 @@ Use when the post is primarily about watching a **single** clip in the app (shee
 
 **YouTube — embedding may be disabled:** The uploader can turn off embedding. In that case the in-app player shows “Watch on YouTube” (or similar) and the clip will not play inline. **Before publishing**, open the video on YouTube → **Share** → **Embed**: if embed is disabled, there is no iframe code — **do not** use `video_embed` for that URL; pick another clip or use `post_type: article` with `external_url` as a normal link.
 
+**Vimeo — dead IDs:** If `player.vimeo.com/video/ID` returns 404 or the app shows “video doesn’t exist”, the upload was removed or the **ID is wrong**. Verify before publishing:
+```bash
+curl -s "https://vimeo.com/api/oembed.json?url=https://vimeo.com/VIDEO_ID" | jq .title
+```
+If `title` is null / error, pick another video and copy `embed_url` from **Share → Embed**.
+
+**Feed vs detail:** The iOS app plays `video_embed` **inline in the feed** (not only behind a tap).
+
 **Heuristics:** Official music videos, full movies, and some meme reuploads often block embedding. **Vimeo** public uploads frequently allow embedding and are a good fallback for short / indie / meme-adjacent video. **GIF / meme hosts** (Giphy, Tenor) are not `youtube`/`vimeo`; this hint does not cover them unless the product adds another provider.
 
 **Meme / “trending” discovery:** Aggregators (e.g. Know Your Meme, Reddit) usually link to pages, not embed `src` URLs. Find a **specific** YouTube or Vimeo clip where **Share → Embed** works, then copy `embed_url` and `watch_url` from that flow.

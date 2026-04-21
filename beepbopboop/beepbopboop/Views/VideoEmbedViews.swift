@@ -9,6 +9,15 @@ struct VideoEmbedWebView: UIViewRepresentable {
     let embedURL: URL
     let provider: String
 
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    /// Avoids reloading the iframe on every SwiftUI pass (fixes flicker / broken loads).
+    final class Coordinator {
+        var lastLoadedSrc: String?
+    }
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
@@ -22,6 +31,9 @@ struct VideoEmbedWebView: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
         let src = preparedEmbedURLString()
+        if context.coordinator.lastLoadedSrc == src { return }
+        context.coordinator.lastLoadedSrc = src
+
         let safe = Self.htmlEscapeAttribute(src)
         let html = """
         <!DOCTYPE html>
@@ -35,6 +47,7 @@ struct VideoEmbedWebView: UIViewRepresentable {
         </head><body>
         <div class="wrap">
         <iframe src="\(safe)"
+          referrerpolicy="strict-origin-when-cross-origin"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
           allowfullscreen></iframe>
         </div>
@@ -44,19 +57,25 @@ struct VideoEmbedWebView: UIViewRepresentable {
         uiView.loadHTMLString(html, baseURL: base)
     }
 
-    /// Adds YouTube params that improve inline playback in embedded web views.
+    /// Tweaks embed URLs for inline playback (YouTube) and Vimeo’s player.
     private func preparedEmbedURLString() -> String {
-        guard provider == "youtube",
-              var components = URLComponents(url: embedURL, resolvingAgainstBaseURL: false) else {
+        guard var components = URLComponents(url: embedURL, resolvingAgainstBaseURL: false) else {
             return embedURL.absoluteString
         }
         var items = components.queryItems ?? []
-        if !items.contains(where: { $0.name == "playsinline" }) {
-            items.append(URLQueryItem(name: "playsinline", value: "1"))
+
+        switch provider {
+        case "youtube":
+            if !items.contains(where: { $0.name == "playsinline" }) {
+                items.append(URLQueryItem(name: "playsinline", value: "1"))
+            }
+            if !items.contains(where: { $0.name == "rel" }) {
+                items.append(URLQueryItem(name: "rel", value: "0"))
+            }
+        default:
+            break
         }
-        if !items.contains(where: { $0.name == "rel" }) {
-            items.append(URLQueryItem(name: "rel", value: "0"))
-        }
+
         components.queryItems = items
         return components.url?.absoluteString ?? embedURL.absoluteString
     }
@@ -72,7 +91,6 @@ struct VideoEmbedWebView: UIViewRepresentable {
 struct VideoEmbedCard: View {
     let post: Post
     let embed: VideoEmbedData
-    @State private var showPlayer = false
 
     init?(post: Post) {
         guard post.displayHintValue == .videoEmbed,
@@ -95,65 +113,16 @@ struct VideoEmbedCard: View {
                 .lineLimit(3)
 
             if let embedURL = URL(string: embed.embedUrl) {
-                Button {
-                    showPlayer = true
-                } label: {
-                    ZStack {
-                        thumbnail
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 56))
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .black.opacity(0.45))
-                            .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
-                    }
-                    .aspectRatio(16 / 9, contentMode: .fit)
+                VideoEmbedWebView(embedURL: embedURL, provider: embed.provider)
                     .frame(maxWidth: .infinity)
-                    .clipped()
-                    .cornerRadius(10)
-                }
-                .buttonStyle(.plain)
-                .sheet(isPresented: $showPlayer) {
-                    NavigationStack {
-                        VideoEmbedWebView(embedURL: embedURL, provider: embed.provider)
-                            .ignoresSafeArea(edges: .bottom)
-                            .navigationTitle(embed.channelTitle ?? "Video")
-                            .navigationBarTitleDisplayMode(.inline)
-                    }
-                }
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
             CardFooter(post: post)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-    }
-
-    @ViewBuilder
-    private var thumbnail: some View {
-        if let thumb = embed.thumbnailUrl ?? post.imageURL,
-           !thumb.isEmpty,
-           let url = URL(string: thumb) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                case .failure:
-                    Color.secondary.opacity(0.2)
-                default:
-                    Color.secondary.opacity(0.15)
-                        .overlay { ProgressView() }
-                }
-            }
-        } else {
-            Color.secondary.opacity(0.2)
-                .overlay {
-                    Image(systemName: "play.rectangle")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                }
-        }
     }
 }
 

@@ -116,7 +116,7 @@ func ExtractEmbed(htmlBytes []byte) (Embed, bool) {
 		}
 		if n.Type == html.ElementNode {
 			switch n.Data {
-			case "iframe", "embed", "source":
+			case "iframe", "embed", "source", "video":
 				if e, hit := parseEmbedURL(attr(n, "src")); hit {
 					found, ok = e, true
 					return
@@ -147,47 +147,86 @@ func ExtractEmbed(htmlBytes []byte) (Embed, bool) {
 
 // --- URL parsing --------------------------------------------------------------
 
+// Provider matchers.
+//
+// Each matcher extracts (provider, id) and reconstructs canonical watch/embed
+// URLs. This is the deliberate complement to oEmbed lookup: once we have a
+// canonical URL we can ask the provider for enriched metadata, and once we
+// have (provider, video_id) we have a stable catalog key.
+//
+// We intentionally do NOT try to parse every social embed wimp.com ever used
+// (Facebook, Instagram, TikTok, Twitter/X). Those either:
+//   - don't expose a stable public oEmbed endpoint (FB/IG: require app tokens),
+//   - or change embed URL shape frequently (TikTok, X).
+// For now they're a follow-up. The tests below exercise the providers we DO
+// recognize; when a new one needs support, add a regex + constructor here and
+// extend the switch in scanScriptForEmbed + parseEmbedURL.
 var (
 	reYouTubeEmbed = regexp.MustCompile(`(?:https?:)?//(?:www\.)?youtube(?:-nocookie)?\.com/embed/([A-Za-z0-9_-]{6,20})`)
 	reYouTubeWatch = regexp.MustCompile(`(?:https?:)?//(?:www\.)?youtube\.com/watch\?[^"'\s]*?v=([A-Za-z0-9_-]{6,20})`)
 	reYouTubeShort = regexp.MustCompile(`(?:https?:)?//youtu\.be/([A-Za-z0-9_-]{6,20})`)
 	reVimeoPlayer  = regexp.MustCompile(`(?:https?:)?//player\.vimeo\.com/video/([0-9]{4,})`)
 	reVimeoCanon   = regexp.MustCompile(`(?:https?:)?//(?:www\.)?vimeo\.com/([0-9]{4,})(?:[/?#]|$)`)
+	// Dailymotion: both /video/<id> and dai.ly/<id> shapes.
+	reDailymotion      = regexp.MustCompile(`(?:https?:)?//(?:www\.)?dailymotion\.com/(?:embed/)?video/([A-Za-z0-9]+)`)
+	reDailymotionShort = regexp.MustCompile(`(?:https?:)?//dai\.ly/([A-Za-z0-9]+)`)
+	// Twitch clips and videos.
+	reTwitchClip   = regexp.MustCompile(`(?:https?:)?//clips\.twitch\.tv/([A-Za-z0-9_-]+)`)
+	reTwitchPlayer = regexp.MustCompile(`(?:https?:)?//player\.twitch\.tv/\?(?:[^"'\s]*?(?:video|clip)=([A-Za-z0-9_-]+))`)
+	// Streamable: streamable.com/abc123 (alphanumeric id).
+	reStreamable = regexp.MustCompile(`(?:https?:)?//(?:www\.)?streamable\.com/(?:e/)?([A-Za-z0-9]+)`)
+	// Generic JWPlayer-style setup({file: "..."}) is parsed as-is; we look for
+	// a direct .mp4 URL as the last resort and mark provider as "mp4" so the
+	// catalog can still serve it (iOS VideoEmbedCard supports raw mp4).
+	reDirectMP4 = regexp.MustCompile(`https?://[^"'\s<>]+\.mp4(?:\?[^"'\s<>]*)?`)
 )
+
+// embedMatcher pairs a URL-matching regex with a constructor for its Embed.
+// Order matters: earlier entries win, so the most specific regexes are first.
+// reDirectMP4 is the last-resort fallback because raw mp4s lack provider
+// metadata and can't be enriched via oEmbed.
+var embedMatchers = []struct {
+	re    *regexp.Regexp
+	build func(id string) Embed
+}{
+	{reYouTubeEmbed, youTubeEmbed},
+	{reYouTubeWatch, youTubeEmbed},
+	{reYouTubeShort, youTubeEmbed},
+	{reVimeoPlayer, vimeoEmbed},
+	{reVimeoCanon, vimeoEmbed},
+	{reDailymotion, dailymotionEmbed},
+	{reDailymotionShort, dailymotionEmbed},
+	{reTwitchClip, twitchClipEmbed},
+	{reTwitchPlayer, twitchClipEmbed},
+	{reStreamable, streamableEmbed},
+	{reDirectMP4, directMP4Embed},
+}
 
 func parseEmbedURL(u string) (Embed, bool) {
 	if u == "" {
 		return Embed{}, false
 	}
-	if m := reYouTubeEmbed.FindStringSubmatch(u); m != nil {
-		return youTubeEmbed(m[1]), true
-	}
-	if m := reYouTubeWatch.FindStringSubmatch(u); m != nil {
-		return youTubeEmbed(m[1]), true
-	}
-	if m := reYouTubeShort.FindStringSubmatch(u); m != nil {
-		return youTubeEmbed(m[1]), true
-	}
-	if m := reVimeoPlayer.FindStringSubmatch(u); m != nil {
-		return vimeoEmbed(m[1]), true
-	}
-	if m := reVimeoCanon.FindStringSubmatch(u); m != nil {
-		return vimeoEmbed(m[1]), true
+	for _, m := range embedMatchers {
+		if match := m.re.FindStringSubmatch(u); match != nil {
+			// reDirectMP4 has no capture group for an id; the whole URL is the id.
+			if len(match) < 2 {
+				return m.build(match[0]), true
+			}
+			return m.build(match[1]), true
+		}
 	}
 	return Embed{}, false
 }
 
 func scanScriptForEmbed(body string) (Embed, bool) {
-	// Scripts may register player URLs via setup({ file: "..." }) etc.;
-	// we only care about YouTube / Vimeo references by regex match.
-	for _, re := range []*regexp.Regexp{reYouTubeEmbed, reYouTubeWatch, reYouTubeShort, reVimeoPlayer, reVimeoCanon} {
-		if m := re.FindStringSubmatch(body); m != nil {
-			switch re {
-			case reVimeoPlayer, reVimeoCanon:
-				return vimeoEmbed(m[1]), true
-			default:
-				return youTubeEmbed(m[1]), true
+	// Scripts may register player URLs via setup({ file: "..." }) or plain
+	// inline JSON blobs. We scan for any known provider pattern.
+	for _, m := range embedMatchers {
+		if match := m.re.FindStringSubmatch(body); match != nil {
+			if len(match) < 2 {
+				return m.build(match[0]), true
 			}
+			return m.build(match[1]), true
 		}
 	}
 	return Embed{}, false
@@ -208,6 +247,45 @@ func vimeoEmbed(id string) Embed {
 		VideoID:  id,
 		WatchURL: "https://vimeo.com/" + id,
 		EmbedURL: "https://player.vimeo.com/video/" + id,
+	}
+}
+
+func dailymotionEmbed(id string) Embed {
+	return Embed{
+		Provider: "dailymotion",
+		VideoID:  id,
+		WatchURL: "https://www.dailymotion.com/video/" + id,
+		EmbedURL: "https://www.dailymotion.com/embed/video/" + id,
+	}
+}
+
+func twitchClipEmbed(id string) Embed {
+	return Embed{
+		Provider: "twitch",
+		VideoID:  id,
+		WatchURL: "https://clips.twitch.tv/" + id,
+		EmbedURL: "https://clips.twitch.tv/embed?clip=" + id,
+	}
+}
+
+func streamableEmbed(id string) Embed {
+	return Embed{
+		Provider: "streamable",
+		VideoID:  id,
+		WatchURL: "https://streamable.com/" + id,
+		EmbedURL: "https://streamable.com/e/" + id,
+	}
+}
+
+// directMP4Embed treats the raw URL as both the watch and embed URL, and uses
+// the URL itself as the natural id. Upstream code that cares about oEmbed
+// enrichment should skip provider="mp4" since there is no oEmbed endpoint.
+func directMP4Embed(url string) Embed {
+	return Embed{
+		Provider: "mp4",
+		VideoID:  url,
+		WatchURL: url,
+		EmbedURL: url,
 	}
 }
 

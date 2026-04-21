@@ -320,6 +320,47 @@ type UserEmbedding struct {
 	Embedding  []float32 `json:"-"`
 }
 
+// Video is a row in the historical video catalog. Rows are keyed by
+// (provider, provider_video_id) for deterministic idempotent ingestion and
+// joined by `id` from downstream tables (embeddings, post history).
+type Video struct {
+	ID              string     `json:"id"`
+	Provider        string     `json:"provider"`
+	ProviderVideoID string     `json:"provider_video_id"`
+	WatchURL        string     `json:"watch_url"`
+	EmbedURL        string     `json:"embed_url"`
+	Title           string     `json:"title,omitempty"`
+	Description     string     `json:"description,omitempty"`
+	ChannelTitle    string     `json:"channel_title,omitempty"`
+	ThumbnailURL    string     `json:"thumbnail_url,omitempty"`
+	DurationSec     int        `json:"duration_sec,omitempty"`
+	PublishedAt     *time.Time `json:"published_at,omitempty"`
+	SourceURL       string     `json:"source_url,omitempty"`
+	SourceDesc      string     `json:"source_description,omitempty"`
+	Labels          []string   `json:"labels"`
+	SupportsPrevCap bool       `json:"supports_preview_cap"`
+	EmbedHealth     string     `json:"embed_health"`
+	EmbedCheckedAt  *time.Time `json:"embed_checked_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+// VideoPostHistory records that a user's agent published `video_id` as `post_id`.
+// Drives the 180-day dedup window in candidate selection.
+type VideoPostHistory struct {
+	PostID      string    `json:"post_id"`
+	VideoID     string    `json:"video_id"`
+	UserID      string    `json:"user_id"`
+	PublishedAt time.Time `json:"published_at"`
+}
+
+// VideoSourceIngest tracks ingest cursor per source (e.g. wimp.com) so crawls
+// are resumable across process restarts.
+type VideoSourceIngest struct {
+	Source     string    `json:"source"`
+	LastCursor string    `json:"last_cursor"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 // CreateCreatorRequest is the agent-facing request body for POST /creators.
 type CreateCreatorRequest struct {
 	Name         string          `json:"name"`

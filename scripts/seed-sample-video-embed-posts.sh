@@ -62,7 +62,8 @@ post "$(jq -n \
     "embed_url":"https://www.youtube.com/embed/jNQXAC9IVRw",
     "watch_url":"https://www.youtube.com/watch?v=jNQXAC9IVRw",
     "thumbnail_url":"https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
-    "channel_title":"jawed"
+    "channel_title":"jawed",
+    "supports_preview_cap": true
   }' \
   '{
     title: "Sample: Me at the zoo (YouTube — embed-friendly)",
@@ -83,7 +84,8 @@ post "$(jq -n \
     "embed_url":"https://www.youtube-nocookie.com/embed/jNQXAC9IVRw",
     "watch_url":"https://www.youtube.com/watch?v=jNQXAC9IVRw",
     "thumbnail_url":"https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
-    "channel_title":"jawed"
+    "channel_title":"jawed",
+    "supports_preview_cap": true
   }' \
   '{
     title: "Sample: Me at the zoo (youtube-nocookie)",
@@ -104,7 +106,8 @@ post "$(jq -n \
     "embed_url":"https://player.vimeo.com/video/1084537",
     "watch_url":"https://vimeo.com/1084537",
     "thumbnail_url":"https://i.vimeocdn.com/video/20963649-f02817456fc48e7c317ef4c07ba259cd4b40a3649bd8eb50a4418b59ec3f5af5-d_640",
-    "channel_title":"Blender"
+    "channel_title":"Blender",
+    "supports_preview_cap": true
   }' \
   '{
     title: "Sample: Big Buck Bunny (Vimeo)",

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/rand"
 	"sort"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/geo"
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
+	"github.com/shanegleeson/beepbopboop/backend/internal/ranking"
 )
 
 // FeedWeights holds parsed preference weights for scored ranking.
@@ -49,10 +51,25 @@ type CreatePostParams struct {
 
 type PostRepo struct {
 	db *sql.DB
+	ml *PostRepoML
+}
+
+// PostRepoML configures optional two-tower re-ranking in ListForYou (issue #44).
+// When nil or partially unset, ListForYou falls back to rule-only scoring.
+type PostRepoML struct {
+	Ranker  *ranking.Ranker
+	PostEmb *PostEmbeddingRepo
+	// Blend is the ML weight vs normalised rule scores (ranking.RankerConfig.MLWeight, env ML_RANK_BLEND).
+	Blend float64
 }
 
 func NewPostRepo(db *sql.DB) *PostRepo {
 	return &PostRepo{db: db}
+}
+
+// SetML attaches optional ML ranking. Pass nil to disable.
+func (r *PostRepo) SetML(ml *PostRepoML) {
+	r.ml = ml
 }
 
 // postColumns is the shared SELECT column list. seq is last for cursor pagination.
@@ -510,7 +527,9 @@ func (r *PostRepo) ListCommunity(lat, lon, radiusKm float64, cursor string, limi
 
 // ListForYou returns community + user's own posts with cursor-based pagination.
 // If weights is non-nil, posts are scored and ranked instead of pure recency.
-func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor string, limit int, weights *FeedWeights) ([]model.Post, *string, error) {
+// userEmbed is the raw user embedding vector (same dim as post embeddings). When nil
+// or wrong length, two-tower scoring is skipped even if a ranker is configured.
+func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor string, limit int, weights *FeedWeights, userEmbed []float32) ([]model.Post, *string, error) {
 	minLat, maxLat, minLon, maxLon := geo.BoundingBox(lat, lon, radiusKm)
 
 	// When scoring, fetch more candidates so we have enough to rank.
@@ -591,12 +610,17 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 			post  model.Post
 			score float64
 		}
+		ruleScores := make([]float64, len(candidates))
+		for i, p := range candidates {
+			ruleScores[i] = scorePost(p, lat, lon, radiusKm, weights)
+		}
+		combinedScores := r.blendForYouMLScores(candidates, ruleScores, userEmbed)
+
 		scoredPosts := make([]scored, len(candidates))
 		for i, p := range candidates {
-			s := scorePost(p, lat, lon, radiusKm, weights)
 			// Add ±30% jitter so each refresh produces a noticeably different order.
 			jitter := 1.0 + (rand.Float64()-0.5)*0.6
-			scoredPosts[i] = scored{post: p, score: s * jitter}
+			scoredPosts[i] = scored{post: p, score: combinedScores[i] * jitter}
 		}
 		sort.Slice(scoredPosts, func(i, j int) bool {
 			return scoredPosts[i].score > scoredPosts[j].score
@@ -649,6 +673,76 @@ func (r *PostRepo) ListForYou(userID string, lat, lon, radiusKm float64, cursor 
 		nextCursor = &c
 	}
 	return posts, nextCursor, nil
+}
+
+// blendForYouMLScores merges normalised rule scores with two-tower ML scores when configured.
+// Falls back to ruleScores when ML deps are missing or batch scoring fails.
+func (r *PostRepo) blendForYouMLScores(candidates []model.Post, ruleScores []float64, userEmbed []float32) []float64 {
+	n := len(ruleScores)
+	out := make([]float64, n)
+	copy(out, ruleScores)
+
+	if r.ml == nil || r.ml.Ranker == nil || r.ml.PostEmb == nil {
+		return out
+	}
+	alpha := r.ml.Blend
+	if alpha <= 0 {
+		return out
+	}
+	if alpha > 1 {
+		alpha = 1
+	}
+	if len(userEmbed) != r.ml.Ranker.InputDim() {
+		return out
+	}
+
+	var minR, maxR float64
+	for i, s := range ruleScores {
+		if i == 0 || s < minR {
+			minR = s
+		}
+		if i == 0 || s > maxR {
+			maxR = s
+		}
+	}
+	span := maxR - minR
+	if span < 1e-9 {
+		span = 1
+	}
+	normRule := func(x float64) float64 { return (x - minR) / span }
+
+	ids := make([]string, n)
+	for i, p := range candidates {
+		ids[i] = p.ID
+	}
+	embMap, err := r.ml.PostEmb.GetMany(ids)
+	if err != nil {
+		slog.Warn("forYou: batch post embeddings failed, rule-only ranking", "error", err)
+		return out
+	}
+
+	postVecs := make([][]float32, n)
+	for i, p := range candidates {
+		v := embMap[p.ID]
+		if len(v) == r.ml.Ranker.InputDim() {
+			postVecs[i] = v
+		}
+	}
+
+	mlScores, err := r.ml.Ranker.ScoreBatch(userEmbed, postVecs)
+	if err != nil {
+		slog.Warn("forYou: ranker batch scoring failed, rule-only ranking", "error", err)
+		return out
+	}
+
+	for i := range out {
+		ml := float64(mlScores[i])
+		if postVecs[i] == nil {
+			ml = 0.5
+		}
+		out[i] = (1-alpha)*normRule(ruleScores[i]) + alpha*ml
+	}
+	return out
 }
 
 // scorePost computes a weighted relevance score for a post.

@@ -19,6 +19,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
+	"github.com/shanegleeson/beepbopboop/backend/internal/ranking"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 	"github.com/shanegleeson/beepbopboop/backend/internal/scheduler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/sports"
@@ -72,6 +73,26 @@ func main() {
 	feedbackRepo := repository.NewFeedbackRepo(db)
 	calendarRepo := repository.NewCalendarRepo(db)
 	followRepo := repository.NewFollowRepo(db)
+	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
+	postEmbeddingRepo := repository.NewPostEmbeddingRepo(db)
+
+	if cfg.RankerModelPath != "" {
+		ranker, err := ranking.NewRanker(cfg.RankerModelPath)
+		if err != nil {
+			slog.Warn("RANKER_MODEL_PATH set but ranker failed to load; rule-only ForYou",
+				"path", cfg.RankerModelPath, "error", err)
+		} else if ranker != nil {
+			postRepo.SetML(&repository.PostRepoML{
+				Ranker:  ranker,
+				PostEmb: postEmbeddingRepo,
+				Blend:   cfg.MLRankBlend,
+			})
+			slog.Info("ForYou ML ranking enabled",
+				"path", cfg.RankerModelPath, "input_dim", ranker.InputDim(), "blend", cfg.MLRankBlend)
+		}
+	}
+
+	userEmbFront := repository.NewEmbeddingCacheFromLoader(userEmbeddingRepo, 1000, 5*time.Minute)
 
 	// Handlers
 	healthH := handler.NewHealthHandler()
@@ -79,7 +100,7 @@ func main() {
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo)
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
-	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo, followRepo)
+	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo, followRepo, userEmbFront)
 	followH := handler.NewFollowHandler(userRepo, followRepo)
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
@@ -93,7 +114,6 @@ func main() {
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
 	feedbackH := handler.NewFeedbackHandler(userRepo, feedbackRepo)
-	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
 	userEmbedder := embedding.NewUserEmbedder(db, userEmbeddingRepo)
 
 	creatorRepo := repository.NewLocalCreatorRepo(db)

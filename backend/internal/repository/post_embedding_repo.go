@@ -50,6 +50,31 @@ func (r *PostEmbeddingRepo) Get(postID string) (*model.PostEmbedding, error) {
 	return &pe, nil
 }
 
+// GetMany returns post_id → embedding for the given IDs. Missing IDs are omitted.
+func (r *PostEmbeddingRepo) GetMany(postIDs []string) (map[string][]float32, error) {
+	if len(postIDs) == 0 {
+		return map[string][]float32{}, nil
+	}
+	rows, err := r.db.Query(`
+		SELECT post_id, embedding FROM post_embeddings WHERE post_id = ANY($1)`,
+		pq.Array(postIDs))
+	if err != nil {
+		return nil, fmt.Errorf("get post_embeddings batch: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string][]float32)
+	for rows.Next() {
+		var id string
+		var f64 pq.Float64Array
+		if err := rows.Scan(&id, &f64); err != nil {
+			return nil, fmt.Errorf("scan post_embedding: %w", err)
+		}
+		out[id] = toFloat32Slice([]float64(f64))
+	}
+	return out, rows.Err()
+}
+
 // toFloat64Slice converts []float32 to []float64 for PostgreSQL array storage.
 func toFloat64Slice(f32 []float32) []float64 {
 	f64 := make([]float64, len(f32))

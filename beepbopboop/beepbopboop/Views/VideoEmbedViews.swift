@@ -3,8 +3,11 @@ import WebKit
 
 // MARK: - WebView
 
+/// Loads the provider embed in an HTML iframe. Navigating the embed URL directly in WKWebView
+/// often shows “Watch on YouTube” / broken playback; iframe matches normal web embed behavior.
 struct VideoEmbedWebView: UIViewRepresentable {
-    let url: URL
+    let embedURL: URL
+    let provider: String
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -18,7 +21,49 @@ struct VideoEmbedWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        uiView.load(URLRequest(url: url))
+        let src = preparedEmbedURLString()
+        let safe = Self.htmlEscapeAttribute(src)
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+        <style>
+          html, body { margin:0; padding:0; background:#000; height:100%; }
+          .wrap { position:absolute; left:0; top:0; right:0; bottom:0; }
+          iframe { position:absolute; left:0; top:0; width:100%; height:100%; border:0; }
+        </style>
+        </head><body>
+        <div class="wrap">
+        <iframe src="\(safe)"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+          allowfullscreen></iframe>
+        </div>
+        </body></html>
+        """
+        let base = embedURL.host.flatMap { URL(string: "https://\($0)/") } ?? embedURL
+        uiView.loadHTMLString(html, baseURL: base)
+    }
+
+    /// Adds YouTube params that improve inline playback in embedded web views.
+    private func preparedEmbedURLString() -> String {
+        guard provider == "youtube",
+              var components = URLComponents(url: embedURL, resolvingAgainstBaseURL: false) else {
+            return embedURL.absoluteString
+        }
+        var items = components.queryItems ?? []
+        if !items.contains(where: { $0.name == "playsinline" }) {
+            items.append(URLQueryItem(name: "playsinline", value: "1"))
+        }
+        if !items.contains(where: { $0.name == "rel" }) {
+            items.append(URLQueryItem(name: "rel", value: "0"))
+        }
+        components.queryItems = items
+        return components.url?.absoluteString ?? embedURL.absoluteString
+    }
+
+    private static func htmlEscapeAttribute(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 }
 
@@ -69,7 +114,7 @@ struct VideoEmbedCard: View {
                 .buttonStyle(.plain)
                 .sheet(isPresented: $showPlayer) {
                     NavigationStack {
-                        VideoEmbedWebView(url: embedURL)
+                        VideoEmbedWebView(embedURL: embedURL, provider: embed.provider)
                             .ignoresSafeArea(edges: .bottom)
                             .navigationTitle(embed.channelTitle ?? "Video")
                             .navigationBarTitleDisplayMode(.inline)
@@ -124,7 +169,7 @@ struct VideoEmbedDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let data = embed, let url = URL(string: data.embedUrl) {
-                    VideoEmbedWebView(url: url)
+                    VideoEmbedWebView(embedURL: url, provider: data.provider)
                         .frame(height: 220)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }

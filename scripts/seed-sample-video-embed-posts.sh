@@ -53,19 +53,41 @@ post() {
   echo ""
 }
 
-# YouTube — standard embed
+# YouTube — "Me at the zoo" (jNQXAC9IVRw): first YouTube upload; historically embed-friendly.
+# Many music videos / meme reuploads block embedding in third-party apps — avoid those.
 post "$(jq -n \
   --argjson embed '{
     "provider":"youtube",
-    "video_id":"dQw4w9WgXcQ",
-    "embed_url":"https://www.youtube.com/embed/dQw4w9WgXcQ",
-    "watch_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    "thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
-    "channel_title":"Rick Astley"
+    "video_id":"jNQXAC9IVRw",
+    "embed_url":"https://www.youtube.com/embed/jNQXAC9IVRw",
+    "watch_url":"https://www.youtube.com/watch?v=jNQXAC9IVRw",
+    "thumbnail_url":"https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
+    "channel_title":"jawed"
   }' \
   '{
-    title: "Sample: Never Gonna Give You Up (YouTube)",
-    body: "video_embed test — thumbnail + sheet player. Share should use watch_url.",
+    title: "Sample: Me at the zoo (YouTube — embed-friendly)",
+    body: "video_embed test — thumbnail + sheet player. Share uses watch_url. Classic viral clip.",
+    post_type: "video",
+    display_hint: "video_embed",
+    locality: "YouTube",
+    labels: ["sample","video_embed","youtube","meme"],
+    image_url: $embed.thumbnail_url,
+    external_url: ($embed | tojson)
+  }')"
+
+# YouTube — privacy-enhanced host (same video id; different embed host)
+post "$(jq -n \
+  --argjson embed '{
+    "provider":"youtube",
+    "video_id":"jNQXAC9IVRw",
+    "embed_url":"https://www.youtube-nocookie.com/embed/jNQXAC9IVRw",
+    "watch_url":"https://www.youtube.com/watch?v=jNQXAC9IVRw",
+    "thumbnail_url":"https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
+    "channel_title":"jawed"
+  }' \
+  '{
+    title: "Sample: Me at the zoo (youtube-nocookie)",
+    body: "Same clip as the first sample — validates youtube-nocookie.com embed host.",
     post_type: "video",
     display_hint: "video_embed",
     locality: "YouTube",
@@ -74,28 +96,7 @@ post "$(jq -n \
     external_url: ($embed | tojson)
   }')"
 
-# YouTube — privacy-enhanced host (same video id as first; different embed host)
-post "$(jq -n \
-  --argjson embed '{
-    "provider":"youtube",
-    "video_id":"dQw4w9WgXcQ",
-    "embed_url":"https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ",
-    "watch_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    "thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
-    "channel_title":"Rick Astley"
-  }' \
-  '{
-    title: "Sample: youtube-nocookie embed",
-    body: "Second card — validates youtube-nocookie.com host (same clip as the first sample).",
-    post_type: "video",
-    display_hint: "video_embed",
-    locality: "YouTube",
-    labels: ["sample","video_embed","youtube"],
-    image_url: $embed.thumbnail_url,
-    external_url: ($embed | tojson)
-  }')"
-
-# Vimeo — public embed (no thumbnail_url in JSON; hero uses image_url)
+# Vimeo — public Creative Commons short (Blender); often embeds more reliably than restricted YT clips.
 post "$(jq -n \
   --argjson embed '{
     "provider":"vimeo",
@@ -106,7 +107,7 @@ post "$(jq -n \
   }' \
   '{
     title: "Sample: Big Buck Bunny (Vimeo)",
-    body: "Vimeo player embed test.",
+    body: "Vimeo embed test — good for short films / meme-adjacent clips. Hero image is optional; thumbnail can live in JSON.",
     post_type: "video",
     display_hint: "video_embed",
     locality: "Vimeo",

@@ -1399,8 +1399,39 @@ Notes:
   | `scoreboard` | Sports game results — team colors, large score, status pill. Requires structured JSON in `external_url` (see news skill SP3) |
   | `matchup` | Sports upcoming game — split team-color gradient, game time, venue. Requires structured JSON in `external_url` |
   | `standings` | Sports multi-game digest — compact score rows for a full day of games. Requires structured JSON in `external_url` |
+  | `video_embed` | In-feed embedded video (YouTube or Vimeo). `external_url` is **JSON**, not a bare URL — see **Video embed** below. Prefer `post_type: video`. |
 
 - When publishing multiple posts, geocode all venue addresses in parallel, then publish all posts in parallel
+
+#### Video embed (`display_hint: video_embed`)
+
+Use when the post is primarily about watching a **single** clip in the app (sheet + detail use an embedded player).
+
+**`external_url` JSON** (all strings; omit optional keys if unknown):
+
+```json
+{
+  "provider": "youtube",
+  "video_id": "VIDEO_ID",
+  "embed_url": "https://www.youtube.com/embed/VIDEO_ID",
+  "watch_url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "thumbnail_url": "https://…",
+  "channel_title": "Channel or creator name"
+}
+```
+
+- **`provider`**: `youtube` or `vimeo` (must match the host in `embed_url`).
+- **`embed_url`**: Exact `src` from the site’s **Share → Embed** dialog — for YouTube it must include `/embed/` in the path; for Vimeo use `https://player.vimeo.com/video/…`.
+- **`watch_url`**: Normal watch page — used for **Share** and opening in the provider app; keep it accurate.
+- **`thumbnail_url`**: Optional; used if `image_url` is empty for the card thumbnail.
+
+**YouTube — embedding may be disabled:** The uploader can turn off embedding. In that case the in-app player shows “Watch on YouTube” (or similar) and the clip will not play inline. **Before publishing**, open the video on YouTube → **Share** → **Embed**: if embed is disabled, there is no iframe code — **do not** use `video_embed` for that URL; pick another clip or use `post_type: article` with `external_url` as a normal link.
+
+**Heuristics:** Official music videos, full movies, and some meme reuploads often block embedding. **Vimeo** public uploads frequently allow embedding and are a good fallback for short / indie / meme-adjacent video. **GIF / meme hosts** (Giphy, Tenor) are not `youtube`/`vimeo`; this hint does not cover them unless the product adds another provider.
+
+**Meme / “trending” discovery:** Aggregators (e.g. Know Your Meme, Reddit) usually link to pages, not embed `src` URLs. Find a **specific** YouTube or Vimeo clip where **Share → Embed** works, then copy `embed_url` and `watch_url` from that flow.
+
+**Lint:** `POST /posts/lint` with the same JSON validates structure before publish.
 
 ### Step 5b: Save to post history
 

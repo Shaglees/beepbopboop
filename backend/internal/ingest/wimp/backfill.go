@@ -18,15 +18,7 @@ import (
 const ingestSourceName = "wimp-cdx"
 
 type ArchiveLister interface {
-	ListPageURLs(ctx context.Context, offset, limit int) (ListPageResult, error)
-}
-
-// ListPageResult separates the normalized URLs we want to process from the raw
-// number of archive rows consumed to produce this page. Cursor advancement must
-// use ScannedRows, not len(URLs), because listers may deduplicate URLs.
-type ListPageResult struct {
-	URLs        []string
-	ScannedRows int
+	ListPageURLs(ctx context.Context, offset, limit int) ([]string, error)
 }
 
 type Inspector interface {
@@ -88,14 +80,14 @@ func (b *Backfiller) Run(ctx context.Context, opts BackfillOptions) (BackfillSta
 
 	stats := BackfillStats{}
 	for stats.Processed < opts.CrawlBudget {
-		page, err := b.lister.ListPageURLs(ctx, offset, opts.PageSize)
+		pageURLs, err := b.lister.ListPageURLs(ctx, offset, opts.PageSize)
 		if err != nil {
 			return stats, err
 		}
-		if page.ScannedRows <= 0 {
+		if len(pageURLs) == 0 {
 			break
 		}
-		for _, rawURL := range page.URLs {
+		for _, rawURL := range pageURLs {
 			if stats.Processed >= opts.CrawlBudget {
 				break
 			}
@@ -158,7 +150,7 @@ func (b *Backfiller) Run(ctx context.Context, opts BackfillOptions) (BackfillSta
 			stats.PagesStored++
 		}
 
-		offset += page.ScannedRows
+		offset += len(pageURLs)
 		if err := b.repo.RecordIngest(ingestSourceName, strconv.Itoa(offset)); err != nil {
 			return stats, err
 		}

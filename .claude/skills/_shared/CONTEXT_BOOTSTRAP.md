@@ -43,12 +43,18 @@ Top-level keys you care about:
     - `structured_json` — if `true`, `external_url` is JSON, not a URL
     - `required_fields` — flat list; names prefixed `external_url:` refer to keys inside that JSON blob
     - `example` — a full, lint-clean payload you can copy-shape-and-modify
+    - `renders.card` — the SwiftUI card the iOS client draws for this hint (e.g. `PlaceCard`, `DateCard`)
+    - `renders.uses_fields` — which post fields that card reads
+    - `renders.ignores_fields` — fields the card silently drops (e.g. `PlaceCard` ignores `external_url`)
+    - `pick_when` / `avoid_when` — heuristics for when this hint is or isn't a fit
 - `enums.display_hint` / `enums.post_type` / `enums.visibility` / `enums.image_role` — never hard-code these
 - `endpoints.*` — map of named endpoints (create_post, lint_post, post_stats, events_summary, reactions_summary, sports_scores, creators_nearby). The authoritative set of things you can call.
 - `docs.images` — pointer to `_shared/IMAGES.md`; do not skip image sourcing.
 - `docs.publish_flow` — **always POST `/posts/lint` before `/posts`**.
 
 **Contract:** pick the hint that matches your content, copy the example, edit title/body/labels/external_url values, lint, publish. If a hint has `structured_json: true`, you MUST produce an `external_url` string whose JSON parses to something that satisfies `required_fields`.
+
+**Before picking a hint**, scan `renders.ignores_fields` — if the field carrying your CTA is in that list, pick a different hint (or inline the data into body). See `_shared/HINT_DECISION.md` for the full decision tree.
 
 ### `/posts/stats` — your own posting spread
 
@@ -89,6 +95,15 @@ Mode files will say:
 > From the hint catalog loaded in Step 0d, take the entry for `matchup`. Copy `example`, override title/body/labels from Step 2, and substitute your `gameTime` / home / away values.
 
 No mode file should include its own inline hint schema tables any more — that's what caused the drift this refactor is fixing.
+
+## Related shared docs
+
+Every compose step should at minimum consult:
+
+- `_shared/HINT_DECISION.md` — decision tree for picking the right `display_hint`. The bug that caused a hike to render as a dated event lived here.
+- `_shared/IMAGES.md` — image source ladder + Tier 2 relevance guard.
+- `_shared/GEOCODE.md` — Nominatim fallback ladder + label-saturation lint (drop labels that are already over-posted this week).
+- `_shared/PUBLISH_ENVELOPE.md` — lint → dedup → POST, with retry-on-5xx helper.
 
 ## If bootstrap fails
 

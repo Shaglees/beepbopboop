@@ -139,6 +139,35 @@ func validateURL(raw string) string {
 	return ""
 }
 
+// containsDateToken is a lightweight check that mirrors the iOS DateCard's
+// NSDataDetector-based date extraction: if the title or body obviously talks
+// about a specific date/time, the client can render the badge sensibly even
+// without a scheduled_at field.
+//
+// The match is intentionally loose: full month names, short month names,
+// weekday names, or a "Month Day" pattern. We don't try to parse; we only
+// decide whether the event-without-date warning should fire.
+func containsDateToken(s string) bool {
+	if s == "" {
+		return false
+	}
+	lower := strings.ToLower(s)
+	tokens := []string{
+		"january", "february", "march", "april", "may", "june", "july",
+		"august", "september", "october", "november", "december",
+		"jan ", "feb ", "mar ", "apr ", "jun ", "jul ", "aug ", "sep ", "sept ",
+		"oct ", "nov ", "dec ",
+		"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+		"tonight", "tomorrow", "this weekend", "next weekend",
+	}
+	for _, tok := range tokens {
+		if strings.Contains(lower, tok) {
+			return true
+		}
+	}
+	return false
+}
+
 // validatePost checks a createPostRequest and returns structured errors/warnings.
 // Pure function — no DB access.
 func validatePost(req *createPostRequest) validationResult {
@@ -264,6 +293,43 @@ func validatePost(req *createPostRequest) validationResult {
 			Field:   "locality",
 			Code:    "missing",
 			Message: "public post with no locality or coordinates",
+		})
+	}
+
+	// Evergreen-content-as-event guardrail.
+	//
+	// The iOS DateCard renders a big "MONTH DAY" badge for event/calendar/concert
+	// posts and falls back to created_at when no real date is available. That
+	// means an evergreen "great hike" post labeled `event` gets a fabricated date
+	// badge — technically valid, visually broken.
+	//
+	// We warn (not error) because some skills legitimately don't have a machine-
+	// readable date but do put one in the body text (DateCard will extract it
+	// via NSDataDetector the same way this check does).
+	if req.DisplayHint == "event" || req.DisplayHint == "calendar" || req.DisplayHint == "concert" {
+		if req.ScheduledAt == nil && !containsDateToken(req.Title) && !containsDateToken(req.Body) {
+			warns = append(warns, validationIssue{
+				Field:   "display_hint",
+				Code:    "event_without_date",
+				Message: fmt.Sprintf("display_hint %q renders a date badge but no scheduled_at was provided and no date token found in title/body. For evergreen content prefer display_hint=\"place\" or \"card\".", req.DisplayHint),
+			})
+		}
+	}
+
+	// Place hint + external_url guardrail.
+	//
+	// PlaceCard in iOS does not render external_url. Skills that put a booking
+	// or info link in external_url end up with an invisible CTA. Warn so the
+	// skill inlines the URL in the body text, or picks a hint whose card
+	// actually shows external_url (article, restaurant, destination).
+	//
+	// When PlaceCard is updated to render a "Visit" button, remove this warning
+	// in the same PR.
+	if req.DisplayHint == "place" && req.ExternalURL != "" {
+		warns = append(warns, validationIssue{
+			Field:   "external_url",
+			Code:    "place_external_url_not_rendered",
+			Message: "PlaceCard does not currently render external_url; inline the link in the body text, or use display_hint=\"restaurant\"/\"destination\" which do surface CTAs.",
 		})
 	}
 

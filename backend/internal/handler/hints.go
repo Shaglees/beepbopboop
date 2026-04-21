@@ -22,7 +22,13 @@ import (
 // Version is bumped manually when the response shape changes in a way skills
 // need to notice (adding fields is non-breaking; removing/renaming fields is
 // breaking). Skills should tolerate unknown keys.
-const hintsResponseVersion = 1
+//
+// v2 added per-hint `renders` (what the iOS client actually shows) and
+// `pick_when`/`avoid_when` guidance. These are answers to the prod bug where
+// an evergreen hike got rendered as an event card with a fabricated date,
+// and a place post's booking URL was silently dropped because PlaceCard
+// doesn't render external_url. See docs/skill-refactor-migration.md.
+const hintsResponseVersion = 2
 
 // hintDescriptor is the per-display-hint shape returned by /posts/hints.
 // It is purposefully hand-maintained (not derived from reflection) so the
@@ -35,6 +41,28 @@ type hintDescriptor struct {
 	StructuredJSON bool            `json:"structured_json"`
 	RequiredFields []string        `json:"required_fields"`
 	Example        json.RawMessage `json:"example"`
+
+	// Renders describes what the iOS client draws for this hint. Skills
+	// consult this before composing to avoid wasted work (populating fields
+	// the client will never show) and wrong hint choice (picking `event`
+	// for a timeless recommendation and getting a fabricated date badge).
+	Renders *hintRenderInfo `json:"renders,omitempty"`
+
+	// PickWhen / AvoidWhen are short heuristics. These answer the question
+	// "I have content about X — which hint should I use?" without forcing
+	// the skill to read the iOS source.
+	PickWhen  string `json:"pick_when,omitempty"`
+	AvoidWhen string `json:"avoid_when,omitempty"`
+}
+
+// hintRenderInfo mirrors the SwiftUI card structure in
+// beepbopboop/Views/FeedItemView.swift. When the iOS client changes the
+// renderer for a hint, bump here too (the handler test at minimum asserts
+// Card is in an allowlist).
+type hintRenderInfo struct {
+	Card           string   `json:"card"`
+	UsesFields     []string `json:"uses_fields"`
+	IgnoresFields  []string `json:"ignores_fields,omitempty"`
 }
 
 // GetPostHints returns the discoverability catalog described above.
@@ -112,6 +140,13 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body"},
 			Example:        rawJSON(`{"title":"Neighborhood gem","body":"A little bakery just opened on Main St.","post_type":"discovery","display_hint":"card","locality":"San Francisco"}`),
+			Renders: &hintRenderInfo{
+				Card:          "StandardCard",
+				UsesFields:    []string{"title", "body", "image_url", "locality", "labels"},
+				IgnoresFields: []string{"external_url", "scheduled_at"},
+			},
+			PickWhen:  "Generic discovery post with no CTA link, no date, no venue coords.",
+			AvoidWhen: "You have a clickable URL (use `article`) or coordinates (use `place`).",
 		},
 		{
 			Hint:           "place",
@@ -120,6 +155,13 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body", "locality"},
 			Example:        rawJSON(`{"title":"Cafe du Jour","body":"Tiny espresso bar with seasonal pastries.","post_type":"place","display_hint":"place","locality":"San Francisco","latitude":37.7749,"longitude":-122.4194}`),
+			Renders: &hintRenderInfo{
+				Card:          "PlaceCard",
+				UsesFields:    []string{"title", "body", "latitude", "longitude", "locality", "image_url"},
+				IgnoresFields: []string{"external_url"},
+			},
+			PickWhen:  "Evergreen place/venue/activity recommendation (trail, cafe, cooking studio) — especially with coordinates.",
+			AvoidWhen: "The post is centered on a specific date (use `event`) or your main CTA is a booking/info URL (PlaceCard does not render external_url — inline the link in the body until the client is updated).",
 		},
 		{
 			Hint:           "article",
@@ -128,6 +170,12 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body", "external_url"},
 			Example:        rawJSON(`{"title":"Headline here","body":"Why this matters in 2-3 sentences.","post_type":"article","display_hint":"article","external_url":"https://example.com/article"}`),
+			Renders: &hintRenderInfo{
+				Card:       "StandardCard",
+				UsesFields: []string{"title", "body", "image_url", "external_url", "labels"},
+			},
+			PickWhen:  "Linking to an off-platform article/news story with 2-3 sentences of 'why this matters'.",
+			AvoidWhen: "The content is a place recommendation (use `place`) or a dated event (use `event`).",
 		},
 		{
 			Hint:           "event",
@@ -135,7 +183,13 @@ func buildHintCatalog() []hintDescriptor {
 			PostType:       "event",
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body"},
-			Example:        rawJSON(`{"title":"Summer jazz in the park","body":"Free outdoor concert this Saturday at 6pm.","post_type":"event","display_hint":"event","locality":"San Francisco"}`),
+			Example:        rawJSON(`{"title":"Summer jazz in the park","body":"Free outdoor concert this Saturday at 6pm.","post_type":"event","display_hint":"event","locality":"San Francisco","scheduled_at":"2026-06-21T18:00:00Z"}`),
+			Renders: &hintRenderInfo{
+				Card:       "DateCard",
+				UsesFields: []string{"title", "body", "scheduled_at", "locality", "external_url"},
+			},
+			PickWhen:  "A time-bound happening with a real start date/time (concert, festival, one-off class, registration deadline).",
+			AvoidWhen: "The content is evergreen (a trail you can do any time, a year-round place, a general recommendation). Without a real date the client falls back to createdAt and the card looks broken.",
 		},
 		{
 			Hint:           "calendar",
@@ -143,7 +197,13 @@ func buildHintCatalog() []hintDescriptor {
 			PostType:       "event",
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body"},
-			Example:        rawJSON(`{"title":"Soccer practice","body":"Tue + Thu 5pm at Franklin Park.","post_type":"event","display_hint":"calendar"}`),
+			Example:        rawJSON(`{"title":"Soccer practice","body":"Tuesday and Thursday at 5pm at Franklin Park.","post_type":"event","display_hint":"calendar","scheduled_at":"2026-06-01T17:00:00Z"}`),
+			Renders: &hintRenderInfo{
+				Card:       "DateCard",
+				UsesFields: []string{"title", "body", "scheduled_at", "locality"},
+			},
+			PickWhen:  "Recurring/scheduled item that should also appear on the user's calendar layer (kids' activities, standing appointments).",
+			AvoidWhen: "Public feed item with no user-specific calendar relevance — use `event` instead.",
 		},
 		{
 			Hint:           "deal",
@@ -152,6 +212,12 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body"},
 			Example:        rawJSON(`{"title":"20% off opening weekend","body":"New Thai spot on Valencia is doing 20% off all entrees this weekend.","post_type":"discovery","display_hint":"deal","locality":"San Francisco"}`),
+			Renders: &hintRenderInfo{
+				Card:       "DealCard",
+				UsesFields: []string{"title", "body", "image_url", "locality"},
+			},
+			PickWhen:  "Price-led promo (% off, dollar amount, limited-time offer).",
+			AvoidWhen: "Evergreen recommendation with no price hook.",
 		},
 		{
 			Hint:           "digest",
@@ -160,6 +226,12 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body"},
 			Example:        rawJSON(`{"title":"Your Tuesday brief","body":"- Story one\n- Story two\n- Story three","post_type":"article","display_hint":"digest"}`),
+			Renders: &hintRenderInfo{
+				Card:       "CompactCard",
+				UsesFields: []string{"title", "body"},
+			},
+			PickWhen:  "Rollup of multiple items in one post (morning brief, weekly recap).",
+			AvoidWhen: "Single-topic posts — pick the topic's natural hint instead.",
 		},
 		{
 			Hint:           "brief",
@@ -168,6 +240,12 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body"},
 			Example:        rawJSON(`{"title":"Brief: new transit line","body":"The Central Subway extension opens Monday.","post_type":"article","display_hint":"brief"}`),
+			Renders: &hintRenderInfo{
+				Card:       "CompactCard",
+				UsesFields: []string{"title", "body"},
+			},
+			PickWhen:  "One-topic summary with no external link required.",
+			AvoidWhen: "You have a clickable source (use `article`).",
 		},
 		{
 			Hint:           "comparison",
@@ -176,6 +254,12 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body"},
 			Example:        rawJSON(`{"title":"Italian vs Thai tonight?","body":"Italian: cozy, under 20 min wait. Thai: fast, vegan friendly.","post_type":"discovery","display_hint":"comparison","locality":"San Francisco"}`),
+			Renders: &hintRenderInfo{
+				Card:       "StandardCard",
+				UsesFields: []string{"title", "body", "locality"},
+			},
+			PickWhen:  "Side-by-side of two concrete options (restaurants, products, routes).",
+			AvoidWhen: "Single-topic content.",
 		},
 		{
 			Hint:           "outfit",
@@ -184,6 +268,12 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: false,
 			RequiredFields: []string{"title", "body"},
 			Example:        rawJSON(`{"title":"Weeknight dinner look","body":"Oversized blazer, straight-leg denim, loafers.","post_type":"discovery","display_hint":"outfit"}`),
+			Renders: &hintRenderInfo{
+				Card:       "OutfitCard",
+				UsesFields: []string{"title", "body", "image_url", "hero_image", "images"},
+			},
+			PickWhen:  "Fashion render/outfit recommendation with a hero image.",
+			AvoidWhen: "No image available — the card will feel empty.",
 		},
 		{
 			Hint:           "creator_spotlight",
@@ -192,6 +282,8 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url"},
 			Example:        rawJSON(`{"title":"Local creator: Maya's Ceramics","body":"Hand-thrown mugs from a Mission District studio.","post_type":"discovery","display_hint":"creator_spotlight","external_url":"https://example.com/creator/maya"}`),
+			Renders:        &hintRenderInfo{Card: "CreatorSpotlightCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
+			PickWhen:       "Highlighting a local maker/artist with portfolio info.",
 		},
 		{
 			Hint:           "weather",
@@ -200,6 +292,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:current", "external_url:hourly", "external_url:daily", "external_url:location"},
 			Example: rawJSON(`{"title":"Mild and sunny today","body":"20\u00b0C with clear skies; UV index 5.","post_type":"discovery","display_hint":"weather","locality":"Dublin","external_url":"{\"current\":{\"temp_c\":20,\"feels_like_c\":18,\"humidity\":60,\"wind_speed_kmh\":10,\"uv_index\":5,\"is_day\":true,\"condition\":\"Sunny\",\"condition_code\":1000},\"hourly\":[],\"daily\":[],\"location\":{\"latitude\":53.3,\"longitude\":-6.2,\"timezone\":\"Europe/Dublin\"}}"}`),
+			Renders: &hintRenderInfo{Card: "WeatherCard", UsesFields: []string{"title", "body", "external_url", "locality"}},
 		},
 		{
 			Hint:           "scoreboard",
@@ -208,6 +301,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:status", "external_url:home", "external_url:away"},
 			Example: rawJSON(`{"title":"Lakers 110, Celtics 105","body":"LeBron 28/9/7 as LA closes out the series.","post_type":"article","display_hint":"scoreboard","external_url":"{\"status\":\"Final\",\"home\":{\"name\":\"Lakers\",\"abbr\":\"LAL\"},\"away\":{\"name\":\"Celtics\",\"abbr\":\"BOS\"},\"sport\":\"NBA\"}"}`),
+			Renders: &hintRenderInfo{Card: "ScoreboardCard", UsesFields: []string{"title", "body", "external_url"}},
 		},
 		{
 			Hint:           "matchup",
@@ -216,6 +310,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:status", "external_url:home", "external_url:away", "external_url:gameTime"},
 			Example: rawJSON(`{"title":"Lakers host Celtics tonight","body":"First meeting since the Finals; tip-off 7pm PT.","post_type":"article","display_hint":"matchup","external_url":"{\"status\":\"Scheduled\",\"home\":{\"name\":\"Lakers\",\"abbr\":\"LAL\"},\"away\":{\"name\":\"Celtics\",\"abbr\":\"BOS\"},\"sport\":\"NBA\",\"gameTime\":\"2026-04-16T19:00:00Z\"}"}`),
+			Renders: &hintRenderInfo{Card: "MatchupCard", UsesFields: []string{"title", "body", "external_url"}},
 		},
 		{
 			Hint:           "standings",
@@ -224,6 +319,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:league", "external_url:date", "external_url:games"},
 			Example:        rawJSON(`{"title":"NBA nightly recap","body":"Four games tonight.","post_type":"article","display_hint":"standings","external_url":"{\"league\":\"NBA\",\"date\":\"2026-04-16\",\"games\":[{\"home\":\"LAL\",\"away\":\"BOS\",\"homeScore\":110,\"awayScore\":105,\"status\":\"Final\"}]}"}`),
+			Renders:        &hintRenderInfo{Card: "StandingsCard", UsesFields: []string{"title", "body", "external_url"}},
 		},
 		{
 			Hint:           "box_score",
@@ -232,6 +328,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:status", "external_url:home", "external_url:away"},
 			Example: rawJSON(`{"title":"Box score: LAL 110, BOS 105","body":"LeBron led all scorers with 28.","post_type":"article","display_hint":"box_score","external_url":"{\"status\":\"Final\",\"home\":{\"name\":\"Lakers\",\"abbr\":\"LAL\"},\"away\":{\"name\":\"Celtics\",\"abbr\":\"BOS\"},\"sport\":\"NBA\"}"}`),
+			Renders: &hintRenderInfo{Card: "BoxScoreCard", UsesFields: []string{"title", "body", "external_url"}},
 		},
 		{
 			Hint:           "player_spotlight",
@@ -240,6 +337,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:playerName", "external_url:sport", "external_url:team"},
 			Example:        rawJSON(`{"title":"LeBron's quiet efficiency","body":"28/9/7 on 61% shooting.","post_type":"article","display_hint":"player_spotlight","external_url":"{\"playerName\":\"LeBron James\",\"sport\":\"NBA\",\"team\":\"Lakers\"}"}`),
+			Renders:        &hintRenderInfo{Card: "PlayerSpotlightCard", UsesFields: []string{"title", "body", "external_url"}},
 		},
 		{
 			Hint:           "entertainment",
@@ -248,6 +346,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:subject", "external_url:headline"},
 			Example:        rawJSON(`{"title":"Zendaya named TIME Entertainer of the Year","body":"Recognized for Dune: Part Two and Challengers.","post_type":"article","display_hint":"entertainment","external_url":"{\"subject\":\"Zendaya\",\"headline\":\"Zendaya Named TIME Entertainer of the Year\",\"source\":\"People\",\"category\":\"award\",\"tags\":[\"entertainment\"]}"}`),
+			Renders:        &hintRenderInfo{Card: "EntertainmentCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "album",
@@ -256,6 +355,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:type", "external_url:artist", "external_url:title"},
 			Example:        rawJSON(`{"title":"Taylor Swift drops TTPD","body":"31 tracks, double album.","post_type":"article","display_hint":"album","external_url":"{\"type\":\"album\",\"artist\":\"Taylor Swift\",\"title\":\"The Tortured Poets Department\"}"}`),
+			Renders:        &hintRenderInfo{Card: "AlbumCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "concert",
@@ -263,7 +363,8 @@ func buildHintCatalog() []hintDescriptor {
 			PostType:       "event",
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:type", "external_url:artist"},
-			Example:        rawJSON(`{"title":"Coldplay tour hits SF","body":"Levi's Stadium, two nights in September.","post_type":"event","display_hint":"concert","external_url":"{\"type\":\"concert\",\"artist\":\"Coldplay\"}"}`),
+			Example:        rawJSON(`{"title":"Coldplay tour hits SF","body":"Levi's Stadium, two nights in September.","post_type":"event","display_hint":"concert","external_url":"{\"type\":\"concert\",\"artist\":\"Coldplay\",\"date\":\"2026-09-10\"}"}`),
+			Renders:        &hintRenderInfo{Card: "ConcertCard", UsesFields: []string{"title", "body", "external_url", "scheduled_at"}},
 		},
 		{
 			Hint:           "game_release",
@@ -272,6 +373,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:title", "external_url:status"},
 			Example:        rawJSON(`{"title":"New game out next week","body":"Preorders open on Steam.","post_type":"article","display_hint":"game_release","external_url":"{\"title\":\"Test Game\",\"status\":\"upcoming\"}"}`),
+			Renders:        &hintRenderInfo{Card: "GameReleaseCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "game_review",
@@ -280,6 +382,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:title", "external_url:status"},
 			Example:        rawJSON(`{"title":"Test Game: first impressions","body":"Solid core loop, weak story.","post_type":"article","display_hint":"game_review","external_url":"{\"title\":\"Test Game\",\"status\":\"released\"}"}`),
+			Renders:        &hintRenderInfo{Card: "GameReviewCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "restaurant",
@@ -288,6 +391,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:name", "external_url:latitude", "external_url:longitude"},
 			Example:        rawJSON(`{"title":"Test Cafe","body":"New neighborhood cafe with great espresso.","post_type":"place","display_hint":"restaurant","external_url":"{\"name\":\"Test Cafe\",\"latitude\":40.7,\"longitude\":-74.0}"}`),
+			Renders:        &hintRenderInfo{Card: "RestaurantCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "destination",
@@ -296,6 +400,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:city", "external_url:country", "external_url:latitude", "external_url:longitude"},
 			Example:        rawJSON(`{"title":"Weekend in Paris","body":"Museums, patisseries, the Seine at dusk.","post_type":"place","display_hint":"destination","external_url":"{\"city\":\"Paris\",\"country\":\"France\",\"latitude\":48.8566,\"longitude\":2.3522}"}`),
+			Renders:        &hintRenderInfo{Card: "DestinationCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "movie",
@@ -304,6 +409,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:tmdbId", "external_url:title"},
 			Example:        rawJSON(`{"title":"Fight Club","body":"1999 cult classic still holds up.","post_type":"article","display_hint":"movie","external_url":"{\"tmdbId\":550,\"title\":\"Fight Club\"}"}`),
+			Renders:        &hintRenderInfo{Card: "MovieCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "show",
@@ -312,6 +418,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:tmdbId", "external_url:title"},
 			Example:        rawJSON(`{"title":"Game of Thrones","body":"Start of the fantasy prestige era.","post_type":"article","display_hint":"show","external_url":"{\"tmdbId\":1399,\"title\":\"Game of Thrones\"}"}`),
+			Renders:        &hintRenderInfo{Card: "ShowCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "pet_spotlight",
@@ -320,6 +427,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:type", "external_url:name", "external_url:species", "external_url:petfinderUrl"},
 			Example:        rawJSON(`{"title":"Meet Biscuit","body":"Young Lab mix, loves fetch.","post_type":"discovery","display_hint":"pet_spotlight","external_url":"{\"type\":\"adoption\",\"name\":\"Biscuit\",\"species\":\"dog\",\"breed\":\"Labrador Mix\",\"age\":\"Young\",\"gender\":\"Male\",\"shelterName\":\"SF SPCA\",\"shelterCity\":\"San Francisco\",\"petfinderUrl\":\"https://www.petfinder.com/dog/biscuit-12345678\"}"}`),
+			Renders:        &hintRenderInfo{Card: "PetSpotlightCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "fitness",
@@ -328,6 +436,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:activity", "external_url:duration_min"},
 			Example:        rawJSON(`{"title":"30 minute evening run","body":"Zone 2, flat loop.","post_type":"discovery","display_hint":"fitness","external_url":"{\"activity\":\"Running\",\"duration_min\":30}"}`),
+			Renders:        &hintRenderInfo{Card: "FitnessCard", UsesFields: []string{"title", "body", "external_url"}},
 		},
 		{
 			Hint:           "science",
@@ -336,6 +445,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:category", "external_url:source", "external_url:headline"},
 			Example:        rawJSON(`{"title":"NASA finds new exoplanet","body":"Earth-sized, in the habitable zone.","post_type":"article","display_hint":"science","external_url":"{\"category\":\"Space\",\"source\":\"NASA\",\"headline\":\"New Planet Discovered\"}"}`),
+			Renders:        &hintRenderInfo{Card: "ScienceCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 		},
 		{
 			Hint:           "feedback",
@@ -344,6 +454,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:feedback_type", "external_url:question", "external_url:options"},
 			Example:        rawJSON(`{"title":"Which do you prefer?","body":"Help us tune your feed.","post_type":"discovery","display_hint":"feedback","external_url":"{\"feedback_type\":\"poll\",\"question\":\"What do you think?\",\"options\":[{\"key\":\"a\",\"label\":\"Option A\"}]}"}`),
+			Renders:        &hintRenderInfo{Card: "FeedbackCard", UsesFields: []string{"title", "body", "external_url"}},
 		},
 		{
 			Hint:           "video_embed",
@@ -352,6 +463,7 @@ func buildHintCatalog() []hintDescriptor {
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:provider", "external_url:embed_url"},
 			Example:        rawJSON(`{"title":"Watch: short film","body":"A 4-minute doc from last month's festival.","post_type":"video","display_hint":"video_embed","external_url":"{\"provider\":\"youtube\",\"video_id\":\"dQw4w9WgXcQ\",\"embed_url\":\"https://www.youtube.com/embed/dQw4w9WgXcQ\",\"watch_url\":\"https://www.youtube.com/watch?v=dQw4w9WgXcQ\",\"thumbnail_url\":\"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg\",\"channel_title\":\"Rick Astley\"}"}`),
+			Renders:        &hintRenderInfo{Card: "VideoEmbedCard", UsesFields: []string{"title", "body", "external_url"}},
 		},
 	}
 	return entries

@@ -48,6 +48,19 @@ type hintEntry struct {
 	StructuredJSON bool            `json:"structured_json"`
 	RequiredFields []string        `json:"required_fields"`
 	Example        json.RawMessage `json:"example"`
+	Renders        *hintRenders    `json:"renders,omitempty"`
+	PickWhen       string          `json:"pick_when,omitempty"`
+	AvoidWhen      string          `json:"avoid_when,omitempty"`
+}
+
+// hintRenders documents what the iOS client actually draws for a given hint.
+// Skills use this to pick the right hint (e.g. don't pick "event" for an
+// evergreen recommendation, because the client will render a date badge from
+// thin air) and to know which fields are displayed vs silently dropped.
+type hintRenders struct {
+	Card        string   `json:"card"`
+	UsesFields  []string `json:"uses_fields"`
+	IgnoresFields []string `json:"ignores_fields,omitempty"`
 }
 
 type endpointDoc struct {
@@ -198,6 +211,227 @@ func TestHints_DocumentsKeyEndpoints(t *testing.T) {
 	for _, key := range wantEndpoints {
 		if _, ok := hr.Endpoints[key]; !ok {
 			t.Errorf("endpoints[%q] missing from hints response", key)
+		}
+	}
+}
+
+// TestHints_RendersDocumentsClientBehavior is the main fix for the
+// "evergreen hike got rendered as an event with a fabricated date" bug
+// we hit in production. Every hint must declare what the iOS client
+// actually shows so skills can pick the right hint *and* know which
+// fields get silently dropped (e.g. external_url on a PlaceCard).
+//
+// Minimum contract: every entry in the catalog has a non-empty `renders.card`
+// pointing at a real SwiftUI card, and a non-empty uses_fields list.
+func TestHints_RendersDocumentsClientBehavior(t *testing.T) {
+	h := newHintsHandler(t)
+	hr := fetchHints(t, h)
+
+	// These are the SwiftUI cards wired up in FeedItemView.swift. A hint whose
+	// renders.card isn't in this allowlist is either a typo or a client-side
+	// rendering gap — either way skills shouldn't trust it.
+	// Mirrors FeedItemView.swift's cardContent switch. StandardCard is the
+	// default fallback for hints that don't have a dedicated renderer yet
+	// (card, article, comparison, and the hole of unrecognized hints).
+	knownCards := map[string]bool{
+		"StandardCard": true, "CompactCard": true, "DateCard": true,
+		"PlaceCard": true, "DealCard": true, "OutfitCard": true,
+		"WeatherCard": true, "ScoreboardCard": true, "MatchupCard": true,
+		"StandingsCard": true, "BoxScoreCard": true, "PlayerSpotlightCard": true,
+		"EntertainmentCard": true, "AlbumCard": true, "ConcertCard": true,
+		"GameReleaseCard": true, "GameReviewCard": true,
+		"RestaurantCard": true, "DestinationCard": true,
+		"MovieCard": true, "ShowCard": true, "PetSpotlightCard": true,
+		"FitnessCard": true, "ScienceCard": true, "FeedbackCard": true,
+		"CreatorSpotlightCard": true, "VideoEmbedCard": true,
+	}
+
+	for _, e := range hr.DisplayHints {
+		if e.Renders == nil {
+			t.Errorf("hint %q is missing a renders block; skills can't tell what the client shows", e.Hint)
+			continue
+		}
+		if e.Renders.Card == "" {
+			t.Errorf("hint %q renders.card is empty", e.Hint)
+		} else if !knownCards[e.Renders.Card] {
+			t.Errorf("hint %q renders.card = %q, not in the known SwiftUI card allowlist", e.Hint, e.Renders.Card)
+		}
+		if len(e.Renders.UsesFields) == 0 {
+			t.Errorf("hint %q renders.uses_fields is empty; must list at least title/body", e.Hint)
+		}
+	}
+}
+
+// TestHints_EventHintWarnsOnEvergreen is the guardrail that would have
+// stopped today's bug at lint time. Today we posted a timeless hike as
+// display_hint=event and the iOS DateCard fabricated a date from the title.
+// The server should warn when event/calendar/concert is used without a
+// scheduled_at *and* without an obvious date token in the title/body.
+func TestHints_EventHintWarnsOnEvergreen(t *testing.T) {
+	h := newHintsHandler(t)
+
+	body := []byte(`{
+		"title": "Evergreen hike recommendation",
+		"body": "A year-round loop worth doing when the weather holds.",
+		"post_type": "event",
+		"display_hint": "event",
+		"locality": "Victoria, BC",
+		"labels": ["event"]
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/posts/lint", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.LintPost(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("lint status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var result struct {
+		Valid    bool `json:"valid"`
+		Warnings []struct {
+			Field   string `json:"field"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"warnings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if !result.Valid {
+		t.Fatalf("expected valid=true (this should be a warning, not an error)")
+	}
+	found := false
+	for _, w := range result.Warnings {
+		if w.Code == "event_without_date" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected an event_without_date warning; got warnings=%+v", result.Warnings)
+	}
+}
+
+// TestHints_PlaceHintWarnsWhenExternalURLDropped catches the second prod bug:
+// we shipped a 'place' post with an external_url for the booking link, lint
+// passed, and the iOS PlaceCard silently dropped the URL. Until the client
+// renders a CTA on PlaceCard, the server should warn when place + external_url
+// are combined so skills at least know to inline the link in the body.
+//
+// When the iOS fix lands, this warning can be removed in the same PR that
+// adds PlaceCard CTA rendering.
+func TestHints_PlaceHintWarnsWhenExternalURLDropped(t *testing.T) {
+	h := newHintsHandler(t)
+
+	body := []byte(`{
+		"title": "Great local spot",
+		"body": "A neighborhood cafe worth visiting.",
+		"post_type": "place",
+		"display_hint": "place",
+		"locality": "Victoria, BC",
+		"external_url": "https://example.com/book",
+		"labels": ["place"]
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/posts/lint", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.LintPost(rec, req)
+
+	var result struct {
+		Valid    bool `json:"valid"`
+		Warnings []struct {
+			Field   string `json:"field"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"warnings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	found := false
+	for _, w := range result.Warnings {
+		if w.Code == "place_external_url_not_rendered" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected a place_external_url_not_rendered warning; got warnings=%+v", result.Warnings)
+	}
+}
+
+// TestHints_EventHintNoWarningWithScheduledAt is the false-positive guard.
+// When the skill *did* set scheduled_at, the event_without_date warning must
+// not fire — otherwise legitimate dated events would be nagged.
+func TestHints_EventHintNoWarningWithScheduledAt(t *testing.T) {
+	h := newHintsHandler(t)
+
+	body := []byte(`{
+		"title": "Jazz in the park",
+		"body": "Saturday at 6pm, free.",
+		"post_type": "event",
+		"display_hint": "event",
+		"locality": "Victoria, BC",
+		"scheduled_at": "2026-06-21T18:00:00Z",
+		"labels": ["event"]
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/posts/lint", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.LintPost(rec, req)
+
+	var result struct {
+		Warnings []struct {
+			Code string `json:"code"`
+		} `json:"warnings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, w := range result.Warnings {
+		if w.Code == "event_without_date" {
+			t.Errorf("event_without_date warning fired for a post that had scheduled_at set: %+v", result.Warnings)
+		}
+	}
+}
+
+// TestHints_EventHintNoWarningWhenDateInBody is the second false-positive guard.
+// Skills that say "Saturday at 6pm" in the body are fine — the client extracts
+// the date from the title/body the same way DateCard does.
+func TestHints_EventHintNoWarningWhenDateInBody(t *testing.T) {
+	h := newHintsHandler(t)
+
+	body := []byte(`{
+		"title": "Neighborhood block party",
+		"body": "Join us Saturday May 10 at 2pm on Elm Street.",
+		"post_type": "event",
+		"display_hint": "event",
+		"locality": "Victoria, BC",
+		"labels": ["event"]
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/posts/lint", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.LintPost(rec, req)
+
+	var result struct {
+		Warnings []struct {
+			Code string `json:"code"`
+		} `json:"warnings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, w := range result.Warnings {
+		if w.Code == "event_without_date" {
+			t.Errorf("event_without_date warning fired for a post whose body already mentions a date: %+v", result.Warnings)
 		}
 	}
 }

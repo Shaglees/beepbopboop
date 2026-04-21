@@ -59,6 +59,31 @@ When `display_hint = outfit`, the post carries an `images[]` array as well as `i
 - **Google Places photo URLs:** signed/temporary. Always download and re-upload to imgur before using.
 - **TMDB/Spotify posters:** already permanent CDN — do NOT re-upload.
 
+## Tier 2 relevance guard (added after a mushroom showed up on a hiking post)
+
+Wikimedia geosearch returns **every** Commons file near a coordinate, which on a hiking post once surfaced a macro photo of a mushroom. Always filter the result before accepting it.
+
+Minimum acceptance rules for Tier 2 (Wikimedia) and Tier 3 (Panoramax):
+
+1. **Title must intersect the topic keywords.** If the post topic is "hiking / trail / outdoors / forest", the image title must contain at least one of those tokens (or the locality name). No match → skip this image.
+2. **Reject macro/zoomed subjects when the post is a landscape/activity.** Exclude titles containing `mushroom`, `insect`, `fungus`, `lichen`, `flower close-up`, `macro`, `specimen`, or anatomical terms unless your topic is botany/wildlife.
+3. **Reject unrelated buildings.** If the topic is "trail", skip titles containing `building`, `plaque`, `sign`, `monument` unless the word `trailhead` appears.
+4. **Prefer hits with ≥ 800px width.** Wikimedia returns a `width` and `height` in `imageinfo`; reject anything under 800px on the long edge for feed cards.
+
+Pseudocode (bash / `jq`):
+
+```bash
+jq --arg topic "hike trail forest ridge" \
+   '.query.pages | to_entries | map(.value) |
+    map(select(
+      (.title | test($topic; "i")) and
+      ((.title | test("mushroom|macro|specimen|insect|fungus|plaque"; "i")) | not) and
+      (.imageinfo[0].width >= 800)
+    )) | .[0]'
+```
+
+If nothing survives the filter, **fall back to Tier 5 (Unsplash) immediately**. Don't keep an off-topic image just to avoid an extra call — the cost of a wrong image is higher than the cost of one more API request.
+
 ## Reminder
 
 Before you publish a post, ask: "did I run the image pipeline?" If the answer is "no, the hint doesn't seem visual enough", think again — every card in the feed has an image area; skipping it leaves a gradient placeholder that degrades the feed.

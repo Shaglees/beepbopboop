@@ -54,27 +54,54 @@ For a batch: `beepbopgraph check --batch '<JSON_ARRAY>'` where each object has `
 
 Also dedup within the current batch — if two pending posts share ≥3 labels and the same locality, drop the weaker one.
 
-## Step P3: POST `/posts`
+## Step P3: POST `/posts` (with retry on transient failure)
+
+Wrap the POST in a retry loop. During today's run the backend container flapped for ~30 seconds and in-flight POSTs lost their work. The retry helper below is idempotent at the skill level *only* because we run it after `/posts/lint` — a retry of a lint-valid payload is always safe.
 
 ```bash
-curl -s -X POST "$API_URL/posts" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "<TITLE>",
-    "body": "<BODY>",
-    "image_url": "<IMAGE_URL_OR_EMPTY>",
-    "external_url": "<URL_OR_STRUCTURED_JSON_STRING>",
-    "locality": "<LOCALITY_OR_EMPTY>",
-    "latitude": <LAT_OR_NULL>,
-    "longitude": <LON_OR_NULL>,
-    "post_type": "<POST_TYPE>",
-    "visibility": "<VISIBILITY>",
-    "display_hint": "<DISPLAY_HINT>",
-    "labels": ["label1", "label2"],
-    "images": []
-  }' | jq .
+publish_post() {
+  local payload="$1"
+  local out
+  for attempt in 1 2 3; do
+    out=$(curl -sS -w "\n%{http_code}" -X POST "$API_URL/posts" \
+      -H "Authorization: Bearer $AGENT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$payload")
+    local code=$(printf '%s' "$out" | tail -n1)
+    local body=$(printf '%s' "$out" | sed '$d')
+    case "$code" in
+      2*) printf '%s\n' "$body"; return 0 ;;
+      5*|000) sleep $(( attempt * 2 )) ;;
+      4*) printf '%s\n' "$body" >&2; return 1 ;;
+    esac
+  done
+  echo "publish failed after 3 attempts" >&2
+  return 1
+}
+
+PAYLOAD='{
+  "title": "<TITLE>",
+  "body": "<BODY>",
+  "image_url": "<IMAGE_URL_OR_EMPTY>",
+  "external_url": "<URL_OR_STRUCTURED_JSON_STRING>",
+  "locality": "<LOCALITY_OR_EMPTY>",
+  "latitude": <LAT_OR_NULL>,
+  "longitude": <LON_OR_NULL>,
+  "post_type": "<POST_TYPE>",
+  "visibility": "<VISIBILITY>",
+  "display_hint": "<DISPLAY_HINT>",
+  "labels": ["label1", "label2"],
+  "images": []
+}'
+publish_post "$PAYLOAD" | jq .
 ```
+
+Retry policy:
+
+- **2xx** → done.
+- **5xx or connection refused** (`curl -w` reports `000` on connection failure) → exponential backoff (2s, 4s, 6s), up to 3 attempts total.
+- **4xx** → never retry. The payload is wrong; fix it and restart from Step P1.
+- Don't retry on 409 `already_exists` — the first attempt actually succeeded and we never saw the response. Use `GET /posts?limit=5` to look for a match before re-trying.
 
 Notes:
 

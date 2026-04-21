@@ -642,24 +642,35 @@ private struct CompactCard: View {
 private struct DateCard: View {
     let post: Post
 
+    /// Date extracted from the title or body. `nil` means the skill didn't
+    /// supply a real date; we intentionally don't fall back to createdAt
+    /// because a "posted today" badge on an evergreen hike looks fabricated.
+    private var parsedDate: Date? {
+        if let d = Self.extractDate(from: post.title) { return d }
+        if let d = Self.extractDate(from: post.body) { return d }
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             CardHeader(post: post)
 
             HStack(alignment: .top, spacing: 12) {
-                // Date badge
-                VStack(spacing: 2) {
-                    Text(dateParts.month)
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(post.hintColor)
-                        .textCase(.uppercase)
-                    Text(dateParts.day)
-                        .font(.title2.weight(.bold))
-                        .foregroundColor(.primary)
+                if let date = parsedDate {
+                    let parts = Self.formatBadge(for: date)
+                    VStack(spacing: 2) {
+                        Text(parts.month)
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(post.hintColor)
+                            .textCase(.uppercase)
+                        Text(parts.day)
+                            .font(.title2.weight(.bold))
+                            .foregroundColor(.primary)
+                    }
+                    .frame(width: 48, height: 52)
+                    .background(post.hintColor.opacity(0.1))
+                    .cornerRadius(8)
                 }
-                .frame(width: 48, height: 52)
-                .background(post.hintColor.opacity(0.1))
-                .cornerRadius(8)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(post.title)
@@ -671,17 +682,20 @@ private struct DateCard: View {
                         .foregroundColor(.secondary)
                         .lineLimit(3)
 
-                    // Event: show location + external link
                     if post.displayHintValue == .event {
                         if let locality = post.locality, !locality.isEmpty {
                             Label(locality, systemImage: "location")
                                 .font(.caption)
                                 .foregroundColor(post.hintColor)
                         }
-                        if let extURL = post.externalURL, !extURL.isEmpty {
-                            Label("Get Tickets", systemImage: "arrow.up.right.square")
-                                .font(.caption.weight(.medium))
-                                .foregroundColor(post.hintColor)
+                        if let extURL = post.externalURL, !extURL.isEmpty,
+                           let url = URL(string: extURL) {
+                            Link(destination: url) {
+                                Label("Get Tickets", systemImage: "arrow.up.right.square")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(post.hintColor)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -693,34 +707,15 @@ private struct DateCard: View {
         .padding(.vertical, 12)
     }
 
-    private var dateParts: (month: String, day: String) {
-        // Try to extract a date from the title first (e.g. "April 16" or "May 3")
-        if let titleDate = Self.extractDate(from: post.title) {
-            let cal = Calendar.current
-            let monthF = DateFormatter()
-            monthF.dateFormat = "MMM"
-            return (monthF.string(from: titleDate), "\(cal.component(.day, from: titleDate))")
-        }
-
-        // Fall back to createdAt
-        let formatters: [ISO8601DateFormatter] = {
-            let f1 = ISO8601DateFormatter()
-            f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let f2 = ISO8601DateFormatter()
-            f2.formatOptions = [.withInternetDateTime]
-            return [f1, f2]
-        }()
-        var date = Date()
-        for f in formatters {
-            if let d = f.date(from: post.createdAt) { date = d; break }
-        }
+    /// Formats a Date into (MMM, D) parts for the badge.
+    private static func formatBadge(for date: Date) -> (month: String, day: String) {
         let cal = Calendar.current
         let monthF = DateFormatter()
         monthF.dateFormat = "MMM"
         return (monthF.string(from: date), "\(cal.component(.day, from: date))")
     }
 
-    /// Try to find a date like "April 16" or "Jan 3" in text
+    /// Try to find a date like "April 16" or "Jan 3" in text.
     private static func extractDate(from text: String) -> Date? {
         let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
         let range = NSRange(text.startIndex..., in: text)
@@ -845,10 +840,44 @@ private struct PlaceCard: View {
                 .foregroundColor(.secondary)
                 .lineLimit(3)
 
+            // CTA for place posts that carry a booking/info link. Without this,
+            // skills that set external_url on a `place` post had no clickable
+            // surface — the link was silently dropped.
+            if let extURL = post.externalURL, !extURL.isEmpty,
+               let url = URL(string: extURL) {
+                Link(destination: url) {
+                    Label(placeCTALabel(for: extURL), systemImage: "arrow.up.right.square")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(post.hintColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(post.hintColor.opacity(0.12))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+
             CardFooter(post: post)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    /// Pick a reasonable CTA label based on URL host. We keep this intentionally
+    /// simple — "Visit site" is always a safe fallback; booking/reservation hosts
+    /// get a stronger verb.
+    private func placeCTALabel(for urlString: String) -> String {
+        let lower = urlString.lowercased()
+        if lower.contains("book") || lower.contains("reserv") || lower.contains("ticket") {
+            return "Book"
+        }
+        if lower.contains("menu") {
+            return "View menu"
+        }
+        if lower.contains("maps.") || lower.contains("/maps") {
+            return "Directions"
+        }
+        return "Visit site"
     }
 }
 

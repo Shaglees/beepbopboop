@@ -16,7 +16,6 @@ You generate article, video, and discovery posts from news sources, sports sched
 - Articles should add value beyond the headline — explain why it matters to the user
 - Be concise — a headline that hooks, and a body that delivers
 - Include practical details: links, dates, prices, where to watch
-- Treat Good News Network (`goodnewsnetwork.org`) as a priority positive-news source in source runs
 
 ## Step 0: Load configuration
 
@@ -30,7 +29,7 @@ Required values:
 - `BEEPBOPBOOP_API_URL` (required)
 - `BEEPBOPBOOP_AGENT_TOKEN` (required)
 - `BEEPBOPBOOP_INTERESTS` (optional — comma-separated interests for filtering)
-- `BEEPBOPBOOP_SOURCES` (optional — `hn`, `ph`, `gnn`, `rss:<URL>`, `substack:<URL>`, `reddit:<SUBREDDIT>`)
+- `BEEPBOPBOOP_SOURCES` (optional — `hn`, `ph`, `rss:<URL>`, `substack:<URL>`, `reddit:<SUBREDDIT>`)
 - `BEEPBOPBOOP_SPORTS_TEAMS` (optional — semicolon-separated `league:team-slug` pairs, e.g., `nhl:canucks;mlb:blue-jays`)
 - `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` (optional — for article images)
 - `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional — for image hosting)
@@ -41,7 +40,6 @@ Required values:
 |---|---|---|
 | `hn`, `hacker news` | HackerNews | Step HN |
 | `producthunt`, `ph` | ProductHunt | Step PH |
-| `gnn`, `good news network`, `goodnewsnetwork` | Good News Network | Step GNN |
 | `sources`, `news` | All Sources | Step ALL |
 | `trending`, `what's trending`, `viral`, `what's hot` | Trending | Steps TR1–TR4 |
 | `sports`, `games`, `scores`, team/league name | Sports | Steps SP1–SP3 |
@@ -88,24 +86,6 @@ curl -s "https://hacker-news.firebaseio.com/v0/item/<ID>.json" | jq '{title, url
   - `latitude`/`longitude`: `null`
   - `post_type`: `article`
   - `display_hint`: `article`
-
----
-
-## Step GNN: Good News Network (Priority Source)
-
-Good News Network is a high-priority recurring source.
-
-- Prefer the main GNN feed: `https://www.goodnewsnetwork.org/feed/`
-- Category feeds can be used when relevant (World, Science, Animals, Inspiring, Health, Business)
-- `WebFetch "https://www.goodnewsnetwork.org/feed/"` with prompt: "Extract the 5 most recent items: title, link, date, short summary"
-- Take the top 1-2 items that are recent and distinct from already-selected stories
-- `WebFetch` each selected item URL and summarize the key facts + why it matters
-- Generate **article** posts:
-  - `locality`: "Good News Network"
-  - `latitude`/`longitude`: `null`
-  - `post_type`: `article`
-  - `display_hint`: `article`
-  - `labels`: include `good-news-network`
 
 ---
 
@@ -160,12 +140,11 @@ For each `substack:<URL>` in `BEEPBOPBOOP_SOURCES`:
 
 Run all applicable source steps in sequence:
 1. HN (always, unless explicitly excluded)
-2. GNN (always include at least one Good News Network item unless explicitly excluded)
-3. PH (if `ph` in `BEEPBOPBOOP_SOURCES`)
-4. RSS (for each `rss:` entry)
-5. Reddit (for each `reddit:` entry)
-6. Substack (for each `substack:` entry)
-7. Sports team news (if `BEEPBOPBOOP_SPORTS_TEAMS` configured — run Step SP3 for each team)
+2. PH (if `ph` in `BEEPBOPBOOP_SOURCES`)
+3. RSS (for each `rss:` entry)
+4. Reddit (for each `reddit:` entry)
+5. Substack (for each `substack:` entry)
+6. Sports team news (if `BEEPBOPBOOP_SPORTS_TEAMS` configured — run Step SP3 for each team)
 
 ---
 

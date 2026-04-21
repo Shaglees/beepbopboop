@@ -1,7 +1,7 @@
 ---
 name: beepbopboop-post
 description: Generate and publish an engaging BeepBopBoop post from a simple idea
-argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|discover|trending|fashion|init|calendar> [locality] [post_type]
+argument-hint: <idea|batch|weather|compare|seasonal|deals|sources|discover|trending|fashion|kids|init|calendar> [locality] [post_type]
 allowed-tools: Bash(curl *), Bash(jq *), Bash(cat *), Bash(mkdir *), Bash(osm *), Bash(date *), Bash(beepbopgraph *), WebSearch, WebFetch
 ---
 
@@ -90,6 +90,7 @@ After loading config, parse the user's input to determine which mode to use:
 | `trending`, `what's trending`, `viral`, `pop culture`, `what's hot`, `zeitgeist` | Trending | **Delegate to `beepbopboop-news` skill** |
 | `sports`, `games`, `scores`, team/league name | Sports | **Delegate to `beepbopboop-news` skill** |
 | `fashion`, `outfit`, `style`, `what to wear`, `drops`, `capsule wardrobe` | Fashion | **Delegate to `beepbopboop-fashion` skill** |
+| `kids`, `kids activities`, `pro-d`, `day off school`, `camp`, `summer camp`, `after school sports`, `baseball registration` | Kids Activities | **Delegate to `beepbopboop-kids-activities` skill** |
 | `digest`, `roundup`, `weekly digest`, `summary` | Digest | Steps DG1–DG3 |
 | `brief`, `morning brief`, `daily brief`, `today's take` | Brief | Steps BR1–BR3 |
 | Everything else | Continue to Step 0b | — |
@@ -104,11 +105,13 @@ Examine the user's idea to determine the content mode:
 
 - **Local mode** (existing flow): The idea mentions a place, activity, venue, or thing to do nearby (e.g., "coffee", "hockey games", "best parks", "restaurants") → proceed to Step 1 as normal
 - **Interest mode**: The idea mentions a topic, person, creator, news area, or uses keywords like "latest from", "news about", "what's new in", or references a topic from `BEEPBOPBOOP_INTERESTS` (e.g., "latest AI news", "latest from Fireship", "what's new in investing") → **delegate to `beepbopboop-news` skill**
+- **Kids activities mode**: The idea mentions day-off camps, Pro-D days, summer camps, after-school sports, youth registration windows, or baseball signups → **delegate to `beepbopboop-kids-activities` skill**
 
 **Routing heuristics:**
 - Mentions a specific online creator/publication → interest mode
 - Mentions "latest", "news", "what's new", "update" + a topic → interest mode
 - Topic matches a `BEEPBOPBOOP_INTERESTS` entry without location context → interest mode
+- Mentions Pro-D, day-off school, camp registration, youth sports registration, or baseball signup windows → kids activities mode
 - Mentions a physical place, activity, or "near me" → local mode
 - Ambiguous → default to local mode
 
@@ -461,6 +464,20 @@ date +%Y%m%d
 Compare each event's `DTSTART` date portion against today through today+7.
 
 Take a maximum of **5 events**. Skip events with complex recurrence rules (`RRULE`) for now — only process single-instance and simple recurring events.
+
+#### CL1b: School day-off detection and kids routing
+
+Before CL2, scan each parsed event `SUMMARY` + `DESCRIPTION` (case-insensitive) for school-closure/day-off signals:
+- `pro-d`, `pd day`, `professional development day`
+- `no school`, `non-instructional day`, `inset day`, `school closed`
+- `district closure`, `student holiday`, `curriculum day`
+
+If one or more matches are found:
+- **Delegate to `beepbopboop-kids-activities` skill** with mode intent `day off camp` and include the detected event date(s)
+- Ask for/propagate locality context from resolved location/default location
+- Prioritize camps and activities that cover the exact day-off window
+
+Then continue CL2/CL3 for normal calendar posts as well.
 
 #### CL2: Research and enrich
 
@@ -833,6 +850,7 @@ Execute each matching schedule rule from BT1. Schedule modes map to:
 - `brief` → Brief mode (Steps BR1–BR3)
 - `sports` → **Delegate to `beepbopboop-news` skill** with `sports`
 - `fashion` → **Delegate to `beepbopboop-fashion` skill** with ARGS (default: rotating focus)
+- `kids` → **Delegate to `beepbopboop-kids-activities` skill** with ARGS (e.g., `day off camp`, `summer camp`, `baseball registration`)
 
 **Phase 2 — Fill with defaults** (if post count is still under target):
 1. Always: weather brief → 1 brief post (via BR1–BR3 adapted with weather focus)
@@ -844,6 +862,7 @@ Execute each matching schedule rule from BT1. Schedule modes map to:
 7. If `BEEPBOPBOOP_INTERESTS` configured: pick 1-2 interests → **delegate to `beepbopboop-news`** → 2-4 posts
 8. If `BEEPBOPBOOP_SOURCES` configured: pick 1-2 sources → **delegate to `beepbopboop-news`** → 1-3 posts
 9. If `BEEPBOPBOOP_CALENDAR_URL` configured: calendar mode → 1-3 posts
+9b. If calendar events include school day-off signals (Pro-D/no-school/non-instructional): **delegate to `beepbopboop-kids-activities` with `day off camp`** → 1-2 posts
 10. If seasonal month is notable (Dec, Mar, Jun, Sep, Oct): seasonal mode → 1 post
 11. Always: interest discovery mode → 1-2 posts (explore adjacent topics — this keeps the feed expanding)
 12. Always: **delegate to `beepbopboop-news` with `trending`** → 2-3 posts (what's hot in the world right now)

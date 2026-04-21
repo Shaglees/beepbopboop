@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"strings"
 )
 
 // checkpoint is the JSON serialisation of a trained two-tower model.
@@ -45,8 +46,12 @@ type Ranker struct {
 }
 
 // NewRanker loads a checkpoint from the JSON file at path and returns a ready
-// Ranker. Returns a descriptive error if the file is missing or malformed.
+// Ranker. Returns (nil, nil) when path is empty so callers can disable ML without error.
+// Returns a descriptive error if the file is missing or malformed when path is set.
 func NewRanker(path string) (*Ranker, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("ranker: read %s: %w", path, err)

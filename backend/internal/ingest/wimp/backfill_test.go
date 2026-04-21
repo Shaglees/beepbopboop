@@ -13,17 +13,27 @@ import (
 )
 
 type fakeLister struct {
-	pages [][]string
-	call  int
+	pages      [][]string
+	scanned    []int
+	call       int
+	lastOffset int
 }
 
-func (f *fakeLister) ListPageURLs(ctx context.Context, offset, limit int) ([]string, error) {
+func (f *fakeLister) ListPageURLs(ctx context.Context, offset, limit int) (wimp.ListPageResult, error) {
+	f.lastOffset = offset
 	if f.call >= len(f.pages) {
-		return nil, nil
+		return wimp.ListPageResult{}, nil
 	}
 	page := f.pages[f.call]
+	scanned := len(page)
+	if f.call < len(f.scanned) && f.scanned[f.call] > 0 {
+		scanned = f.scanned[f.call]
+	}
 	f.call++
-	return page, nil
+	return wimp.ListPageResult{
+		URLs:        page,
+		ScannedRows: scanned,
+	}, nil
 }
 
 type fakeInspector struct {
@@ -171,6 +181,45 @@ func TestBackfiller_Run_RetriesTransientErrorsAndDeadLettersPermanentFailures(t 
 	}
 	if !strings.Contains(page.LastError, "permanent parse failure") {
 		t.Fatalf("expected permanent failure message, got %q", page.LastError)
+	}
+}
+
+func TestBackfiller_Run_AdvancesCursorByScannedRowsNotDedupedURLs(t *testing.T) {
+	db := database.OpenTestDB(t)
+	repo := repository.NewVideoRepo(db)
+
+	lister := &fakeLister{
+		pages:   [][]string{{"https://www.wimp.com/beatles/"}},
+		scanned: []int{10}, // Simulates 10 raw CDX rows collapsing to 1 URL.
+	}
+	backfiller := wimp.NewBackfiller(
+		lister,
+		&fakeInspector{inspections: map[string]wimp.Inspection{
+			"https://www.wimp.com/beatles/": inspectionFixture("https://www.wimp.com/beatles/", "20190109001127", "A blooper reel of Beatles recordings", "A collection of studio chatter and rough takes from Beatles recording sessions.", embedFixture("youtube", "NZd3R2iw4cA")),
+		}},
+		repo,
+	)
+
+	if _, err := backfiller.Run(context.Background(), wimp.BackfillOptions{CrawlBudget: 5, PageSize: 5, MaxRetries: 2}); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	ingest, err := repo.GetIngest("wimp-cdx")
+	if err != nil || ingest == nil {
+		t.Fatalf("GetIngest after first run: %v %v", err, ingest)
+	}
+	if ingest.LastCursor != "10" {
+		t.Fatalf("expected cursor=10 from scanned rows, got %q", ingest.LastCursor)
+	}
+
+	// Next run should resume from offset 10.
+	lister.pages = [][]string{}
+	lister.scanned = nil
+	lister.call = 0
+	if _, err := backfiller.Run(context.Background(), wimp.BackfillOptions{CrawlBudget: 5, PageSize: 5, MaxRetries: 2}); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if lister.lastOffset != 10 {
+		t.Fatalf("expected resumed offset 10, got %d", lister.lastOffset)
 	}
 }
 

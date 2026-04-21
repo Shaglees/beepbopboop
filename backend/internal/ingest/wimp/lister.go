@@ -30,7 +30,7 @@ func NewCDXArchiveLister(baseURL string, httpClient *http.Client) *CDXArchiveLis
 	}
 }
 
-func (l *CDXArchiveLister) ListPageURLs(ctx context.Context, offset, limit int) ([]string, error) {
+func (l *CDXArchiveLister) ListPageURLs(ctx context.Context, offset, limit int) (ListPageResult, error) {
 	if limit <= 0 {
 		limit = 25
 	}
@@ -46,26 +46,26 @@ func (l *CDXArchiveLister) ListPageURLs(ctx context.Context, offset, limit int) 
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, l.baseURL+"/cdx/search/cdx?"+q.Encode(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("wimp list: build request: %w", err)
+		return ListPageResult{}, fmt.Errorf("wimp list: build request: %w", err)
 	}
 	resp, err := l.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("wimp list: request: %w", err)
+		return ListPageResult{}, fmt.Errorf("wimp list: request: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("wimp list: upstream status %d", resp.StatusCode)
+		return ListPageResult{}, fmt.Errorf("wimp list: upstream status %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("wimp list: read body: %w", err)
+		return ListPageResult{}, fmt.Errorf("wimp list: read body: %w", err)
 	}
 	var raw [][]string
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("wimp list: parse body: %w", err)
+		return ListPageResult{}, fmt.Errorf("wimp list: parse body: %w", err)
 	}
 	if len(raw) < 2 {
-		return nil, nil
+		return ListPageResult{}, nil
 	}
 	seen := map[string]bool{}
 	out := make([]string, 0, len(raw)-1)
@@ -85,5 +85,8 @@ func (l *CDXArchiveLister) ListPageURLs(ctx context.Context, offset, limit int) 
 			out = append(out, normalized)
 		}
 	}
-	return out, nil
+	return ListPageResult{
+		URLs:        out,
+		ScannedRows: len(raw) - 1,
+	}, nil
 }

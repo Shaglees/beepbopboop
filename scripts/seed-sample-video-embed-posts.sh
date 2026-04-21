@@ -2,15 +2,18 @@
 # Create sample video_embed posts for manual / iOS testing.
 #
 # Requires: curl, jq
-# Env:
+# Env (optional if repo-root .env exists):
 #   BEEPBOPBOOP_API_URL  (default http://localhost:8080)
-#   BEEPBOPBOOP_AGENT_TOKEN — required (see .claude/connection-details.md for LAN/local)
+#   BEEPBOPBOOP_AGENT_TOKEN — required (copy .env.example to .env; see .claude/connection-details.md)
 #
 # Usage:
-#   export BEEPBOPBOOP_AGENT_TOKEN='bbp_...'
 #   ./scripts/seed-sample-video-embed-posts.sh
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/load-repo-env.sh"
 
 API_URL="${BEEPBOPBOOP_API_URL:-http://localhost:8080}"
 TOKEN="${BEEPBOPBOOP_AGENT_TOKEN:-}"

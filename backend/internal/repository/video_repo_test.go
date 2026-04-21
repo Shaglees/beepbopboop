@@ -1,6 +1,7 @@
 package repository_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -13,21 +14,21 @@ import (
 
 func sampleVideo(overrides func(*model.Video)) model.Video {
 	v := model.Video{
-		Provider:         "youtube",
-		ProviderVideoID:  "dQw4w9WgXcQ",
-		WatchURL:         "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-		EmbedURL:         "https://www.youtube.com/embed/dQw4w9WgXcQ",
-		Title:            "Never Gonna Give You Up",
-		Description:      "Classic 80s hit.",
-		ChannelTitle:     "Rick Astley",
-		ThumbnailURL:     "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
-		DurationSec:      213,
-		PublishedAt:      ptrTime(time.Date(2009, 10, 25, 0, 0, 0, 0, time.UTC)),
-		SourceURL:        "https://wimp.com/never-gonna-give-you-up/",
-		SourceDesc:       "Wimp.com feature: the meme that keeps on giving.",
-		Labels:           []string{"music", "meme", "classic"},
-		SupportsPrevCap:  true,
-		EmbedHealth:      "unknown",
+		Provider:        "youtube",
+		ProviderVideoID: "dQw4w9WgXcQ",
+		WatchURL:        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+		EmbedURL:        "https://www.youtube.com/embed/dQw4w9WgXcQ",
+		Title:           "Never Gonna Give You Up",
+		Description:     "Classic 80s hit.",
+		ChannelTitle:    "Rick Astley",
+		ThumbnailURL:    "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+		DurationSec:     213,
+		PublishedAt:     ptrTime(time.Date(2009, 10, 25, 0, 0, 0, 0, time.UTC)),
+		SourceURL:       "https://wimp.com/never-gonna-give-you-up/",
+		SourceDesc:      "Wimp.com feature: the meme that keeps on giving.",
+		Labels:          []string{"music", "meme", "classic"},
+		SupportsPrevCap: true,
+		EmbedHealth:     "unknown",
 	}
 	if overrides != nil {
 		overrides(&v)
@@ -143,6 +144,60 @@ func TestVideoRepo_UpdateEmbedHealth(t *testing.T) {
 	}
 	if got.EmbedCheckedAt == nil {
 		t.Errorf("expected embed_checked_at to be stamped")
+	}
+}
+
+func TestVideoRepo_ListForEmbedHealthCheck_PrioritizesUnknownThenStale(t *testing.T) {
+	db := database.OpenTestDB(t)
+	repo := repository.NewVideoRepo(db)
+
+	unknown, err := repo.UpsertCatalog(sampleVideo(func(v *model.Video) {
+		v.ProviderVideoID = "unknown-priority"
+		v.EmbedURL = "https://www.youtube.com/embed/unknown-priority"
+		v.WatchURL = "https://www.youtube.com/watch?v=unknown-priority"
+		v.EmbedHealth = "unknown"
+	}))
+	if err != nil {
+		t.Fatalf("seed unknown: %v", err)
+	}
+	stale, err := repo.UpsertCatalog(sampleVideo(func(v *model.Video) {
+		v.ProviderVideoID = "stale-priority"
+		v.EmbedURL = "https://www.youtube.com/embed/stale-priority"
+		v.WatchURL = "https://www.youtube.com/watch?v=stale-priority"
+		v.EmbedHealth = "ok"
+	}))
+	if err != nil {
+		t.Fatalf("seed stale: %v", err)
+	}
+	fresh, err := repo.UpsertCatalog(sampleVideo(func(v *model.Video) {
+		v.ProviderVideoID = "fresh-last"
+		v.EmbedURL = "https://www.youtube.com/embed/fresh-last"
+		v.WatchURL = "https://www.youtube.com/watch?v=fresh-last"
+		v.EmbedHealth = "ok"
+	}))
+	if err != nil {
+		t.Fatalf("seed fresh: %v", err)
+	}
+
+	if _, err := db.Exec(`UPDATE video_catalog SET embed_checked_at = NOW() - INTERVAL '10 days' WHERE id = $1`, stale.ID); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE video_catalog SET embed_checked_at = NOW() - INTERVAL '1 day' WHERE id = $1`, fresh.ID); err != nil {
+		t.Fatalf("mark fresh: %v", err)
+	}
+
+	got, err := repo.ListForEmbedHealthCheck(context.Background(), 7*24*time.Hour, 10)
+	if err != nil {
+		t.Fatalf("ListForEmbedHealthCheck: %v", err)
+	}
+	if len(got) < 3 {
+		t.Fatalf("expected at least 3 rows, got %d", len(got))
+	}
+	if got[0].ID != unknown.ID {
+		t.Fatalf("expected unknown video first, got %q", got[0].ProviderVideoID)
+	}
+	if got[1].ID != stale.ID {
+		t.Fatalf("expected stale video second, got %q", got[1].ProviderVideoID)
 	}
 }
 

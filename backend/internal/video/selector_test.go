@@ -108,6 +108,33 @@ func TestSelector_Select_ExcludesRecentlyPostedVideos(t *testing.T) {
 	}
 }
 
+func TestSelector_Select_ExcludesBlockedAndGoneVideos(t *testing.T) {
+	db := database.OpenTestDB(t)
+	ctx := context.Background()
+
+	userRepo := repository.NewUserRepo(db)
+	user, _ := userRepo.FindOrCreateByFirebaseUID("selector-health-user")
+	videoRepo := repository.NewVideoRepo(db)
+	selector := videoselector.NewSelector(videoRepo, repository.NewUserEmbeddingRepo(db))
+
+	seedVideos(t, videoRepo,
+		videoFixture("blocked-video", []string{"wimp"}, 3, "blocked"),
+		videoFixture("gone-video", []string{"wimp"}, 3, "gone"),
+		videoFixture("healthy-video", []string{"wimp"}, 3, "ok"),
+	)
+
+	result, err := selector.Select(ctx, videoselector.SelectOptions{UserID: user.ID, Limit: 5})
+	if err != nil {
+		t.Fatalf("select: %v", err)
+	}
+	if len(result.Videos) != 1 {
+		t.Fatalf("expected only healthy video to remain, got %d", len(result.Videos))
+	}
+	if result.Videos[0].ProviderVideoID != "healthy-video" {
+		t.Errorf("expected healthy-video, got %q", result.Videos[0].ProviderVideoID)
+	}
+}
+
 func TestSelector_Select_LowInventoryReturnsDiagnostics(t *testing.T) {
 	db := database.OpenTestDB(t)
 	ctx := context.Background()
@@ -188,8 +215,12 @@ func seedVideos(t *testing.T, repo *repository.VideoRepo, videos ...model.Video)
 	return out
 }
 
-func videoFixture(id string, labels []string, ageDays int) model.Video {
+func videoFixture(id string, labels []string, ageDays int, embedHealth ...string) model.Video {
 	publishedAt := time.Now().Add(-time.Duration(ageDays) * 24 * time.Hour).UTC().Truncate(time.Second)
+	health := "unknown"
+	if len(embedHealth) > 0 && embedHealth[0] != "" {
+		health = embedHealth[0]
+	}
 	return model.Video{
 		Provider:        "youtube",
 		ProviderVideoID: id,
@@ -200,7 +231,7 @@ func videoFixture(id string, labels []string, ageDays int) model.Video {
 		ThumbnailURL:    "https://example.com/" + id + ".jpg",
 		PublishedAt:     &publishedAt,
 		Labels:          labels,
-		EmbedHealth:     "unknown",
+		EmbedHealth:     health,
 	}
 }
 

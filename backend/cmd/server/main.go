@@ -22,6 +22,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 	"github.com/shanegleeson/beepbopboop/backend/internal/scheduler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/sports"
+	"github.com/shanegleeson/beepbopboop/backend/internal/videohealth"
 	"github.com/shanegleeson/beepbopboop/backend/internal/weather"
 	"google.golang.org/api/option"
 )
@@ -188,6 +189,9 @@ func main() {
 
 	embeddingWorker := embedding.NewWorker(userEmbedder, 24*time.Hour)
 	go embeddingWorker.Run(workerCtx)
+
+	videoHealthWorker := videohealth.NewScheduledWorker(videoRepo, videohealth.NewHTTPChecker(nil), 6*time.Hour)
+	go videoHealthWorker.Run(workerCtx)
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 

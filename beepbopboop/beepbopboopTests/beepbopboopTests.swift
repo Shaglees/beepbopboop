@@ -124,3 +124,45 @@ struct EventTrackerTests {
         #expect(dict?["dwell_ms"] as? Int == 4200)
     }
 }
+
+@MainActor
+struct VideoEmbedPreviewCapTests {
+
+    @Test func videoEmbedDataDecodesSupportsPreviewCap() throws {
+        let json = """
+        {
+          "provider": "youtube",
+          "video_id": "jNQXAC9IVRw",
+          "watch_url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+          "embed_url": "https://www.youtube.com/embed/jNQXAC9IVRw",
+          "supports_preview_cap": true
+        }
+        """
+        let data = try #require(json.data(using: .utf8))
+        let decoded = try JSONDecoder().decode(VideoEmbedData.self, from: data)
+        #expect(decoded.previewCapEnabled == true)
+    }
+
+    @Test func previewCapHTMLInjectedForYouTube() throws {
+        let url = try #require(URL(string: "https://www.youtube.com/embed/jNQXAC9IVRw"))
+        let html = VideoEmbedHTMLBuilder.html(embedURL: url, provider: "youtube", previewCapSec: 60)
+        #expect(html.contains("youtube.com/iframe_api"))
+        #expect(html.contains("pauseVideo()"))
+        #expect(html.contains(VideoEmbedHTMLBuilder.previewCapMessageName))
+    }
+
+    @Test func previewCapHTMLInjectedForVimeo() throws {
+        let url = try #require(URL(string: "https://player.vimeo.com/video/1084537"))
+        let html = VideoEmbedHTMLBuilder.html(embedURL: url, provider: "vimeo", previewCapSec: 60)
+        #expect(html.contains("player.vimeo.com/api/player.js"))
+        #expect(html.contains("timeupdate"))
+        #expect(html.contains(VideoEmbedHTMLBuilder.previewCapMessageName))
+    }
+
+    @Test func playbackStateTransitionsOnCapReachedMessage() throws {
+        let state = VideoEmbedPlaybackState()
+        #expect(state.capReached == false)
+        state.handleScriptMessage(name: VideoEmbedHTMLBuilder.previewCapMessageName, body: "capReached")
+        #expect(state.capReached == true)
+    }
+}

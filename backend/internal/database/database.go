@@ -286,5 +286,17 @@ func Open(url string) (*sql.DB, error) {
 		updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
 
+	// Raw crawl records per source page. Keeps provenance and dead-letter/error
+	// context separate from the normalized candidate rows in video_catalog.
+	db.Exec(`CREATE TABLE IF NOT EXISTS video_source_pages (
+		source_name TEXT NOT NULL,
+		source_url  TEXT PRIMARY KEY,
+		archive_url TEXT,
+		raw_payload JSONB,
+		last_error  TEXT,
+		fetched_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_video_source_pages_source_name ON video_source_pages (source_name, fetched_at DESC)")
+
 	return db, nil
 }

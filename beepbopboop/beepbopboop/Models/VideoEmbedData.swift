@@ -8,6 +8,7 @@ struct VideoEmbedData: Codable {
     let embedUrl: String
     let thumbnailUrl: String?
     let channelTitle: String?
+    let supportsPreviewCap: Bool?
 
     enum CodingKeys: String, CodingKey {
         case provider
@@ -16,5 +17,8 @@ struct VideoEmbedData: Codable {
         case embedUrl = "embed_url"
         case thumbnailUrl = "thumbnail_url"
         case channelTitle = "channel_title"
+        case supportsPreviewCap = "supports_preview_cap"
     }
+
+    var previewCapEnabled: Bool { supportsPreviewCap == true }
 }

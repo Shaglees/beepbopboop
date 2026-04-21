@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
@@ -30,36 +31,37 @@ var ValidVisibility = map[string]bool{
 }
 
 var ValidDisplayHints = map[string]bool{
-	"card":             true,
-	"place":            true,
-	"article":          true,
-	"weather":          true,
-	"calendar":         true,
-	"deal":             true,
-	"digest":           true,
-	"brief":            true,
-	"comparison":       true,
-	"event":            true,
-	"outfit":           true,
-	"scoreboard":       true,
-	"matchup":          true,
-	"standings":        true,
-	"movie":            true,
-	"show":             true,
-	"player_spotlight": true,
-	"entertainment":    true,
-	"album":            true,
-	"concert":          true,
-	"game_release":     true,
-	"game_review":      true,
-	"restaurant":       true,
-	"destination":      true,
-	"science":          true,
-	"pet_spotlight":    true,
-	"fitness":          true,
-	"box_score":          true,
-	"feedback":           true,
-	"creator_spotlight":  true,
+	"card":              true,
+	"place":             true,
+	"article":           true,
+	"weather":           true,
+	"calendar":          true,
+	"deal":              true,
+	"digest":            true,
+	"brief":             true,
+	"comparison":        true,
+	"event":             true,
+	"outfit":            true,
+	"scoreboard":        true,
+	"matchup":           true,
+	"standings":         true,
+	"movie":             true,
+	"show":              true,
+	"player_spotlight":  true,
+	"entertainment":     true,
+	"album":             true,
+	"concert":           true,
+	"game_release":      true,
+	"game_review":       true,
+	"restaurant":        true,
+	"destination":       true,
+	"science":           true,
+	"pet_spotlight":     true,
+	"fitness":           true,
+	"box_score":         true,
+	"feedback":          true,
+	"creator_spotlight": true,
+	"video_embed":       true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -199,7 +201,8 @@ func validatePost(req *createPostRequest) validationResult {
 		req.DisplayHint == "pet_spotlight" || req.DisplayHint == "fitness" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
 		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" ||
-		req.DisplayHint == "feedback" || req.DisplayHint == "creator_spotlight"
+		req.DisplayHint == "feedback" || req.DisplayHint == "creator_spotlight" ||
+		req.DisplayHint == "video_embed"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -290,12 +293,15 @@ func validatePost(req *createPostRequest) validationResult {
 			validateTravelData(req.ExternalURL, &errs, &warns)
 		case "science":
 			validateScienceData(req.ExternalURL, &errs, &warns)
+		case "video_embed":
+			validateVideoEmbedData(req.ExternalURL, &errs, &warns)
 		}
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" ||
 		req.DisplayHint == "destination" || req.DisplayHint == "fitness" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
-		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" || req.DisplayHint == "pet_spotlight" || req.DisplayHint == "feedback" {
+		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" || req.DisplayHint == "pet_spotlight" || req.DisplayHint == "feedback" ||
+		req.DisplayHint == "video_embed" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",
@@ -526,6 +532,66 @@ func validateEntertainmentData(externalURL string, errs *[]validationIssue, warn
 	}
 	if e.Source == nil {
 		*errs = append(*errs, validationIssue{Field: "external_url.source", Code: "required", Message: "source is required"})
+	}
+}
+
+// --- Video embed validation (video_embed) ---
+
+type videoEmbedDataValidation struct {
+	Provider     string `json:"provider"`
+	VideoID      string `json:"video_id"`
+	WatchURL     string `json:"watch_url"`
+	EmbedURL     string `json:"embed_url"`
+	ThumbnailURL string `json:"thumbnail_url"`
+	ChannelTitle string `json:"channel_title"`
+}
+
+func validateVideoEmbedData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var v videoEmbedDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &v); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for video_embed hint"})
+		return
+	}
+	if v.Provider != "youtube" && v.Provider != "vimeo" {
+		*errs = append(*errs, validationIssue{Field: "external_url.provider", Code: "invalid", Message: "provider must be youtube or vimeo"})
+		return
+	}
+	if v.EmbedURL == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.embed_url", Code: "required", Message: "embed_url is required"})
+		return
+	}
+	if msg := validateURL(v.EmbedURL); msg != "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.embed_url", Code: "invalid_url", Message: msg})
+		return
+	}
+	u, err := url.Parse(v.EmbedURL)
+	if err != nil || u.Host == "" {
+		return
+	}
+	host := strings.ToLower(u.Host)
+	switch v.Provider {
+	case "youtube":
+		if !strings.Contains(host, "youtube.com") && !strings.Contains(host, "youtube-nocookie.com") {
+			*errs = append(*errs, validationIssue{Field: "external_url.embed_url", Code: "invalid_host", Message: "youtube embed_url must be on youtube.com or youtube-nocookie.com"})
+			return
+		}
+		if !strings.Contains(u.Path, "/embed/") {
+			*errs = append(*errs, validationIssue{Field: "external_url.embed_url", Code: "invalid_path", Message: "youtube embed_url path must include /embed/VIDEO_ID"})
+		}
+	case "vimeo":
+		if !strings.Contains(host, "vimeo.com") {
+			*errs = append(*errs, validationIssue{Field: "external_url.embed_url", Code: "invalid_host", Message: "vimeo embed_url must be on vimeo.com"})
+		}
+	}
+	if v.ThumbnailURL != "" {
+		if msg := validateURL(v.ThumbnailURL); msg != "" {
+			*errs = append(*errs, validationIssue{Field: "external_url.thumbnail_url", Code: "invalid_url", Message: msg})
+		}
+	}
+	if v.WatchURL != "" {
+		if msg := validateURL(v.WatchURL); msg != "" {
+			*errs = append(*errs, validationIssue{Field: "external_url.watch_url", Code: "invalid_url", Message: msg})
+		}
 	}
 }
 
@@ -814,7 +880,6 @@ func validateScienceData(externalURL string, errs *[]validationIssue, warns *[]v
 		*errs = append(*errs, validationIssue{Field: "external_url.headline", Code: "required", Message: "headline is required"})
 	}
 }
-
 
 func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	agentID := middleware.AgentIDFromContext(r.Context())

@@ -4,9 +4,22 @@ import (
 	"bytes"
 	"regexp"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
+
+// noiseLabels are label strings that carry no filtering value across the
+// catalog because they describe the medium, not the topic. Shared by
+// buildLiveLabels (page keywords) and RSSLister.List (feed categories) so
+// both sources agree on what to drop.
+var noiseLabels = map[string]bool{
+	"":       true,
+	"video":  true,
+	"videos": true,
+	"clip":   true,
+	"clips":  true,
+}
 
 // Metadata is the subset of a Wimp page's HTML we care about for catalog rows.
 type Metadata struct {
@@ -15,6 +28,9 @@ type Metadata struct {
 	ThumbnailURL string
 	CanonicalURL string
 	Keywords     []string
+	// PublishedAt is parsed from <meta property="article:published_time">.
+	// Nil when the meta tag is absent or the value can't be parsed as RFC3339.
+	PublishedAt *time.Time
 }
 
 // Embed is the first third-party video reference found in a Wimp page.
@@ -86,6 +102,10 @@ func applyMetaTag(md *Metadata, n *html.Node) {
 		md.ThumbnailURL = content
 	case prop == "og:url" && md.CanonicalURL == "":
 		md.CanonicalURL = content
+	case prop == "article:published_time" && md.PublishedAt == nil:
+		if t, err := time.Parse(time.RFC3339, content); err == nil {
+			md.PublishedAt = &t
+		}
 	case name == "description" && md.Description == "":
 		md.Description = content
 	case name == "keywords" && len(md.Keywords) == 0:
@@ -168,17 +188,27 @@ var (
 	reVimeoPlayer  = regexp.MustCompile(`(?:https?:)?//player\.vimeo\.com/video/([0-9]{4,})`)
 	reVimeoCanon   = regexp.MustCompile(`(?:https?:)?//(?:www\.)?vimeo\.com/([0-9]{4,})(?:[/?#]|$)`)
 	// Dailymotion: both /video/<id> and dai.ly/<id> shapes.
-	reDailymotion      = regexp.MustCompile(`(?:https?:)?//(?:www\.)?dailymotion\.com/(?:embed/)?video/([A-Za-z0-9]+)`)
-	reDailymotionShort = regexp.MustCompile(`(?:https?:)?//dai\.ly/([A-Za-z0-9]+)`)
+	// Dailymotion ids are at least 5 chars of base62 and terminated by a
+	// path/query/fragment boundary. The length floor avoids matching navigation
+	// slugs like /video/hot or /video/channel.
+	reDailymotion      = regexp.MustCompile(`(?:https?:)?//(?:www\.)?dailymotion\.com/(?:embed/)?video/([A-Za-z0-9]{5,})(?:[/?#_]|$)`)
+	reDailymotionShort = regexp.MustCompile(`(?:https?:)?//dai\.ly/([A-Za-z0-9]{5,})(?:[/?#]|$)`)
 	// Twitch clips and videos.
 	reTwitchClip   = regexp.MustCompile(`(?:https?:)?//clips\.twitch\.tv/([A-Za-z0-9_-]+)`)
 	reTwitchPlayer = regexp.MustCompile(`(?:https?:)?//player\.twitch\.tv/\?(?:[^"'\s]*?(?:video|clip)=([A-Za-z0-9_-]+))`)
-	// Streamable: streamable.com/abc123 (alphanumeric id).
-	reStreamable = regexp.MustCompile(`(?:https?:)?//(?:www\.)?streamable\.com/(?:e/)?([A-Za-z0-9]+)`)
+	// Streamable: streamable.com/<id> where <id> is 4+ chars of base62. The
+	// length floor and terminator keep us from matching nav paths like /about,
+	// /login, /terms which would otherwise produce broken catalog rows.
+	reStreamable = regexp.MustCompile(`(?:https?:)?//(?:www\.)?streamable\.com/(?:e/)?([A-Za-z0-9]{4,})(?:[/?#]|$)`)
 	// Generic JWPlayer-style setup({file: "..."}) is parsed as-is; we look for
 	// a direct .mp4 URL as the last resort and mark provider as "mp4" so the
 	// catalog can still serve it (iOS VideoEmbedCard supports raw mp4).
-	reDirectMP4 = regexp.MustCompile(`https?://[^"'\s<>]+\.mp4(?:\?[^"'\s<>]*)?`)
+	//
+	// Important: we REQUIRE .mp4 to be in the URL *path*, not a query string.
+	// Forbidding ? and # before the .mp4 literal prevents pages like
+	// https://player.example.com/watch?file=foo.mp4 — which are HTML watch
+	// pages, not raw video — from being miscategorized as mp4 embeds.
+	reDirectMP4 = regexp.MustCompile(`https?://[^"'\s<>?#]+\.mp4(?:\?[^"'\s<>]*)?`)
 )
 
 // embedMatcher pairs a URL-matching regex with a constructor for its Embed.
@@ -209,10 +239,17 @@ func parseEmbedURL(u string) (Embed, bool) {
 	for _, m := range embedMatchers {
 		if match := m.re.FindStringSubmatch(u); match != nil {
 			// reDirectMP4 has no capture group for an id; the whole URL is the id.
+			var id string
 			if len(match) < 2 {
-				return m.build(match[0]), true
+				id = match[0]
+			} else {
+				id = match[1]
 			}
-			return m.build(match[1]), true
+			built := m.build(id)
+			if !isPlausibleEmbed(built) {
+				continue
+			}
+			return built, true
 		}
 	}
 	return Embed{}, false
@@ -223,13 +260,55 @@ func scanScriptForEmbed(body string) (Embed, bool) {
 	// inline JSON blobs. We scan for any known provider pattern.
 	for _, m := range embedMatchers {
 		if match := m.re.FindStringSubmatch(body); match != nil {
+			var id string
 			if len(match) < 2 {
-				return m.build(match[0]), true
+				id = match[0]
+			} else {
+				id = match[1]
 			}
-			return m.build(match[1]), true
+			built := m.build(id)
+			if !isPlausibleEmbed(built) {
+				continue
+			}
+			return built, true
 		}
 	}
 	return Embed{}, false
+}
+
+// isPlausibleEmbed filters out matches whose "id" is actually a navigation
+// slug on the provider's domain. Without this check, /about or /login pages
+// linked from a wimp post would produce permanently-broken catalog rows.
+//
+// We only deny-list for providers whose id shape is loose enough to
+// collide with English words (Streamable, Dailymotion). YouTube/Vimeo ids
+// are already well-constrained by their respective regexes.
+func isPlausibleEmbed(e Embed) bool {
+	switch e.Provider {
+	case "streamable":
+		return !streamableNavSlugs[strings.ToLower(e.VideoID)]
+	case "dailymotion":
+		return !dailymotionNavSlugs[strings.ToLower(e.VideoID)]
+	}
+	return true
+}
+
+// streamableNavSlugs are real streamable.com URL paths that are NOT videos.
+// Compiled from the site's top-level nav. If Streamable ships a video whose
+// id collides with one of these words, we'll miss it — but that's vastly
+// preferable to ingesting a broken embed every time a wimp post links to
+// streamable.com/about.
+var streamableNavSlugs = map[string]bool{
+	"about": true, "login": true, "signup": true, "terms": true, "privacy": true,
+	"pricing": true, "help": true, "contact": true, "upgrade": true, "upload": true,
+	"explore": true, "trending": true, "account": true, "settings": true,
+	"dashboard": true, "search": true, "logout": true,
+}
+
+var dailymotionNavSlugs = map[string]bool{
+	"hot": true, "new": true, "trending": true, "featured": true, "channels": true,
+	"channel": true, "topics": true, "feed": true, "live": true, "search": true,
+	"about": true, "login": true, "signup": true, "upload": true,
 }
 
 func youTubeEmbed(id string) Embed {

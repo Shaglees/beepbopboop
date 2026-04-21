@@ -7,10 +7,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 )
+
+// liveMaxBodyBytes caps the live-page body read so a hostile or broken
+// upstream can't exhaust process memory.
+const liveMaxBodyBytes = 2 * 1024 * 1024
 
 // FromLiveURL fetches a current wimp.com page (not Wayback), parses it, and
 // returns a model.Video normalized candidate.
@@ -24,7 +27,7 @@ import (
 //     present.
 //   - Any other error: network / non-2xx status from wimp.com.
 func (a *Adapter) FromLiveURL(ctx context.Context, wimpURL string) (model.Video, error) {
-	md, embed, publishedAt, err := a.fetchLiveInspection(ctx, wimpURL)
+	md, embed, err := a.fetchLiveInspection(ctx, wimpURL)
 	if err != nil {
 		return model.Video{}, err
 	}
@@ -44,36 +47,42 @@ func (a *Adapter) FromLiveURL(ctx context.Context, wimpURL string) (model.Video,
 		// the catalog row tracks the YouTube/Vimeo video, not the wimp.com
 		// page. Wimp attribution is dropped here by design. If provenance is
 		// ever needed it can be reintroduced via video_source_pages.
-		SourceURL:    embed.WatchURL,
-		SourceDesc:   md.Description,
-		Labels:       buildLiveLabels(md),
-		EmbedHealth:  "unknown",
+		SourceURL:   embed.WatchURL,
+		SourceDesc:  md.Description,
+		Labels:      buildLiveLabels(md),
+		EmbedHealth: model.EmbedHealthUnknown,
 	}
-	if publishedAt != nil {
-		v.PublishedAt = publishedAt
+	if md.PublishedAt != nil {
+		v.PublishedAt = md.PublishedAt
 	}
 	return v, nil
 }
 
 // fetchLiveInspection fetches and parses the page. Isolated from FromLiveURL
 // to make testing against an httptest.Server trivial.
-func (a *Adapter) fetchLiveInspection(ctx context.Context, pageURL string) (Metadata, *Embed, *time.Time, error) {
+//
+// PublishedAt is extracted by ExtractMetadata via the HTML walker rather than
+// a raw string scan, so it's robust to unrelated `article:published_time`
+// substrings in JSON-LD or comments.
+func (a *Adapter) fetchLiveInspection(ctx context.Context, pageURL string) (Metadata, *Embed, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
 	if err != nil {
-		return Metadata{}, nil, nil, fmt.Errorf("wimp live: build request: %w", err)
+		return Metadata{}, nil, fmt.Errorf("wimp live: build request: %w", err)
 	}
 	req.Header.Set("User-Agent", a.cfg.UserAgent)
 	resp, err := a.http.Do(req)
 	if err != nil {
-		return Metadata{}, nil, nil, fmt.Errorf("wimp live: fetch: %w", err)
+		return Metadata{}, nil, fmt.Errorf("wimp live: fetch: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return Metadata{}, nil, nil, fmt.Errorf("wimp live: upstream status %d for %s", resp.StatusCode, pageURL)
+		return Metadata{}, nil, fmt.Errorf("wimp live: upstream status %d for %s", resp.StatusCode, pageURL)
 	}
-	body, err := io.ReadAll(resp.Body)
+	// Wimp post pages are ~200KB in the wild; 2MB cap bounds memory without
+	// prematurely truncating unusually heavy pages.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, liveMaxBodyBytes))
 	if err != nil {
-		return Metadata{}, nil, nil, fmt.Errorf("wimp live: read body: %w", err)
+		return Metadata{}, nil, fmt.Errorf("wimp live: read body: %w", err)
 	}
 
 	md := ExtractMetadata(body)
@@ -82,39 +91,7 @@ func (a *Adapter) fetchLiveInspection(ctx context.Context, pageURL string) (Meta
 		e := embed
 		embedPtr = &e
 	}
-	publishedAt := parseArticlePublishedTime(body)
-	return md, embedPtr, publishedAt, nil
-}
-
-// parseArticlePublishedTime extracts the WordPress
-// <meta property="article:published_time" content="2026-04-21T14:00:07+00:00">
-// value, which wimp.com exposes on every post.
-//
-// Returns nil on any parsing failure so callers can fall back to CreatedAt.
-func parseArticlePublishedTime(htmlBytes []byte) *time.Time {
-	const marker = `article:published_time`
-	idx := strings.Index(string(htmlBytes), marker)
-	if idx < 0 {
-		return nil
-	}
-	// Scan forward for the next content=" attribute.
-	rest := string(htmlBytes[idx:])
-	const contentAttr = `content="`
-	cidx := strings.Index(rest, contentAttr)
-	if cidx < 0 {
-		return nil
-	}
-	rest = rest[cidx+len(contentAttr):]
-	end := strings.IndexByte(rest, '"')
-	if end < 0 {
-		return nil
-	}
-	raw := rest[:end]
-	t, err := time.Parse(time.RFC3339, raw)
-	if err != nil {
-		return nil
-	}
-	return &t
+	return md, embedPtr, nil
 }
 
 // buildLiveLabels derives catalog labels from the WordPress metadata keywords
@@ -128,7 +105,7 @@ func buildLiveLabels(md Metadata) []string {
 	seen := make(map[string]bool)
 	for _, k := range md.Keywords {
 		k = strings.ToLower(strings.TrimSpace(k))
-		if k == "" || k == "videos" || k == "clips" || seen[k] {
+		if k == "" || noiseLabels[k] || seen[k] {
 			continue
 		}
 		seen[k] = true

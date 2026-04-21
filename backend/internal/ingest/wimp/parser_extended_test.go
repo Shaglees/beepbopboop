@@ -83,6 +83,70 @@ func TestExtractEmbed_ExtendedProviders(t *testing.T) {
 	}
 }
 
+// TestExtractEmbed_NonVideoPaths_NotMatched covers the H1/H2 hardening:
+// non-video URLs on the same hosts must NOT produce catalog rows.
+// These were real false-positive risks before the regex tightening.
+func TestExtractEmbed_NonVideoPaths_NotMatched(t *testing.T) {
+	nonMatches := []struct {
+		name string
+		html string
+	}{
+		{
+			name: "streamable /about navigation link",
+			html: `<html><body><a href="https://streamable.com/about">about</a></body></html>`,
+		},
+		{
+			name: "streamable short slug under length floor",
+			html: `<html><body><a href="https://streamable.com/ab">x</a></body></html>`,
+		},
+		{
+			name: "dailymotion /video/hot category page",
+			html: `<html><body><a href="https://www.dailymotion.com/video/hot">trending</a></body></html>`,
+		},
+		{
+			name: "mp4 in query string (JW-Player-style watch URL)",
+			html: `<html><body><iframe src="https://player.example.com/watch?file=foo.mp4"></iframe></body></html>`,
+		},
+		{
+			name: "mp4 with fragment before .mp4 literal",
+			html: `<html><body><a href="https://example.com/page#section.mp4">x</a></body></html>`,
+		},
+	}
+	for _, tc := range nonMatches {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, ok := wimp.ExtractEmbed([]byte(tc.html)); ok {
+				t.Errorf("expected NO embed for %q, got %+v", tc.name, got)
+			}
+		})
+	}
+}
+
+// TestExtractEmbed_TwitchPlayerQuery verifies the player.twitch.tv regex pulls
+// the id from ?clip= / ?video= query shapes. Previously untested.
+func TestExtractEmbed_TwitchPlayerQuery(t *testing.T) {
+	cases := []struct {
+		name, src, wantID string
+	}{
+		{"clip param", `https://player.twitch.tv/?clip=SuperClip-xyz&parent=wimp.com`, "SuperClip-xyz"},
+		{"video param", `https://player.twitch.tv/?video=123456789&parent=wimp.com`, "123456789"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			html := `<html><body><iframe src="` + tc.src + `"></iframe></body></html>`
+			got, ok := wimp.ExtractEmbed([]byte(html))
+			if !ok {
+				t.Fatalf("expected embed detection for %s", tc.name)
+			}
+			if got.Provider != "twitch" {
+				t.Errorf("provider: got %q want %q", got.Provider, "twitch")
+			}
+			if got.VideoID != tc.wantID {
+				t.Errorf("video_id: got %q want %q", got.VideoID, tc.wantID)
+			}
+		})
+	}
+}
+
 // TestExtractEmbed_YouTubeStillWinsOverMP4 confirms the ordering invariant:
 // when a page has BOTH a YouTube iframe and a raw mp4 (common on modern
 // wimp posts with a preview reel), the YouTube URL is preferred because it's

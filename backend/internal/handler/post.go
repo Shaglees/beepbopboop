@@ -699,7 +699,7 @@ func (h *PostHandler) maybeLinkVideoPost(post *model.Post, req *createPostReques
 			ChannelTitle:    video.ChannelTitle,
 			ThumbnailURL:    video.ThumbnailURL,
 			Labels:          append([]string(nil), req.Labels...),
-			EmbedHealth:     "unknown",
+			EmbedHealth:     model.EmbedHealthUnknown,
 		})
 		if err != nil {
 			slog.Warn("post: video catalog upsert failed", "post_id", post.ID, "provider", video.Provider, "video_id", videoID, "error", err)

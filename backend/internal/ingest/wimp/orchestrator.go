@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
@@ -40,16 +41,18 @@ type IngestReport struct {
 	Videos        []IngestHit // concise summary of every row we touched
 }
 
-// IngestHit is one row we upserted, with enough context to surface in a CLI
-// report or test assertion.
+// IngestHit is one row we upserted or matched, with enough context to surface
+// in a CLI report or test assertion. The wimp attribution is dropped in the
+// catalog row itself (see live.go), but we retain the source page URL here
+// for operator debugging of the ingest pipeline.
 type IngestHit struct {
-	WimpURL      string   `json:"wimp_url"`
-	VideoID      string   `json:"video_id"`
-	Provider     string   `json:"provider"`
-	Title        string   `json:"title"`
-	ChannelTitle string   `json:"channel_title,omitempty"`
-	Labels       []string `json:"labels"`
-	Enriched     bool     `json:"enriched"`
+	SourcePageURL string   `json:"source_page_url"`
+	VideoID       string   `json:"video_id"`
+	Provider      string   `json:"provider"`
+	Title         string   `json:"title"`
+	ChannelTitle  string   `json:"channel_title,omitempty"`
+	Labels        []string `json:"labels"`
+	Enriched      bool     `json:"enriched"`
 }
 
 // Run executes a single ingest pass.
@@ -75,21 +78,40 @@ func (o *Orchestrator) Run(ctx context.Context, limit int) (IngestReport, error)
 			report.Videos = append(report.Videos, hit)
 		case classAlreadyCached:
 			report.AlreadyCached++
+			// Surface already-cached rows so operators diffing two runs can
+			// see exactly which items were deduped.
+			report.Videos = append(report.Videos, hit)
 		case classNoEmbed:
 			report.NoEmbed++
 		case classErrored:
 			report.Errored++
 			slog.Warn("wimp ingest: item failed",
-				"wimp_url", item.Link, "error", err)
+				"source_page_url", item.Link, "error", err)
 		}
 	}
 	// Persist a lightweight cursor so operators can see the last run time.
 	// last_cursor isn't used for resumption (the RSS feed is small and we
 	// dedup by provider_video_id), but it's still a useful debug signal.
-	if len(items) > 0 {
-		_ = o.Repo.RecordIngest("wimp.com", items[0].PubDate.Format("2006-01-02T15:04:05Z"))
+	//
+	// Use the max pubDate across items (not items[0]) because the feed is
+	// not guaranteed to be newest-first — WordPress honors the query order
+	// the theme asks for. Fall back to now() when no items have a pubDate.
+	if cursor := pickCursor(items); !cursor.IsZero() {
+		_ = o.Repo.RecordIngest("wimp.com", cursor.Format("2006-01-02T15:04:05Z"))
 	}
 	return report, nil
+}
+
+// pickCursor returns the latest PubDate across items, or zero if every item
+// lacks a parseable pubDate.
+func pickCursor(items []RSSItem) time.Time {
+	var latest time.Time
+	for _, it := range items {
+		if it.PubDate.After(latest) {
+			latest = it.PubDate
+		}
+	}
+	return latest
 }
 
 type ingestClass int
@@ -113,8 +135,26 @@ func (o *Orchestrator) ingestOne(ctx context.Context, item RSSItem) (IngestHit, 
 	// Cheap dedup: if we already have a row for this (provider, video_id),
 	// skip the oEmbed call. The upsert would be idempotent anyway, but oEmbed
 	// burns a round-trip and we run this daily.
-	if existing, err := o.Repo.GetByProviderID(candidate.Provider, candidate.ProviderVideoID); err == nil && existing != nil {
-		return IngestHit{}, classAlreadyCached, nil
+	//
+	// If the dedup lookup itself errors (DB glitch), we log it and fall
+	// through to the upsert — idempotent upsert is safer than bailing and
+	// far safer than silently treating the error as a cache miss.
+	existing, lookupErr := o.Repo.GetByProviderID(candidate.Provider, candidate.ProviderVideoID)
+	if lookupErr != nil {
+		slog.Warn("wimp ingest: dedup lookup failed, falling through to upsert",
+			"source_page_url", item.Link, "provider", candidate.Provider,
+			"video_id", candidate.ProviderVideoID, "error", lookupErr)
+	}
+	if existing != nil {
+		return IngestHit{
+			SourcePageURL: item.Link,
+			VideoID:       existing.ID,
+			Provider:      existing.Provider,
+			Title:         existing.Title,
+			ChannelTitle:  existing.ChannelTitle,
+			Labels:        existing.Labels,
+			Enriched:      false,
+		}, classAlreadyCached, nil
 	}
 
 	// Merge the RSS categories in before oEmbed: RSS gives us the editorial
@@ -126,7 +166,7 @@ func (o *Orchestrator) ingestOne(ctx context.Context, item RSSItem) (IngestHit, 
 	if o.Enricher != nil {
 		if err := o.Enricher.Enrich(ctx, &candidate); err != nil {
 			slog.Debug("wimp ingest: oembed skipped",
-				"wimp_url", item.Link, "provider", candidate.Provider, "reason", err.Error())
+				"source_page_url", item.Link, "provider", candidate.Provider, "reason", err.Error())
 		} else {
 			enriched = true
 		}
@@ -138,13 +178,13 @@ func (o *Orchestrator) ingestOne(ctx context.Context, item RSSItem) (IngestHit, 
 	}
 
 	return IngestHit{
-		WimpURL:      item.Link,
-		VideoID:      saved.ID,
-		Provider:     saved.Provider,
-		Title:        saved.Title,
-		ChannelTitle: saved.ChannelTitle,
-		Labels:       saved.Labels,
-		Enriched:     enriched,
+		SourcePageURL: item.Link,
+		VideoID:       saved.ID,
+		Provider:      saved.Provider,
+		Title:         saved.Title,
+		ChannelTitle:  saved.ChannelTitle,
+		Labels:        saved.Labels,
+		Enriched:      enriched,
 	}, classIngested, nil
 }
 

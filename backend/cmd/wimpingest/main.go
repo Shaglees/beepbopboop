@@ -62,6 +62,14 @@ func main() {
 	}
 	defer db.Close()
 
+	// Preflight: confirm the catalog table exists before we spend a minute
+	// crawling wimp.com only to fail at the first upsert with a cryptic
+	// "relation does not exist". Operators running this CLI on a fresh DB
+	// need to apply migrations first (normally done by starting the server).
+	if _, err := db.ExecContext(ctx, `SELECT 1 FROM video_catalog LIMIT 0`); err != nil {
+		fatalf("video_catalog table not found; run the server once (or apply migrations) against this DATABASE_URL first. underlying error: %v", err)
+	}
+
 	videoRepo := repository.NewVideoRepo(db)
 	adapter := wimp.NewAdapter(wimp.Config{})
 	lister := wimp.NewRSSLister(feedURL, nil)

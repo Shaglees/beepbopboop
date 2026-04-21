@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -97,15 +99,58 @@ func (h *VideosHandler) ForMe(w http.ResponseWriter, r *http.Request) {
 
 	agentID := middleware.AgentIDFromContext(r.Context())
 	agent, err := h.agentRepo.GetByID(agentID)
-	if err != nil || agent == nil {
+	// Distinguish "auth lookup failed" (500) from "agent not found" (401)
+	// from "agent has no user" (fall back to non-personalized list).
+	// AgentRepo.GetByID wraps sql.ErrNoRows with a query prefix, hence the
+	// errors.Is check — callers upstream of the wrap still match cleanly.
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unknown agent"})
+			return
+		}
+		slog.Error("videos/for-me: agent lookup failed", "error", err, "agent_id", agentID)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve agent"})
+		return
+	}
+	if agent == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unknown agent"})
 		return
 	}
 
 	q := r.URL.Query()
 	limit := parseIntBounded(q.Get("limit"), 5, 1, 100)
-	include := parseCSV(q.Get("labels"))
-	exclude := parseCSV(q.Get("exclude_labels"))
+	include := parseCSV(q.Get("labels"), maxCSVEntries)
+	exclude := parseCSV(q.Get("exclude_labels"), maxCSVEntries)
+
+	// An unassigned (or shared) agent has no per-user history or embedding,
+	// which means Selector can't personalize. Fall back to the simple list
+	// rather than returning garbage personalized-but-not-really results.
+	if agent.UserID == "" {
+		params := repository.VideoCatalogListParams{
+			Limit:         limit,
+			IncludeLabels: include,
+			ExcludeLabels: exclude,
+			HealthyOnly:   true,
+		}
+		videos, listErr := h.videoRepo.ListCatalog(r.Context(), params)
+		if listErr != nil {
+			slog.Error("videos/for-me: catalog fallback failed", "error", listErr, "agent_id", agentID)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list videos"})
+			return
+		}
+		writeJSON(w, http.StatusOK, videosListResponse{
+			Videos: videos,
+			Diagnostics: videosListDiagnostics{
+				RequestedLimit: limit,
+				ReturnedCount:  len(videos),
+				IncludeLabels:  include,
+				ExcludeLabels:  exclude,
+				HealthyOnly:    true,
+				Personalized:   false, // fallback — surfaced so callers can notice.
+			},
+		})
+		return
+	}
 
 	result, err := h.selector.Select(r.Context(), videoselector.SelectOptions{
 		UserID:        agent.UserID,
@@ -143,14 +188,22 @@ func parseVideoListParams(r *http.Request) repository.VideoCatalogListParams {
 	}
 	return repository.VideoCatalogListParams{
 		Limit:         parseIntBounded(q.Get("limit"), 20, 1, 100),
-		IncludeLabels: parseCSV(q.Get("labels")),
-		ExcludeLabels: parseCSV(q.Get("exclude_labels")),
-		Providers:     parseCSV(q.Get("providers")),
+		IncludeLabels: parseCSV(q.Get("labels"), maxCSVEntries),
+		ExcludeLabels: parseCSV(q.Get("exclude_labels"), maxCSVEntries),
+		Providers:     parseCSV(q.Get("providers"), maxCSVEntries),
 		HealthyOnly:   healthy,
 	}
 }
 
-func parseCSV(s string) []string {
+// maxCSVEntries caps how many comma-separated values we accept in a single
+// query parameter. Keeps a single request from allocating a 10k-entry JSONB
+// filter or exploding the SQL IN list.
+const maxCSVEntries = 32
+
+// parseCSV splits a comma-separated query parameter, trims and dedups entries
+// (case-insensitive normalization is a caller concern), and truncates to
+// `cap` entries. A zero/negative cap disables the cap.
+func parseCSV(s string, cap int) []string {
 	if s == "" {
 		return nil
 	}
@@ -164,13 +217,17 @@ func parseCSV(s string) []string {
 		}
 		seen[p] = true
 		out = append(out, p)
+		if cap > 0 && len(out) >= cap {
+			break
+		}
 	}
 	return out
 }
 
-// parseIntBounded clamps a query-string int to [min,max] with default def.
-// Named to avoid collision with any existing helper.
-func parseIntBounded(raw string, def, min, max int) int {
+// parseIntBounded clamps a query-string int to [lo,hi] with default def.
+// `lo`/`hi` are used instead of `min`/`max` to avoid shadowing the Go 1.21+
+// built-ins.
+func parseIntBounded(raw string, def, lo, hi int) int {
 	if raw == "" {
 		return def
 	}
@@ -178,11 +235,11 @@ func parseIntBounded(raw string, def, min, max int) int {
 	if err != nil {
 		return def
 	}
-	if n < min {
-		return min
+	if n < lo {
+		return lo
 	}
-	if n > max {
-		return max
+	if n > hi {
+		return hi
 	}
 	return n
 }

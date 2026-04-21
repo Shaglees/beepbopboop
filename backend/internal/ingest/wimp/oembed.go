@@ -25,7 +25,12 @@ import (
 // Why not the YouTube Data API v3? It requires a billable API key, has quotas,
 // and for our use case doesn't add much beyond what oEmbed already gives us.
 // The one thing oEmbed does NOT return is duration — we leave DurationSec at
-// 0 and flag duration enrichment as a follow-up (see issue tracker).
+// 0 for YouTube, which is fine for now because ranking doesn't use it yet.
+
+// oEmbedMaxBodyBytes caps oEmbed response reads. YouTube/Vimeo oEmbed JSON
+// is consistently under 1KB; 64KB is the effective upper bound we'll tolerate
+// before treating the response as hostile.
+const oEmbedMaxBodyBytes = 64 * 1024
 
 // oEmbedResult is the subset of fields we care about. Both YouTube and Vimeo
 // use the same JSON oEmbed shape, so a single struct covers them.
@@ -86,7 +91,7 @@ func (e *Enricher) Enrich(ctx context.Context, v *model.Video) error {
 	if err != nil {
 		return fmt.Errorf("oembed: build request: %w", err)
 	}
-	req.Header.Set("User-Agent", "beepbopboop-wimp-ingest/1.0")
+	req.Header.Set("User-Agent", defaultWimpUserAgent)
 
 	resp, err := e.http.Do(req)
 	if err != nil {
@@ -98,7 +103,9 @@ func (e *Enricher) Enrich(ctx context.Context, v *model.Video) error {
 		// private/deleted — that's useful to know but not fatal to ingest.
 		return fmt.Errorf("oembed: upstream status %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
+	// oEmbed JSON is ~500 bytes in practice; cap at 64KB so a hostile or
+	// broken upstream can't exhaust memory by streaming garbage.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, oEmbedMaxBodyBytes))
 	if err != nil {
 		return fmt.Errorf("oembed: read body: %w", err)
 	}
@@ -140,9 +147,9 @@ func oEmbedEndpoint(v *model.Video) (string, bool) {
 }
 
 // applyEnrichment patches fields conservatively — we don't clobber scraped
-// metadata unless the upstream value is strictly better.
+// metadata unless the upstream value is strictly better for this provider.
 func applyEnrichment(v *model.Video, r oEmbedResult) {
-	if r.Title != "" && isPreferableTitle(r.Title, v.Title) {
+	if r.Title != "" && shouldReplaceTitle(v.Provider, r.Title, v.Title) {
 		v.Title = strings.TrimSpace(r.Title)
 	}
 	if r.AuthorName != "" && v.ChannelTitle == "" {
@@ -159,19 +166,34 @@ func applyEnrichment(v *model.Video, r oEmbedResult) {
 	}
 }
 
-// isPreferableTitle returns true when upstream is likely a better title than
-// the scraped one. Heuristic: upstream is longer OR scraped is empty/ends with
-// punctuation that suggests a placeholder ("Owner talks to dog."). Scraped
-// wimp titles tend to be short summaries; upstream YouTube titles are usually
-// the creator's actual title, which is better for ranking and dedup.
-func isPreferableTitle(upstream, scraped string) bool {
-	scraped = strings.TrimSpace(scraped)
+// shouldReplaceTitle decides per-provider whether to clobber the scraped
+// wimp title with the upstream oEmbed title.
+//
+// YouTube: the creator-authored title is canonical and the correct one for
+// dedup and ranking ("Epic Dog Rescue | RingTV"). Wimp's retitled version
+// loses information. Always prefer upstream when present.
+//
+// Vimeo: creator-set titles are often lazy placeholders ("Untitled", "final
+// cut 3"). Wimp's editorial title is typically cleaner. Only fall back to
+// upstream when wimp didn't give us one.
+//
+// Other providers don't reach here (no oEmbed endpoint), but for safety we
+// default to scraped-wins.
+func shouldReplaceTitle(provider, upstream, scraped string) bool {
 	upstream = strings.TrimSpace(upstream)
+	scraped = strings.TrimSpace(scraped)
+	if upstream == "" {
+		return false
+	}
 	if scraped == "" {
 		return true
 	}
-	if len(upstream) > len(scraped) {
+	switch provider {
+	case "youtube":
 		return true
+	case "vimeo":
+		return false
+	default:
+		return false
 	}
-	return false
 }

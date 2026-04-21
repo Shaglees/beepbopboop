@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
@@ -47,9 +48,12 @@ func (r *VideoRepo) ListCatalog(ctx context.Context, p VideoCatalogListParams) (
 	if p.HealthyOnly {
 		where = append(where, "embed_health = 'ok'")
 	} else {
-		// Even when the caller didn't ask for healthy-only, skip known-dead rows.
-		// Dead rows are noise that nothing should pick as a post.
-		where = append(where, "embed_health <> 'dead'")
+		// Even when the caller didn't ask for healthy-only, skip known-dead
+		// rows — they're noise that nothing should pick as a post. NULL
+		// embed_health rows (never-checked) must still pass through, which
+		// requires the explicit IS NULL branch because `NULL <> 'dead'` is
+		// itself NULL (not true) and would otherwise drop them.
+		where = append(where, "(embed_health IS NULL OR embed_health <> 'dead')")
 	}
 
 	if len(p.Providers) > 0 {
@@ -139,7 +143,12 @@ func (r *VideoRepo) ListCatalog(ctx context.Context, p VideoCatalogListParams) (
 		}
 		v.Labels = []string{}
 		if len(labelsJSON) > 0 && string(labelsJSON) != "null" {
-			_ = json.Unmarshal(labelsJSON, &v.Labels)
+			if err := json.Unmarshal(labelsJSON, &v.Labels); err != nil {
+				// Corrupted labels JSON is rare enough that we don't want to
+				// fail the whole request; emit a debug log so it's traceable.
+				slog.Debug("video_catalog: corrupt labels JSON",
+					"video_id", v.ID, "error", err)
+			}
 			if v.Labels == nil {
 				v.Labels = []string{}
 			}

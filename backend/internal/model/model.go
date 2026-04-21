@@ -320,6 +320,16 @@ type UserEmbedding struct {
 	Embedding  []float32 `json:"-"`
 }
 
+// EmbedHealth* are the allowed values for Video.EmbedHealth. Kept as
+// string-typed constants so callers get a compile-time reference without
+// adopting a new type across the codebase. The DB column constrains to these
+// values via the DEFAULT + the background health worker.
+const (
+	EmbedHealthUnknown = "unknown"
+	EmbedHealthOK      = "ok"
+	EmbedHealthDead    = "dead"
+)
+
 // Video is a row in the historical video catalog. Rows are keyed by
 // (provider, provider_video_id) for deterministic idempotent ingestion and
 // joined by `id` from downstream tables (embeddings, post history).

@@ -24,6 +24,11 @@ import (
 // lives on the post page. The lister's job is just to enumerate candidate
 // permalinks; the adapter pulls the actual embed from the page HTML.
 
+// rssMaxBodyBytes caps the RSS body read. Wimp's feed is ~20KB today; a 2MB
+// ceiling is orders of magnitude beyond any plausible growth and protects
+// against hostile upstreams.
+const rssMaxBodyBytes = 2 * 1024 * 1024
+
 // RSSItem is the subset of RSS fields we care about for ingest.
 type RSSItem struct {
 	Title       string    `json:"title"`
@@ -33,6 +38,12 @@ type RSSItem struct {
 	Description string    `json:"description"`
 	Author      string    `json:"author"`
 }
+
+// defaultWimpUserAgent is the single UA string used by every component that
+// talks to a wimp.com origin (RSS feed, live post pages, oEmbed). Keeping it
+// unified avoids a footgun where the adapter and lister appear as two
+// different clients to upstream rate-limiters.
+const defaultWimpUserAgent = "beepbopboop-wimp-ingest/1.0 (+https://github.com/Shaglees/beepbopboop)"
 
 // RSSLister fetches wimp.com's RSS feed and returns structured items.
 //
@@ -46,7 +57,8 @@ type RSSLister struct {
 }
 
 // NewRSSLister returns a lister for the given feed URL. If feedURL is empty,
-// the default https://www.wimp.com/feed/ is used.
+// the default https://www.wimp.com/feed/ is used. The UA is shared with the
+// adapter via defaultWimpUserAgent.
 func NewRSSLister(feedURL string, httpClient *http.Client) *RSSLister {
 	if feedURL == "" {
 		feedURL = "https://www.wimp.com/feed/"
@@ -57,7 +69,7 @@ func NewRSSLister(feedURL string, httpClient *http.Client) *RSSLister {
 	return &RSSLister{
 		feedURL:   feedURL,
 		http:      httpClient,
-		userAgent: "beepbopboop-wimp-ingest/1.0 (+https://github.com/Shaglees/beepbopboop)",
+		userAgent: defaultWimpUserAgent,
 	}
 }
 
@@ -97,7 +109,9 @@ func (l *RSSLister) List(ctx context.Context, limit int) ([]RSSItem, error) {
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("wimp rss: upstream status %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
+	// Wimp's feed is ~20KB; 2MB is a very generous cap that bounds memory
+	// without breaking legitimate growth.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, rssMaxBodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("wimp rss: read body: %w", err)
 	}
@@ -117,7 +131,7 @@ func (l *RSSLister) List(ctx context.Context, limit int) ([]RSSItem, error) {
 		}
 		for _, c := range it.Categories {
 			c = strings.ToLower(strings.TrimSpace(c))
-			if c == "" || c == "video" || c == "videos" {
+			if c == "" || noiseLabels[c] {
 				continue
 			}
 			item.Categories = append(item.Categories, c)

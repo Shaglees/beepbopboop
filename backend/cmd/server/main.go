@@ -65,6 +65,7 @@ func main() {
 	agentRepo := repository.NewAgentRepo(db)
 	tokenRepo := repository.NewTokenRepo(db)
 	postRepo := repository.NewPostRepo(db)
+	embeddingRepo := embedding.NewEmbeddingRepo(db)
 	userSettingsRepo := repository.NewUserSettingsRepo(db)
 	eventRepo := repository.NewEventRepo(db)
 	weightsRepo := repository.NewWeightsRepo(db)
@@ -101,6 +102,22 @@ func main() {
 	meH := handler.NewMeHandler(userRepo)
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo, videoRepo)
+
+	embedder := embedding.NewEmbedderFromConfig(embedding.ProviderConfig{
+		Provider:             cfg.EmbeddingProvider,
+		FallbackProvider:     cfg.EmbeddingFallbackProvider,
+		GoogleAPIKey:         cfg.GoogleAPIKey,
+		Model:                cfg.EmbeddingModel,
+		OutputDimensionality: cfg.EmbeddingOutputDimensionality,
+		AllowImageURLParts:   cfg.EmbeddingAllowImageURLParts,
+	})
+	postH.SetEmbeddingPipeline(embeddingRepo, embedder)
+	if mv, ok := embedder.(embedding.ModelVersioner); ok {
+		slog.Info("post embedding pipeline enabled", "provider", cfg.EmbeddingProvider, "model_version", mv.ModelVersion())
+	} else {
+		slog.Info("post embedding pipeline enabled", "provider", cfg.EmbeddingProvider)
+	}
+
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
 	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo, followRepo, userEmbFront)
 	followH := handler.NewFollowHandler(userRepo, followRepo)

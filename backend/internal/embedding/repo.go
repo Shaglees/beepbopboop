@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 )
 
@@ -21,14 +22,26 @@ func NewEmbeddingRepo(db *sql.DB) *EmbeddingRepo {
 	return &EmbeddingRepo{db: db}
 }
 
-// StoreEmbedding writes a 1536-dim embedding for the given post.
+// StoreEmbedding writes an embedding for the given post.
 // Calling it twice for the same post overwrites the first value (idempotent UPDATE).
 // Returns an error if postID does not exist.
 func (r *EmbeddingRepo) StoreEmbedding(postID string, vec []float32) error {
+	return r.StoreEmbeddingWithModel(postID, vec, "")
+}
+
+// StoreEmbeddingWithModel writes an embedding and captures model metadata in
+// post_embeddings for migration-safe re-indexing.
+func (r *EmbeddingRepo) StoreEmbeddingWithModel(postID string, vec []float32, modelVersion string) error {
 	if len(vec) == 0 {
 		return fmt.Errorf("embedding: empty vector for post %s", postID)
 	}
-	result, err := r.db.Exec(
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(
 		`UPDATE posts SET embedding = $1::vector WHERE id = $2`,
 		vecToString(vec), postID,
 	)
@@ -42,7 +55,19 @@ func (r *EmbeddingRepo) StoreEmbedding(postID string, vec []float32) error {
 	if n == 0 {
 		return fmt.Errorf("embedding: post %s not found", postID)
 	}
-	return nil
+
+	if _, err := tx.Exec(`
+		INSERT INTO post_embeddings (post_id, embedding, model_version, created_at)
+		VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+		ON CONFLICT (post_id) DO UPDATE SET
+			embedding = excluded.embedding,
+			model_version = excluded.model_version,
+			created_at = CURRENT_TIMESTAMP`,
+		postID, pq.Array(toFloat64Slice(vec)), modelVersion); err != nil {
+		return fmt.Errorf("embedding: upsert post_embeddings: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 // GetEmbedding retrieves the stored embedding for a post. Returns nil if not set.
@@ -106,7 +131,7 @@ func (r *EmbeddingRepo) FindSimilar(queryVec []float32, limit int) ([]model.Post
 }
 
 // BatchStore stores embeddings for multiple (postID, vec) pairs in a transaction.
-func (r *EmbeddingRepo) BatchStore(postIDs []string, vecs [][]float32) error {
+func (r *EmbeddingRepo) BatchStore(postIDs []string, vecs [][]float32, modelVersion string) error {
 	if len(postIDs) != len(vecs) {
 		return fmt.Errorf("embedding: postIDs and vecs length mismatch")
 	}
@@ -116,18 +141,33 @@ func (r *EmbeddingRepo) BatchStore(postIDs []string, vecs [][]float32) error {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(`UPDATE posts SET embedding = $1::vector WHERE id = $2`)
+	stmtPosts, err := tx.Prepare(`UPDATE posts SET embedding = $1::vector WHERE id = $2`)
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer stmtPosts.Close()
+
+	stmtMeta, err := tx.Prepare(`
+		INSERT INTO post_embeddings (post_id, embedding, model_version, created_at)
+		VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+		ON CONFLICT (post_id) DO UPDATE SET
+			embedding = excluded.embedding,
+			model_version = excluded.model_version,
+			created_at = CURRENT_TIMESTAMP`)
+	if err != nil {
+		return err
+	}
+	defer stmtMeta.Close()
 
 	for i, id := range postIDs {
 		if len(vecs[i]) == 0 {
 			continue
 		}
-		if _, err := stmt.Exec(vecToString(vecs[i]), id); err != nil {
+		if _, err := stmtPosts.Exec(vecToString(vecs[i]), id); err != nil {
 			return fmt.Errorf("batch store post %s: %w", id, err)
+		}
+		if _, err := stmtMeta.Exec(id, pq.Array(toFloat64Slice(vecs[i])), modelVersion); err != nil {
+			return fmt.Errorf("batch store metadata for post %s: %w", id, err)
 		}
 	}
 	return tx.Commit()
@@ -159,6 +199,14 @@ func parseVec(s string) ([]float32, error) {
 		v[i] = float32(f)
 	}
 	return v, nil
+}
+
+func toFloat64Slice(v []float32) []float64 {
+	out := make([]float64, len(v))
+	for i, x := range v {
+		out[i] = float64(x)
+	}
+	return out
 }
 
 // --- post row scanner (mirrors repository.scanPost) ---

@@ -41,6 +41,45 @@ func BuildEmbeddingInput(p model.Post) string {
 	return strings.Join(parts, ". ")
 }
 
+// BuildEmbeddingPayload prepares a multimodal payload from a post.
+// Providers that don't support multimodal inputs can still use Text.
+func BuildEmbeddingPayload(p model.Post) EmbeddingInput {
+	payload := EmbeddingInput{Text: BuildEmbeddingInput(p)}
+	payload.ImageURLs = extractImageURLs(p)
+	return payload
+}
+
+func extractImageURLs(p model.Post) []string {
+	seen := map[string]struct{}{}
+	urls := make([]string, 0, 4)
+	add := func(u string) {
+		u = strings.TrimSpace(u)
+		if u == "" || !strings.HasPrefix(u, "http") {
+			return
+		}
+		if _, ok := seen[u]; ok {
+			return
+		}
+		seen[u] = struct{}{}
+		urls = append(urls, u)
+	}
+
+	add(p.ImageURL)
+
+	if len(p.Images) > 0 {
+		var imgs []map[string]any
+		if err := json.Unmarshal(p.Images, &imgs); err == nil {
+			for _, img := range imgs {
+				if u, ok := img["url"].(string); ok {
+					add(u)
+				}
+			}
+		}
+	}
+
+	return urls
+}
+
 // SummariseForEmbedding converts a structured ExternalURL payload into a natural
 // language phrase suitable for embedding. Returns the raw payload as-is for
 // unknown hints (callers should not embed raw JSON for structured hints).

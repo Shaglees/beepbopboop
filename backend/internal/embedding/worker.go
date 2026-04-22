@@ -72,12 +72,12 @@ func (w *BackfillWorker) Run(ctx context.Context) error {
 			break
 		}
 
-		texts := make([]string, len(posts))
+		inputs := make([]EmbeddingInput, len(posts))
 		for i, p := range posts {
-			texts[i] = BuildEmbeddingInput(p)
+			inputs[i] = BuildEmbeddingPayload(p)
 		}
 
-		vecs, err := w.embedder.EmbedBatch(ctx, texts)
+		vecs, modelVersion, err := EmbedBatchResolved(ctx, w.embedder, inputs)
 		if err != nil {
 			return fmt.Errorf("backfill: embed batch: %w", err)
 		}
@@ -89,7 +89,7 @@ func (w *BackfillWorker) Run(ctx context.Context) error {
 		for i, p := range posts {
 			ids[i] = p.ID
 		}
-		if err := w.repo.BatchStore(ids, vecs); err != nil {
+		if err := w.repo.BatchStore(ids, vecs, modelVersion); err != nil {
 			return fmt.Errorf("backfill: batch store: %w", err)
 		}
 

@@ -83,6 +83,21 @@ func TestBuildEmbeddingInput_EmptyPost(t *testing.T) {
 	_ = out // should not panic; empty string is acceptable
 }
 
+func TestBuildEmbeddingPayload_CollectsImageURLs(t *testing.T) {
+	p := model.Post{
+		Title:    "hello",
+		ImageURL: "https://example.com/hero.jpg",
+		Images:   []byte(`[{"url":"https://example.com/detail.jpg"},{"url":"https://example.com/hero.jpg"}]`),
+	}
+	payload := embedding.BuildEmbeddingPayload(p)
+	if payload.Text == "" {
+		t.Fatal("expected text in payload")
+	}
+	if len(payload.ImageURLs) != 2 {
+		t.Fatalf("expected 2 unique image URLs, got %d (%v)", len(payload.ImageURLs), payload.ImageURLs)
+	}
+}
+
 func TestSummariseForEmbedding_Scoreboard(t *testing.T) {
 	raw := `{"sport":"NBA","home":{"name":"Lakers","score":110},"away":{"name":"Celtics","score":105},"status":"Final"}`
 	out := embedding.SummariseForEmbedding("scoreboard", raw)

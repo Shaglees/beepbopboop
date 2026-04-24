@@ -2,28 +2,33 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
+	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
 
 type OnboardingHandler struct {
-	userRepo    *repository.UserRepo
-	prototypes  *embedding.PrototypeStore
-	userEmbRepo *repository.UserEmbeddingRepo
+	userRepo     *repository.UserRepo
+	prototypes   *embedding.PrototypeStore
+	userEmbRepo  *repository.UserEmbeddingRepo
+	interestRepo *repository.UserInterestRepo
 }
 
 func NewOnboardingHandler(
 	userRepo *repository.UserRepo,
 	prototypes *embedding.PrototypeStore,
 	userEmbRepo *repository.UserEmbeddingRepo,
+	interestRepo *repository.UserInterestRepo,
 ) *OnboardingHandler {
 	return &OnboardingHandler{
-		userRepo:    userRepo,
-		prototypes:  prototypes,
-		userEmbRepo: userEmbRepo,
+		userRepo:     userRepo,
+		prototypes:   prototypes,
+		userEmbRepo:  userEmbRepo,
+		interestRepo: interestRepo,
 	}
 }
 
@@ -58,6 +63,21 @@ func (h *OnboardingHandler) SubmitInterests(w http.ResponseWriter, r *http.Reque
 	if err := h.userEmbRepo.Upsert(r.Context(), user.ID, vec, 0); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to store embedding"})
 		return
+	}
+
+	// Write plaintext interests for profile display and skill access
+	var userInterests []model.UserInterest
+	for _, name := range req.Interests {
+		userInterests = append(userInterests, model.UserInterest{
+			Category:   name,
+			Topic:      name,
+			Source:     "user",
+			Confidence: 1.0,
+		})
+	}
+	if err := h.interestRepo.BulkSetUser(user.ID, userInterests); err != nil {
+		slog.Warn("failed to write plaintext interests", "error", err)
+		// Non-fatal — embedding was already written
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

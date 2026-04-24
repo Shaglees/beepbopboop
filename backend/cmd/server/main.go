@@ -159,7 +159,7 @@ func main() {
 			slog.Warn("prototype store: initial compute failed", "error", err)
 		}
 	}()
-	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo)
+	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo, interestRepo)
 	profileH := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, contentPrefsRepo)
 
 	// Middleware

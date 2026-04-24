@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -173,7 +174,9 @@ func (h *ProfileHandler) UpdateProfileFirebase(w http.ResponseWriter, r *http.Re
 
 	// Sync location to user_settings so the feed endpoint can find it.
 	if req.HomeLat != nil && req.HomeLon != nil {
-		_, _ = h.settingsRepo.Upsert(user.ID, req.HomeLocation, req.HomeLat, req.HomeLon, 25, nil, true, 9, nil)
+		if err := h.settingsRepo.SetLocation(user.ID, req.HomeLocation, req.HomeLat, req.HomeLon); err != nil {
+			log.Printf("warning: failed to sync location to user_settings for %s: %v", user.ID, err)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

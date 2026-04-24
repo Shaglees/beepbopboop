@@ -45,8 +45,7 @@ struct beepbopboopApp: App {
                 .task(id: authService.isSignedIn) {
                     guard authService.isSignedIn, !onboardingComplete else { return }
                     if let profile = try? await api.getProfile(),
-                       !profile.identity.displayName.isEmpty,
-                       !profile.interests.isEmpty {
+                       profile.profileInitialized {
                         onboardingComplete = true
                     }
                 }

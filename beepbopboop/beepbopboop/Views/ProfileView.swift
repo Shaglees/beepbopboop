@@ -95,7 +95,7 @@ struct ProfileView: View {
                                     Text("CONTENT PREFERENCES")
                                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                                         .foregroundStyle(.secondary)
-                                    ForEach(profile.contentPrefs, id: \.depth) { pref in
+                                    ForEach(Array(profile.contentPrefs.enumerated()), id: \.offset) { _, pref in
                                         HStack {
                                             Text(pref.category ?? "Global")
                                                 .font(.system(size: 14, weight: .medium))

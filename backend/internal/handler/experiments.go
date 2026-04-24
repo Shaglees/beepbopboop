@@ -47,6 +47,11 @@ func (h *ExperimentsHandler) GetVariant(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if exp.Status == "paused" {
+		writeJSON(w, http.StatusOK, map[string]string{"variant": "control", "experiment": name})
+		return
+	}
+
 	variant := h.assigner.Variant(r.Context(), user.ID, name, exp.TreatmentPct)
 	writeJSON(w, http.StatusOK, map[string]string{"variant": variant, "experiment": name})
 }

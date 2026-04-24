@@ -88,7 +88,10 @@ func (g *Guardrail) CheckAndPause(ctx context.Context, experiment string) (bool,
 	)
 
 	if drop <= g.cfg.SaveRateDropPct {
-		return false, nil
+		sessionDrop := (float64(ctrl.impressions) - float64(tmt.impressions)) / float64(ctrl.impressions) * 100
+		if g.cfg.SessionDropPct == 0 || sessionDrop <= g.cfg.SessionDropPct {
+			return false, nil
+		}
 	}
 
 	_, err = g.db.ExecContext(ctx, `

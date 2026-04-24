@@ -36,7 +36,7 @@ func (r *ExperimentRepo) Upsert(ctx context.Context, name string, treatmentPct i
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO ab_experiments (name, treatment_pct, status)
 		VALUES ($1, $2, 'running')
-		ON CONFLICT (name) DO UPDATE SET treatment_pct = $2, status = 'running', paused_at = NULL`,
+		ON CONFLICT (name) DO UPDATE SET treatment_pct = $2`,
 		name, treatmentPct)
 	if err != nil {
 		return fmt.Errorf("upsert experiment: %w", err)

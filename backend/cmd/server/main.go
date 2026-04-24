@@ -13,6 +13,7 @@ import (
 	"firebase.google.com/go/v4/auth"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/shanegleeson/beepbopboop/backend/internal/ab"
 	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
@@ -66,12 +67,14 @@ func main() {
 	agentRepo := repository.NewAgentRepo(db)
 	tokenRepo := repository.NewTokenRepo(db)
 	postRepo := repository.NewPostRepo(db)
+	embeddingRepo := embedding.NewEmbeddingRepo(db)
 	userSettingsRepo := repository.NewUserSettingsRepo(db)
 	eventRepo := repository.NewEventRepo(db)
 	weightsRepo := repository.NewWeightsRepo(db)
 	templateRepo := repository.NewTemplateRepo(db)
 	reactionRepo := repository.NewReactionRepo(db)
 	pushTokenRepo := repository.NewPushTokenRepo(db)
+	modelVersionRepo := ranking.NewModelVersionRepo(db)
 	feedbackRepo := repository.NewFeedbackRepo(db)
 	calendarRepo := repository.NewCalendarRepo(db)
 	followRepo := repository.NewFollowRepo(db)
@@ -79,12 +82,16 @@ func main() {
 	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
 	postEmbeddingRepo := repository.NewPostEmbeddingRepo(db)
 
+	var ranker *ranking.Ranker
 	if cfg.RankerModelPath != "" {
-		ranker, err := ranking.NewRanker(cfg.RankerModelPath)
+		var err error
+		ranker, err = ranking.NewRanker(cfg.RankerModelPath)
 		if err != nil {
 			slog.Warn("RANKER_MODEL_PATH set but ranker failed to load; rule-only ForYou",
 				"path", cfg.RankerModelPath, "error", err)
-		} else if ranker != nil {
+			ranker = nil
+		}
+		if ranker != nil {
 			postRepo.SetML(&repository.PostRepoML{
 				Ranker:  ranker,
 				PostEmb: postEmbeddingRepo,
@@ -102,6 +109,22 @@ func main() {
 	meH := handler.NewMeHandler(userRepo)
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo, videoRepo)
+
+	embedder := embedding.NewEmbedderFromConfig(embedding.ProviderConfig{
+		Provider:             cfg.EmbeddingProvider,
+		FallbackProvider:     cfg.EmbeddingFallbackProvider,
+		GoogleAPIKey:         cfg.GoogleAPIKey,
+		Model:                cfg.EmbeddingModel,
+		OutputDimensionality: cfg.EmbeddingOutputDimensionality,
+		AllowImageURLParts:   cfg.EmbeddingAllowImageURLParts,
+	})
+	postH.SetEmbeddingPipeline(embeddingRepo, embedder)
+	if mv, ok := embedder.(embedding.ModelVersioner); ok {
+		slog.Info("post embedding pipeline enabled", "provider", cfg.EmbeddingProvider, "model_version", mv.ModelVersion())
+	} else {
+		slog.Info("post embedding pipeline enabled", "provider", cfg.EmbeddingProvider)
+	}
+
 	feedH := handler.NewFeedHandler(userRepo, postRepo)
 	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo, followRepo, userEmbFront)
 	followH := handler.NewFollowHandler(userRepo, followRepo)
@@ -113,6 +136,8 @@ func main() {
 	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
 	pushTokenH := handler.NewPushTokenHandler(userRepo, pushTokenRepo)
 	calendarH := handler.NewCalendarHandler(userRepo, calendarRepo, userSettingsRepo)
+	deploymentGate := ranking.NewDeploymentGate(0.02)
+	mlAdminH := handler.NewMLAdminHandler(modelVersionRepo, deploymentGate, os.Getenv("OPERATOR_AGENT_ID"))
 	weatherSvc := weather.NewService()
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
@@ -123,6 +148,10 @@ func main() {
 
 	creatorRepo := repository.NewLocalCreatorRepo(db)
 	creatorsH := handler.NewCreatorsHandler(creatorRepo, userRepo, userSettingsRepo)
+
+	experimentRepo := repository.NewExperimentRepo(db)
+	abAssigner := ab.NewAssigner(db)
+	experimentsH := handler.NewExperimentsHandler(abAssigner, userRepo, experimentRepo)
 
 	prototypeStore := embedding.NewPrototypeStore(db)
 	go func() {
@@ -178,6 +207,7 @@ func main() {
 		r.Get("/posts/{postID}/responses", feedbackH.GetResponses)
 		r.Get("/creators/nearby", creatorsH.GetNearby)
 		r.Post("/user/interests", onboardingH.SubmitInterests)
+		r.Get("/experiments/{name}/variant", experimentsH.GetVariant)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -198,9 +228,15 @@ func main() {
 		r.Get("/user/templates", templatesH.ListTemplatesAgent)
 		r.Put("/user/templates/{hint}", templatesH.UpsertTemplate)
 		r.Delete("/user/templates/{hint}", templatesH.DeleteTemplate)
+		r.Post("/admin/experiments", experimentsH.CreateExperiment)
+		r.Get("/admin/experiments/{name}/results", experimentsH.GetResults)
+		r.Get("/admin/ml/versions", mlAdminH.ListVersions)
+		r.Post("/admin/ml/models/{id}/deploy", mlAdminH.DeployVersion)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())
+	retrainWorker := ranking.NewRetrainWorker(modelVersionRepo, 1000, 7*24*time.Hour)
+	go retrainWorker.Run(workerCtx)
 	weatherWorker := weather.NewWorker(weatherSvc, postRepo, userSettingsRepo, 30*time.Minute)
 	go weatherWorker.Run(workerCtx)
 
@@ -218,6 +254,43 @@ func main() {
 
 	videoHealthWorker := videohealth.NewScheduledWorker(videoRepo, videohealth.NewHTTPChecker(nil), 6*time.Hour)
 	go videoHealthWorker.Run(workerCtx)
+
+	if ranker != nil {
+		ranker.StartWatcher(workerCtx, cfg.RankerModelPath, 5*time.Minute)
+	}
+
+	// A/B guardrail: periodically check running experiments and pause on regression.
+	abGuardrail := ab.NewGuardrail(db, ab.GuardrailConfig{SaveRateDropPct: 5, SessionDropPct: 20})
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-ticker.C:
+				rows, err := db.QueryContext(workerCtx,
+					"SELECT name FROM ab_experiments WHERE status = 'running'")
+				if err != nil {
+					slog.Warn("guardrail: failed to list experiments", "error", err)
+					continue
+				}
+				var names []string
+				for rows.Next() {
+					var n string
+					if err := rows.Scan(&n); err == nil {
+						names = append(names, n)
+					}
+				}
+				rows.Close()
+				for _, name := range names {
+					if _, err := abGuardrail.CheckAndPause(workerCtx, name); err != nil {
+						slog.Warn("guardrail: check failed", "experiment", name, "error", err)
+					}
+				}
+			}
+		}
+	}()
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r}
 

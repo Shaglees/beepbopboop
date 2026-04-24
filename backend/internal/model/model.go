@@ -134,9 +134,10 @@ type EventBatchRequest struct {
 }
 
 type EventInput struct {
-	PostID    string `json:"post_id"`
-	EventType string `json:"event_type"`
-	DwellMs   *int   `json:"dwell_ms,omitempty"`
+	PostID    string  `json:"post_id"`
+	EventType string  `json:"event_type"`
+	DwellMs   *int    `json:"dwell_ms,omitempty"`
+	ABVariant *string `json:"ab_variant,omitempty"`
 }
 
 type LabelEngagement struct {
@@ -292,6 +293,13 @@ type LocalCreator struct {
 	VerifiedAt   *time.Time      `json:"verified_at,omitempty"`
 }
 
+// Experiment is an A/B experiment definition stored in ab_experiments.
+type Experiment struct {
+	Name         string `json:"name"`
+	TreatmentPct int    `json:"treatment_pct"`
+	Status       string `json:"status"` // running | paused
+}
+
 // TrainingPair is a labeled (user, post) pair for ML model training.
 type TrainingPair struct {
 	UserID     string  `json:"user_id"`
@@ -396,4 +404,15 @@ type CreateCreatorRequest struct {
 	Tags         []string        `json:"tags"`
 	Source       string          `json:"source"`
 	ImageURL     string          `json:"image_url"`
+}
+
+// ModelVersion records a trained ranking checkpoint and its deployment status.
+type ModelVersion struct {
+	ID         int64      `json:"id"`
+	Version    string     `json:"version"`
+	ModelPath  string     `json:"model_path"`
+	AUCROC     float64    `json:"auc_roc"`
+	Status     string     `json:"status"`
+	TrainedAt  time.Time  `json:"trained_at"`
+	DeployedAt *time.Time `json:"deployed_at,omitempty"`
 }

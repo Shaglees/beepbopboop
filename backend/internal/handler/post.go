@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
@@ -76,6 +78,9 @@ type PostHandler struct {
 	agentRepo *repository.AgentRepo
 	postRepo  *repository.PostRepo
 	videoRepo *repository.VideoRepo
+
+	embRepo  *embedding.EmbeddingRepo
+	embedder embedding.Embedder
 }
 
 func NewPostHandler(agentRepo *repository.AgentRepo, postRepo *repository.PostRepo, videoRepo ...*repository.VideoRepo) *PostHandler {
@@ -88,6 +93,11 @@ func NewPostHandler(agentRepo *repository.AgentRepo, postRepo *repository.PostRe
 		postRepo:  postRepo,
 		videoRepo: vr,
 	}
+}
+
+func (h *PostHandler) SetEmbeddingPipeline(embRepo *embedding.EmbeddingRepo, embedder embedding.Embedder) {
+	h.embRepo = embRepo
+	h.embedder = embedder
 }
 
 type createPostRequest struct {
@@ -1122,10 +1132,33 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.maybeLinkVideoPost(post, &req)
+	h.embedPostAsync(*post)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(post)
+}
+
+func (h *PostHandler) embedPostAsync(post model.Post) {
+	if h.embRepo == nil || h.embedder == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		payload := embedding.BuildEmbeddingPayload(post)
+		vec, modelVersion, err := embedding.EmbedInputResolved(ctx, h.embedder, payload)
+		if err != nil {
+			slog.Warn("post embedding failed", "post_id", post.ID, "error", err)
+			return
+		}
+		if err := h.embRepo.StoreEmbeddingWithModel(post.ID, vec, modelVersion); err != nil {
+			slog.Warn("post embedding store failed", "post_id", post.ID, "error", err)
+			return
+		}
+		slog.Info("post embedded", "post_id", post.ID, "model_version", modelVersion, "dim", len(vec))
+	}()
 }
 
 func (h *PostHandler) LintPost(w http.ResponseWriter, r *http.Request) {

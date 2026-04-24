@@ -298,5 +298,36 @@ func Open(url string) (*sql.DB, error) {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_video_source_pages_source_name ON video_source_pages (source_name, fetched_at DESC)")
 
+	// A/B testing: experiment definitions and user variant assignments.
+	db.Exec(`CREATE TABLE IF NOT EXISTS ab_experiments (
+		name          TEXT PRIMARY KEY,
+		treatment_pct INTEGER NOT NULL DEFAULT 10,
+		status        TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'paused')),
+		paused_at     TIMESTAMPTZ,
+		created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS ab_assignments (
+		user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		experiment  TEXT NOT NULL REFERENCES ab_experiments(name) ON DELETE CASCADE,
+		variant     TEXT NOT NULL,
+		assigned_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, experiment)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_ab_assignments_experiment ON ab_assignments(experiment)")
+	db.Exec("ALTER TABLE post_events ADD COLUMN IF NOT EXISTS ab_variant TEXT")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_post_events_ab_variant ON post_events(ab_variant, created_at DESC) WHERE ab_variant IS NOT NULL")
+
+	// ML model versioning — tracks trained checkpoints and deployment history
+	db.Exec(`CREATE TABLE IF NOT EXISTS model_versions (
+		id          BIGSERIAL PRIMARY KEY,
+		version     TEXT NOT NULL UNIQUE,
+		model_path  TEXT NOT NULL,
+		auc_roc     DOUBLE PRECISION NOT NULL DEFAULT 0,
+		status      TEXT NOT NULL DEFAULT 'trained',
+		trained_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		deployed_at TIMESTAMPTZ
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_model_versions_status ON model_versions(status, trained_at DESC)")
+
 	return db, nil
 }

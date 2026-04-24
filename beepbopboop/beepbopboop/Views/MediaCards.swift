@@ -5,92 +5,94 @@ import SwiftUI
 struct MovieCard: View {
     let post: Post
     let media: MediaData
-    @State private var activeReaction: String?
-
-    private let darkBg = Color(red: 0.059, green: 0.059, blue: 0.059)
 
     init?(post: Post) {
         guard let md = post.mediaData else { return nil }
         self.post = post
         self.media = md
-        self._activeReaction = State(initialValue: post.myReaction)
     }
 
     var body: some View {
-        ZStack {
-            darkBg
-            mediaBackdrop(url: media.backdropUrl)
-            HStack(alignment: .top, spacing: 0) {
-                mediaPoster(
-                    url: media.posterUrl,
-                    placeholder: "film",
-                    badge: media.inTheatres ? AnyView(theatresBadge) : nil
-                )
-                movieMetaColumn
+        VStack(alignment: .leading, spacing: 8) {
+            CardHeader(post: post)
+
+            // Poster + metadata inline
+            HStack(alignment: .top, spacing: 12) {
+                // Small poster thumbnail
+                Group {
+                    if let urlStr = media.posterUrl, let url = URL(string: urlStr) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            default:
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.purple.opacity(0.2))
+                                    .overlay(
+                                        Image(systemName: "film")
+                                            .font(.title3)
+                                            .foregroundColor(.purple.opacity(0.4))
+                                    )
+                            }
+                        }
+                    } else {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.purple.opacity(0.2))
+                            .overlay(
+                                Image(systemName: "film")
+                                    .font(.title3)
+                                    .foregroundColor(.purple.opacity(0.4))
+                            )
+                    }
+                }
+                .frame(width: 64, height: 96)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(media.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .lineLimit(2)
+
+                    // Metadata line: year · runtime · genre
+                    Text(movieMetaText)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+
+                    // Match score
+                    if let rating = media.tmdbRating {
+                        let matchScore = Int(rating * 10)
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(matchScore >= 70 ? Color.green : (matchScore >= 50 ? Color.yellow : Color.red))
+                                .frame(width: 6, height: 6)
+                            Text("\(matchScore) match")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(matchScore >= 70 ? .green : (matchScore >= 50 ? .yellow : .red))
+                        }
+                    }
+                }
             }
+
+            // Body text
+            if !post.body.isEmpty {
+                Text(post.body)
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                    .lineLimit(3)
+            }
+
+            CardFooter(post: post)
         }
-        .frame(height: 220)
-    }
-
-    private var movieMetaColumn: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(media.title)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-
-            if let tagline = media.tagline, !tagline.isEmpty {
-                Text(tagline)
-                    .font(.system(size: 12)).italic()
-                    .foregroundStyle(.white.opacity(0.5))
-                    .lineLimit(1)
-            }
-
-            ratingsRow(tmdbRating: media.tmdbRating, rtScore: media.rtScore, rtAudienceScore: media.rtAudienceScore)
-
-            Text(movieMetaText)
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.45))
-
-            if let director = media.director, !director.isEmpty {
-                Text("Dir. \(director)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.4))
-            }
-
-            Spacer(minLength: 4)
-
-            if !media.cast.isEmpty { castStrip(cast: media.cast) }
-            if !media.streaming.isEmpty { streamingRow(platforms: media.streaming) }
-
-            HStack {
-                Spacer()
-                ReactionPicker(activeReaction: $activeReaction, postID: post.id, style: .feedDark)
-                MediaBookmarkButton(post: post)
-            }
-        }
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-        .padding(.trailing, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var movieMetaText: String {
         var parts: [String] = []
-        if let r = media.runtime { parts.append("\(r / 60)h \(r % 60)m") }
         if let d = media.releaseDate, d.count >= 4 { parts.append(String(d.prefix(4))) }
+        if let r = media.runtime { parts.append("\(r)m") }
         if let g = media.genres.first { parts.append(g) }
         return parts.joined(separator: " · ")
-    }
-
-    private var theatresBadge: some View {
-        Text("IN THEATRES")
-            .font(.system(size: 7, weight: .heavy))
-            .tracking(0.5)
-            .foregroundStyle(.black)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 3)
-            .background(Color(red: 0.957, green: 0.62, blue: 0.043))
-            .clipShape(Capsule())
     }
 }
 
@@ -148,7 +150,7 @@ struct ShowCard: View {
             ratingsRow(tmdbRating: media.tmdbRating, rtScore: media.rtScore, rtAudienceScore: nil)
 
             Text(showMetaText)
-                .font(.system(size: 11))
+                .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.45))
 
             if let creator = media.creator, !creator.isEmpty {

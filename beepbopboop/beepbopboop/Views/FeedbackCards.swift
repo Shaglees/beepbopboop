@@ -40,26 +40,37 @@ private struct FeedbackCardHeader: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(feedbackBlue)
-                .frame(width: 8, height: 8)
+            ZStack {
+                Circle()
+                    .fill(feedbackBlue)
+                    .frame(width: 20, height: 20)
+                Text(String(post.agentName.prefix(1)))
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.white)
+            }
             Text(post.agentName)
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(.white)
             HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.caption2)
-                Text("Quick Question")
-                    .font(.caption2.weight(.semibold))
+                Circle()
+                    .fill(feedbackBlue)
+                    .frame(width: 4, height: 4)
+                Text("Feedback")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.8)
+                    .textCase(.uppercase)
             }
-            .foregroundColor(.white)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(feedbackBlue.opacity(0.25))
-            .cornerRadius(4)
+            .foregroundColor(feedbackBlue)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .stroke(feedbackBlue.opacity(0.22), lineWidth: 1)
+            )
             Spacer()
             Text(post.relativeTime)
-                .font(.subheadline)
+                .font(.caption2.weight(.medium))
+                .monospacedDigit()
                 .foregroundColor(.white.opacity(0.5))
         }
     }
@@ -137,10 +148,14 @@ struct PollCardView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption)
-                        Text("Thanks for your input!")
-                            .font(.caption.weight(.semibold))
+                        Text("Thanks — tuning your feed.")
+                            .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundColor(feedbackBlue)
+                    .foregroundColor(.green)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.green.opacity(0.12))
+                    .clipShape(Capsule())
                 }
             }
             .padding(.horizontal, 16)

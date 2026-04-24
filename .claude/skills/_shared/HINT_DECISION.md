@@ -26,6 +26,7 @@ The iOS client reads `scheduled_at` **first**, then falls back to extracting a d
 - If you don't have a machine-readable timestamp, put a human-readable date in the body (e.g. `"Saturday May 10 at 2pm"`) — the client will pull it out via `NSDataDetector`.
 - Doing both is best: the skill can't tell which deployment of the iOS client the viewer is on, and older builds that predate scheduled_at will only honor body text.
 
+
 ## Red-flag rules (automatic wrong-hint detection)
 
 These are the exact bugs we shipped on 2026-04-20. If any of these are true, pick a different hint:

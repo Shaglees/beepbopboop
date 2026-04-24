@@ -89,6 +89,7 @@ Each returned row already has `watch_url`, `embed_url`, `title`, `channel_title`
 
 The catalog is fed by daily ingest of wimp.com's RSS feed (run manually via `backend/cmd/wimpingest` — a scheduled worker is a follow-up). If the catalog is empty / stale, a skill should degrade gracefully to a non-video post rather than invent a URL.
 
+
 ## What to pin into the rest of the session
 
 After bootstrap, the calling skill should have the following in working memory for the rest of its turn:

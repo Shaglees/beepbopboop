@@ -79,6 +79,7 @@ func main() {
 	videoRepo := repository.NewVideoRepo(db)
 	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
 	postEmbeddingRepo := repository.NewPostEmbeddingRepo(db)
+	modelVersionRepo := ranking.NewModelVersionRepo(db)
 
 	if cfg.RankerModelPath != "" {
 		ranker, err := ranking.NewRanker(cfg.RankerModelPath)
@@ -93,6 +94,7 @@ func main() {
 			})
 			slog.Info("ForYou ML ranking enabled",
 				"path", cfg.RankerModelPath, "input_dim", ranker.InputDim(), "blend", cfg.MLRankBlend)
+			ranker.StartWatcher(context.Background(), cfg.RankerModelPath, 5*time.Minute)
 		}
 	}
 
@@ -130,6 +132,8 @@ func main() {
 	reactionsH := handler.NewReactionsHandler(userRepo, agentRepo, reactionRepo)
 	pushTokenH := handler.NewPushTokenHandler(userRepo, pushTokenRepo)
 	calendarH := handler.NewCalendarHandler(userRepo, calendarRepo, userSettingsRepo)
+	deploymentGate := ranking.NewDeploymentGate(0.02)
+	mlAdminH := handler.NewMLAdminHandler(modelVersionRepo, deploymentGate)
 	weatherSvc := weather.NewService()
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
@@ -217,9 +221,13 @@ func main() {
 		r.Delete("/user/templates/{hint}", templatesH.DeleteTemplate)
 		r.Post("/admin/experiments", experimentsH.CreateExperiment)
 		r.Get("/admin/experiments/{name}/results", experimentsH.GetResults)
+		r.Get("/admin/ml/versions", mlAdminH.ListVersions)
+		r.Post("/admin/ml/models/{id}/deploy", mlAdminH.DeployVersion)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())
+	retrainWorker := ranking.NewRetrainWorker(modelVersionRepo, 1000, 7*24*time.Hour)
+	go retrainWorker.Run(workerCtx)
 	weatherWorker := weather.NewWorker(weatherSvc, postRepo, userSettingsRepo, 30*time.Minute)
 	go weatherWorker.Run(workerCtx)
 

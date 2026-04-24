@@ -19,6 +19,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
+	"github.com/shanegleeson/beepbopboop/backend/internal/interest"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/ranking"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
@@ -80,6 +81,9 @@ func main() {
 	videoRepo := repository.NewVideoRepo(db)
 	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
 	postEmbeddingRepo := repository.NewPostEmbeddingRepo(db)
+	interestRepo := repository.NewUserInterestRepo(db)
+	lifestyleRepo := repository.NewUserLifestyleRepo(db)
+	contentPrefsRepo := repository.NewUserContentPrefsRepo(db)
 
 	var ranker *ranking.Ranker
 	if cfg.RankerModelPath != "" {
@@ -108,6 +112,7 @@ func main() {
 	meH := handler.NewMeHandler(userRepo)
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo, videoRepo)
+	postH.SetContentPrefsRepo(contentPrefsRepo)
 
 	embedder := embedding.NewEmbedderFromConfig(embedding.ProviderConfig{
 		Provider:             cfg.EmbeddingProvider,
@@ -156,7 +161,8 @@ func main() {
 			slog.Warn("prototype store: initial compute failed", "error", err)
 		}
 	}()
-	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo)
+	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo, interestRepo)
+	profileH := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, contentPrefsRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -204,6 +210,14 @@ func main() {
 		r.Get("/posts/{postID}/responses", feedbackH.GetResponses)
 		r.Get("/creators/nearby", creatorsH.GetNearby)
 		r.Post("/user/interests", onboardingH.SubmitInterests)
+		r.Get("/user/profile", profileH.GetProfileFirebase)
+		r.Put("/user/profile", profileH.UpdateProfileFirebase)
+		r.Put("/user/interests/declared", profileH.SetInterests)
+		r.Post("/user/interests/{id}/promote", profileH.PromoteInterest)
+		r.Post("/user/interests/{id}/dismiss", profileH.DismissInterest)
+		r.Post("/user/interests/{id}/pause", profileH.PauseInterest)
+		r.Put("/user/lifestyle", profileH.SetLifestyle)
+		r.Put("/user/content-prefs", profileH.SetContentPrefs)
 		r.Get("/experiments/{name}/variant", experimentsH.GetVariant)
 	})
 
@@ -227,6 +241,7 @@ func main() {
 		r.Get("/admin/experiments/{name}/results", experimentsH.GetResults)
 		r.Get("/admin/ml/versions", mlAdminH.ListVersions)
 		r.Post("/admin/ml/models/{id}/deploy", mlAdminH.DeployVersion)
+		r.Get("/user/profile", profileH.GetProfileAgent)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())
@@ -246,6 +261,12 @@ func main() {
 
 	embeddingWorker := embedding.NewWorker(userEmbedder, 24*time.Hour)
 	go embeddingWorker.Run(workerCtx)
+
+	interestWorker := interest.NewWorker(db, interestRepo)
+	go interestWorker.Run(workerCtx, 24*time.Hour)
+
+	decayChecker := interest.NewDecayChecker(db, interestRepo, postRepo, os.Getenv("FEEDBACK_AGENT_ID"))
+	go decayChecker.Run(workerCtx, 24*time.Hour)
 
 	videoHealthWorker := videohealth.NewScheduledWorker(videoRepo, videohealth.NewHTTPChecker(nil), 6*time.Hour)
 	go videoHealthWorker.Run(workerCtx)

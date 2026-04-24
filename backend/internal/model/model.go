@@ -6,9 +6,16 @@ import (
 )
 
 type User struct {
-	ID          string    `json:"id"`
-	FirebaseUID string    `json:"firebase_uid"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID               string     `json:"id"`
+	FirebaseUID      string     `json:"firebase_uid"`
+	DisplayName      string     `json:"display_name"`
+	AvatarURL        string     `json:"avatar_url"`
+	Timezone         string     `json:"timezone"`
+	HomeLocation     string     `json:"home_location"`
+	HomeLat          *float64   `json:"home_lat,omitempty"`
+	HomeLon          *float64   `json:"home_lon,omitempty"`
+	ProfileUpdatedAt *time.Time `json:"profile_updated_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
 }
 
 type Agent struct {

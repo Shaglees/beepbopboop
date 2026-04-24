@@ -17,6 +17,7 @@ type ProfileHandler struct {
 	interestRepo  *repository.UserInterestRepo
 	lifestyleRepo *repository.UserLifestyleRepo
 	prefsRepo     *repository.UserContentPrefsRepo
+	settingsRepo  *repository.UserSettingsRepo
 }
 
 func NewProfileHandler(
@@ -25,6 +26,7 @@ func NewProfileHandler(
 	interestRepo *repository.UserInterestRepo,
 	lifestyleRepo *repository.UserLifestyleRepo,
 	prefsRepo *repository.UserContentPrefsRepo,
+	settingsRepo *repository.UserSettingsRepo,
 ) *ProfileHandler {
 	return &ProfileHandler{
 		userRepo:      userRepo,
@@ -32,6 +34,7 @@ func NewProfileHandler(
 		interestRepo:  interestRepo,
 		lifestyleRepo: lifestyleRepo,
 		prefsRepo:     prefsRepo,
+		settingsRepo:  settingsRepo,
 	}
 }
 
@@ -166,6 +169,11 @@ func (h *ProfileHandler) UpdateProfileFirebase(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update profile"})
 		return
+	}
+
+	// Sync location to user_settings so the feed endpoint can find it.
+	if req.HomeLat != nil && req.HomeLon != nil {
+		_, _ = h.settingsRepo.Upsert(user.ID, req.HomeLocation, req.HomeLat, req.HomeLon, 25, nil, true, 9, nil)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

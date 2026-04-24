@@ -42,6 +42,14 @@ struct beepbopboopApp: App {
                         Task { await syncCalendarIfEnabled(api: api) }
                     }
                 }
+                .task(id: authService.isSignedIn) {
+                    guard authService.isSignedIn, !onboardingComplete else { return }
+                    if let profile = try? await api.getProfile(),
+                       !profile.identity.displayName.isEmpty,
+                       !profile.interests.isEmpty {
+                        onboardingComplete = true
+                    }
+                }
                 .fullScreenCover(isPresented: Binding(
                     get: { !onboardingComplete },
                     set: { if !$0 { onboardingComplete = true } }

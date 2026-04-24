@@ -13,6 +13,7 @@ import (
 	"firebase.google.com/go/v4/auth"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/shanegleeson/beepbopboop/backend/internal/ab"
 	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
@@ -138,6 +139,10 @@ func main() {
 	creatorRepo := repository.NewLocalCreatorRepo(db)
 	creatorsH := handler.NewCreatorsHandler(creatorRepo, userRepo, userSettingsRepo)
 
+	experimentRepo := repository.NewExperimentRepo(db)
+	abAssigner := ab.NewAssigner(db)
+	experimentsH := handler.NewExperimentsHandler(abAssigner, userRepo, experimentRepo)
+
 	prototypeStore := embedding.NewPrototypeStore(db)
 	go func() {
 		if err := prototypeStore.Compute(context.Background()); err != nil {
@@ -192,6 +197,7 @@ func main() {
 		r.Get("/posts/{postID}/responses", feedbackH.GetResponses)
 		r.Get("/creators/nearby", creatorsH.GetNearby)
 		r.Post("/user/interests", onboardingH.SubmitInterests)
+		r.Get("/experiments/{name}/variant", experimentsH.GetVariant)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -209,6 +215,8 @@ func main() {
 		r.Get("/user/templates", templatesH.ListTemplatesAgent)
 		r.Put("/user/templates/{hint}", templatesH.UpsertTemplate)
 		r.Delete("/user/templates/{hint}", templatesH.DeleteTemplate)
+		r.Post("/admin/experiments", experimentsH.CreateExperiment)
+		r.Get("/admin/experiments/{name}/results", experimentsH.GetResults)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())

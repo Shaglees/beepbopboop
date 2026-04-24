@@ -85,16 +85,16 @@ func (r *EventRepo) BatchCreate(userID string, events []model.EventInput) error 
 	defer tx.Rollback()
 
 	var b strings.Builder
-	b.WriteString("INSERT INTO post_events (post_id, user_id, event_type, dwell_ms) VALUES ")
+	b.WriteString("INSERT INTO post_events (post_id, user_id, event_type, dwell_ms, ab_variant) VALUES ")
 
-	args := make([]any, 0, len(events)*4)
+	args := make([]any, 0, len(events)*5)
 	for i, e := range events {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		base := i*4 + 1
-		fmt.Fprintf(&b, "($%d, $%d, $%d, $%d)", base, base+1, base+2, base+3)
-		args = append(args, e.PostID, userID, e.EventType, e.DwellMs)
+		base := i*5 + 1
+		fmt.Fprintf(&b, "($%d, $%d, $%d, $%d, $%d)", base, base+1, base+2, base+3, base+4)
+		args = append(args, e.PostID, userID, e.EventType, e.DwellMs, e.ABVariant)
 	}
 
 	_, err = tx.Exec(b.String(), args...)

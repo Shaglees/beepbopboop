@@ -35,53 +35,60 @@ func (w *Worker) Run(ctx context.Context, interval time.Duration) {
 	}
 }
 
-type labelEngagement struct {
-	UserID string
-	Label  string
-	Saves  int
-}
-
 func (w *Worker) RunOnce(ctx context.Context) error {
-	// Find labels with high save engagement per user over last 30 days
 	rows, err := w.db.QueryContext(ctx, `
-		SELECT pe.user_id, unnest(string_to_array(trim(both '[]"' from p.labels), '","')) AS label,
-			COUNT(*) AS saves
-		FROM post_events pe
-		JOIN posts p ON p.id = pe.post_id
-		WHERE pe.event_type = 'save'
-		  AND pe.created_at > NOW() - INTERVAL '30 days'
-		  AND p.labels IS NOT NULL AND p.labels != ''
-		GROUP BY pe.user_id, label
-		HAVING COUNT(*) >= 3
-		ORDER BY saves DESC`)
+		WITH engagement AS (
+			SELECT pe.user_id,
+				unnest(string_to_array(trim(both '[]"' from p.labels), '","')) AS label,
+				CASE
+					WHEN pe.event_type = 'save' THEN 3.0
+					WHEN pe.event_type = 'dwell' THEN 1.0
+					ELSE 0.0
+				END AS weight
+			FROM post_events pe
+			JOIN posts p ON p.id = pe.post_id
+			WHERE pe.created_at > NOW() - INTERVAL '30 days'
+			  AND p.labels IS NOT NULL AND p.labels != ''
+
+			UNION ALL
+
+			SELECT pr.user_id,
+				unnest(string_to_array(trim(both '[]"' from p.labels), '","')) AS label,
+				CASE WHEN pr.reaction = 'more' THEN 5.0 ELSE 0.0 END AS weight
+			FROM post_reactions pr
+			JOIN posts p ON p.id = pr.post_id
+			WHERE pr.reaction = 'more'
+			  AND pr.created_at > NOW() - INTERVAL '30 days'
+			  AND p.labels IS NOT NULL AND p.labels != ''
+		)
+		SELECT user_id, label, SUM(weight) AS score
+		FROM engagement
+		GROUP BY user_id, label
+		HAVING SUM(weight) >= 5.0
+		ORDER BY score DESC`)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
-	var engagements []labelEngagement
+	var count int
 	for rows.Next() {
-		var e labelEngagement
-		if err := rows.Scan(&e.UserID, &e.Label, &e.Saves); err != nil {
+		var userID, label string
+		var score float64
+		if err := rows.Scan(&userID, &label, &score); err != nil {
 			continue
 		}
-		engagements = append(engagements, e)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	for _, e := range engagements {
-		confidence := float64(e.Saves) / 20.0 // 20 saves = 1.0 confidence
+		confidence := score / 30.0 // 30 weighted points = 1.0 confidence
 		if confidence > 1.0 {
 			confidence = 1.0
 		}
-		if err := w.interestRepo.UpsertInferred(e.UserID, e.Label, e.Label, confidence); err != nil {
+		if err := w.interestRepo.UpsertInferred(userID, label, label, confidence); err != nil {
 			slog.Warn("failed to upsert inferred interest",
-				"user_id", e.UserID, "label", e.Label, "error", err)
+				"user_id", userID, "label", label, "error", err)
 		}
+		count++
 	}
 
-	slog.Info("interest inference complete", "engagements_processed", len(engagements))
-	return nil
+	slog.Info("interest inference complete", "interests_upserted", count)
+	return rows.Err()
 }

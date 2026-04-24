@@ -265,6 +265,22 @@ func main() {
 	interestWorker := interest.NewWorker(db, interestRepo)
 	go interestWorker.Run(workerCtx, 24*time.Hour)
 
+	decayChecker := interest.NewDecayChecker(db, interestRepo, postRepo, os.Getenv("FEEDBACK_AGENT_ID"))
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-ticker.C:
+				if err := decayChecker.RunOnce(workerCtx); err != nil {
+					slog.Warn("interest decay check failed", "error", err)
+				}
+			}
+		}
+	}()
+
 	videoHealthWorker := videohealth.NewScheduledWorker(videoRepo, videohealth.NewHTTPChecker(nil), 6*time.Hour)
 	go videoHealthWorker.Run(workerCtx)
 

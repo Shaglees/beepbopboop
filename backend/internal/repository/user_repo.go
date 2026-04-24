@@ -92,3 +92,8 @@ func generateID() (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
+
+// GenerateTestID is exported for use in tests.
+func GenerateTestID() (string, error) {
+	return generateID()
+}

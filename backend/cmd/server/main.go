@@ -19,6 +19,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
+	"github.com/shanegleeson/beepbopboop/backend/internal/interest"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/ranking"
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
@@ -259,6 +260,9 @@ func main() {
 
 	embeddingWorker := embedding.NewWorker(userEmbedder, 24*time.Hour)
 	go embeddingWorker.Run(workerCtx)
+
+	interestWorker := interest.NewWorker(db, interestRepo)
+	go interestWorker.Run(workerCtx, 24*time.Hour)
 
 	videoHealthWorker := videohealth.NewScheduledWorker(videoRepo, videohealth.NewHTTPChecker(nil), 6*time.Hour)
 	go videoHealthWorker.Run(workerCtx)

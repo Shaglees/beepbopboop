@@ -80,6 +80,9 @@ func main() {
 	videoRepo := repository.NewVideoRepo(db)
 	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
 	postEmbeddingRepo := repository.NewPostEmbeddingRepo(db)
+	interestRepo := repository.NewUserInterestRepo(db)
+	lifestyleRepo := repository.NewUserLifestyleRepo(db)
+	contentPrefsRepo := repository.NewUserContentPrefsRepo(db)
 
 	var ranker *ranking.Ranker
 	if cfg.RankerModelPath != "" {
@@ -157,6 +160,7 @@ func main() {
 		}
 	}()
 	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo)
+	profileH := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, contentPrefsRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -204,6 +208,14 @@ func main() {
 		r.Get("/posts/{postID}/responses", feedbackH.GetResponses)
 		r.Get("/creators/nearby", creatorsH.GetNearby)
 		r.Post("/user/interests", onboardingH.SubmitInterests)
+		r.Get("/user/profile", profileH.GetProfileFirebase)
+		r.Put("/user/profile", profileH.UpdateProfileFirebase)
+		r.Put("/user/interests/declared", profileH.SetInterests)
+		r.Post("/user/interests/{id}/promote", profileH.PromoteInterest)
+		r.Post("/user/interests/{id}/dismiss", profileH.DismissInterest)
+		r.Post("/user/interests/{id}/pause", profileH.PauseInterest)
+		r.Put("/user/lifestyle", profileH.SetLifestyle)
+		r.Put("/user/content-prefs", profileH.SetContentPrefs)
 		r.Get("/experiments/{name}/variant", experimentsH.GetVariant)
 	})
 
@@ -227,6 +239,7 @@ func main() {
 		r.Get("/admin/experiments/{name}/results", experimentsH.GetResults)
 		r.Get("/admin/ml/versions", mlAdminH.ListVersions)
 		r.Post("/admin/ml/models/{id}/deploy", mlAdminH.DeployVersion)
+		r.Get("/user/profile", profileH.GetProfileAgent)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())

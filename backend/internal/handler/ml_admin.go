@@ -35,7 +35,8 @@ func (h *MLAdminHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(versions)
 }
 
-// DeployVersion manually deploys a model version after checking the AUC gate.
+// DeployVersion manually deploys a model version using an atomic gate check
+// to prevent TOCTOU races between concurrent deploy requests.
 // Route: POST /admin/ml/models/{id}/deploy (agent-auth)
 func (h *MLAdminHandler) DeployVersion(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
@@ -45,6 +46,7 @@ func (h *MLAdminHandler) DeployVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify the candidate exists before attempting the gate.
 	candidate, err := h.versionRepo.Get(r.Context(), id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load model version"})
@@ -55,26 +57,11 @@ func (h *MLAdminHandler) DeployVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	active, err := h.versionRepo.GetActive(r.Context())
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load active version"})
-		return
-	}
-
-	var currentAUC float64
-	if active != nil {
-		currentAUC = active.AUCROC
-	}
-
-	if !h.gate.ShouldDeploy(currentAUC, candidate.AUCROC) {
+	// MarkDeployedWithGate performs the AUC check and deployment atomically.
+	if err := h.versionRepo.MarkDeployedWithGate(r.Context(), id, h.gate.MinImprovement()); err != nil {
 		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": "deployment blocked: AUC improvement below threshold",
+			"error": "deployment blocked: " + err.Error(),
 		})
-		return
-	}
-
-	if err := h.versionRepo.MarkDeployed(r.Context(), id); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to deploy model version"})
 		return
 	}
 

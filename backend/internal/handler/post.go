@@ -75,9 +75,10 @@ var ValidImageRoles = map[string]bool{
 }
 
 type PostHandler struct {
-	agentRepo *repository.AgentRepo
-	postRepo  *repository.PostRepo
-	videoRepo *repository.VideoRepo
+	agentRepo        *repository.AgentRepo
+	postRepo         *repository.PostRepo
+	videoRepo        *repository.VideoRepo
+	contentPrefsRepo *repository.UserContentPrefsRepo
 
 	embRepo  *embedding.EmbeddingRepo
 	embedder embedding.Embedder
@@ -93,6 +94,10 @@ func NewPostHandler(agentRepo *repository.AgentRepo, postRepo *repository.PostRe
 		postRepo:  postRepo,
 		videoRepo: vr,
 	}
+}
+
+func (h *PostHandler) SetContentPrefsRepo(repo *repository.UserContentPrefsRepo) {
+	h.contentPrefsRepo = repo
 }
 
 func (h *PostHandler) SetEmbeddingPipeline(embRepo *embedding.EmbeddingRepo, embedder embedding.Embedder) {
@@ -1228,6 +1233,23 @@ func (h *PostHandler) GetPostStats(w http.ResponseWriter, r *http.Request) {
 		stats.Periods = append(stats.Periods, *ps)
 	}
 
+	resp := map[string]interface{}{
+		"periods": stats.Periods,
+	}
+
+	// Include user's target frequency from content prefs
+	if h.contentPrefsRepo != nil {
+		prefs, err := h.contentPrefsRepo.List(agent.UserID)
+		if err == nil {
+			for _, p := range prefs {
+				if p.Category == nil && p.MaxPerDay != nil {
+					resp["target_posts_per_day"] = *p.MaxPerDay
+					break
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	json.NewEncoder(w).Encode(resp)
 }

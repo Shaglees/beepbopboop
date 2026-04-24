@@ -112,6 +112,7 @@ func main() {
 	meH := handler.NewMeHandler(userRepo)
 	agentH := handler.NewAgentHandler(userRepo, agentRepo, tokenRepo)
 	postH := handler.NewPostHandler(agentRepo, postRepo, videoRepo)
+	postH.SetContentPrefsRepo(contentPrefsRepo)
 
 	embedder := embedding.NewEmbedderFromConfig(embedding.ProviderConfig{
 		Provider:             cfg.EmbeddingProvider,

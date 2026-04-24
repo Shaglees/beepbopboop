@@ -216,8 +216,7 @@ private struct EntertainmentFooter: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()
                 Task {
-                    do { try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save") }
-                    catch { isBookmarked = wasSaved }
+                    await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save")
                 }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
@@ -265,8 +264,7 @@ private struct EntertainmentFallbackCard: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     isBookmarked.toggle()
                     Task {
-                        do { try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save") }
-                        catch { isBookmarked = wasSaved }
+                        await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save")
                     }
                 } label: {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")

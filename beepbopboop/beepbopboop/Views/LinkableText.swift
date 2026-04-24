@@ -36,7 +36,7 @@ struct LinkableText: UIViewRepresentable {
         // Use proposed width when available; never exceed it to prevent overflow
         guard let proposedWidth = proposal.width, proposedWidth > 0, proposedWidth < .infinity else {
             // No valid width proposed — let SwiftUI figure it out
-            let fallback = UIScreen.main.bounds.width - 32
+            let fallback = (uiView.window?.screen.bounds.width ?? 390) - 32
             let fittingSize = uiView.sizeThatFits(CGSize(width: fallback, height: CGFloat.greatestFiniteMagnitude))
             return CGSize(width: fallback, height: fittingSize.height)
         }

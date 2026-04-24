@@ -434,19 +434,16 @@ private struct EventMiniMap: View {
     let longitude: Double
 
     var body: some View {
-        Map(coordinateRegion: .constant(MKCoordinateRegion(
+        Map(initialPosition: .region(MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-        )), annotationItems: [MapPin(coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))]) { pin in
-            MapMarker(coordinate: pin.coordinate, tint: Color(red: 0.133, green: 0.773, blue: 0.369))
+        ))) {
+            Marker("", coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+                .tint(Color(red: 0.133, green: 0.773, blue: 0.369))
         }
-        .disabled(true)
+        .mapControlVisibility(.hidden)
+        .allowsHitTesting(false)
     }
-}
-
-private struct MapPin: Identifiable {
-    let id = UUID()
-    let coordinate: CLLocationCoordinate2D
 }
 
 // MARK: - Fitness Card Footer
@@ -483,8 +480,7 @@ private struct FitnessCardFooter: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 isBookmarked.toggle()
                 Task {
-                    do { try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save") }
-                    catch { isBookmarked = wasSaved }
+                    await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save")
                 }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")

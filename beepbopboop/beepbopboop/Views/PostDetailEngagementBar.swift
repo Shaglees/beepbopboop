@@ -21,11 +21,7 @@ struct PostDetailEngagementBar: View {
                 withAnimation(.bouncy) { isBookmarked.toggle() }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 Task {
-                    do {
-                        try await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save")
-                    } catch {
-                        withAnimation(.bouncy) { isBookmarked = wasSaved }
-                    }
+                    await apiService.trackEvent(postID: post.id, eventType: wasSaved ? "unsave" : "save")
                 }
             } label: {
                 Label(

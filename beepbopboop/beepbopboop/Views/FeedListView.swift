@@ -19,6 +19,12 @@ struct FeedListView: View {
                 feedList
             }
         }
+        .sheet(item: $selectedPost) { post in
+            NavigationStack {
+                PostDetailView(post: post)
+            }
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Subviews
@@ -52,12 +58,6 @@ struct FeedListView: View {
         .refreshable { await viewModel.refresh() }
         .onAppear { viewModel.restartPollingIfNeeded() }
         .onDisappear { viewModel.stopPolling() }
-        .sheet(item: $selectedPost) { post in
-            NavigationStack {
-                PostDetailView(post: post)
-            }
-            .presentationDragIndicator(.visible)
-        }
     }
 
     private var skeletonLoadingView: some View {

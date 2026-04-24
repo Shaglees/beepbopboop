@@ -139,16 +139,10 @@ struct FeedListView: View {
 
 // MARK: - Feed Card Row
 //
-// Wrapping the card in a Button { } made nested buttons unreliable: taps on
-// the reaction Menu, ShareLink, or bookmark would sometimes bubble up to the
-// outer card button (opening the detail sheet) or get swallowed outright
-// depending on hit-testing order in that particular SwiftUI build.
-//
-// `onTapGesture` on a plain container behaves differently from a nested
-// Button: SwiftUI hit-tests inner Buttons *first* and only fires the tap
-// gesture on the parent when nothing inside claimed it. We keep the pressed
-// scale animation via a separate, non-tap LongPressGesture that reads the
-// pressing state but never produces a "tap" action of its own.
+// `onTapGesture` on a plain container lets SwiftUI hit-test inner Buttons
+// first and only fires the tap gesture on the parent when nothing inside
+// claimed it. Swipe reactions use UIKit UISwipeGestureRecognizer via
+// SwipeGestureView to avoid conflicting with scroll/pull-to-refresh.
 
 private struct FeedCardRow: View {
     let post: Post

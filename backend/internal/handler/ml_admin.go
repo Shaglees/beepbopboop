@@ -1,23 +1,24 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 	"github.com/shanegleeson/beepbopboop/backend/internal/ranking"
 )
 
 // MLAdminHandler exposes model versioning endpoints for agents and operators.
 type MLAdminHandler struct {
-	versionRepo *ranking.ModelVersionRepo
-	gate        *ranking.DeploymentGate
+	versionRepo     *ranking.ModelVersionRepo
+	gate            *ranking.DeploymentGate
+	operatorAgentID string // only this agent may deploy; empty disables the check
 }
 
-func NewMLAdminHandler(versionRepo *ranking.ModelVersionRepo, gate *ranking.DeploymentGate) *MLAdminHandler {
-	return &MLAdminHandler{versionRepo: versionRepo, gate: gate}
+func NewMLAdminHandler(versionRepo *ranking.ModelVersionRepo, gate *ranking.DeploymentGate, operatorAgentID string) *MLAdminHandler {
+	return &MLAdminHandler{versionRepo: versionRepo, gate: gate, operatorAgentID: operatorAgentID}
 }
 
 // ListVersions returns all model versions sorted newest-first.
@@ -31,13 +32,20 @@ func (h *MLAdminHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	if versions == nil {
 		versions = []model.ModelVersion{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(versions)
+	writeJSON(w, http.StatusOK, versions)
 }
 
 // DeployVersion manually deploys a model version after checking the AUC gate.
-// Route: POST /admin/ml/models/{id}/deploy (agent-auth)
+// Route: POST /admin/ml/models/{id}/deploy (agent-auth, operator only)
 func (h *MLAdminHandler) DeployVersion(w http.ResponseWriter, r *http.Request) {
+	if h.operatorAgentID != "" {
+		caller := middleware.AgentIDFromContext(r.Context())
+		if caller != h.operatorAgentID {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "only the operator agent may deploy models"})
+			return
+		}
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {

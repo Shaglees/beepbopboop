@@ -284,6 +284,8 @@ func validateBias(name string, b []float32, wantLen int) error {
 	return nil
 }
 
+// project computes w @ v. If v is shorter than a row, only the covered columns
+// contribute (defense-in-depth; validateCheckpoint prevents this in practice).
 func project(w [][]float32, v []float32) []float32 {
 	out := make([]float32, len(w))
 	for i, row := range w {

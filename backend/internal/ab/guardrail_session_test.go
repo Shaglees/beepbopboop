@@ -27,6 +27,7 @@ func TestGuardrail_PausesOnSessionDropRegression(t *testing.T) {
 	postRepo := repository.NewPostRepo(db)
 
 	expName := "session-drop-exp"
+	db.Exec("INSERT INTO ab_experiments (name, treatment_pct, status) VALUES ($1, 50, 'running') ON CONFLICT DO NOTHING", expName)
 
 	controlUser, _ := userRepo.FindOrCreateByFirebaseUID("firebase-sd-control")
 	agent, _ := agentRepo.Create(controlUser.ID, "sd-agent")
@@ -85,6 +86,7 @@ func TestGuardrail_NoActionWhenSessionsAreEqual(t *testing.T) {
 	postRepo := repository.NewPostRepo(db)
 
 	expName := "session-equal-exp"
+	db.Exec("INSERT INTO ab_experiments (name, treatment_pct, status) VALUES ($1, 50, 'running') ON CONFLICT DO NOTHING", expName)
 
 	controlUser, _ := userRepo.FindOrCreateByFirebaseUID("firebase-se-control")
 	agent, _ := agentRepo.Create(controlUser.ID, "se-agent")

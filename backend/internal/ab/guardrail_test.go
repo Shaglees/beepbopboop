@@ -20,6 +20,7 @@ func TestGuardrail_PausesTreatmentOnSaveRateRegression(t *testing.T) {
 	postRepo := repository.NewPostRepo(db)
 
 	expName := "save-regression-exp"
+	db.Exec("INSERT INTO ab_experiments (name, treatment_pct, status) VALUES ($1, 50, 'running') ON CONFLICT DO NOTHING", expName)
 
 	controlUser, _ := userRepo.FindOrCreateByFirebaseUID("firebase-gr-control")
 	agent, _ := agentRepo.Create(controlUser.ID, "guardrail-agent")
@@ -76,6 +77,7 @@ func TestGuardrail_NoActionWhenMetricsImprove(t *testing.T) {
 	postRepo := repository.NewPostRepo(db)
 
 	expName := fmt.Sprintf("save-improve-exp-%d", time.Now().UnixNano())
+	db.Exec("INSERT INTO ab_experiments (name, treatment_pct, status) VALUES ($1, 50, 'running') ON CONFLICT DO NOTHING", expName)
 
 	controlUser, _ := userRepo.FindOrCreateByFirebaseUID("firebase-gi-control")
 	agent, _ := agentRepo.Create(controlUser.ID, "gi-agent")

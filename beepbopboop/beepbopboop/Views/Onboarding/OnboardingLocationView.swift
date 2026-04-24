@@ -4,7 +4,7 @@ import SwiftUI
 struct OnboardingLocationView: View {
     @Binding var profile: UserProfileIdentity
     let onNext: () -> Void
-    @StateObject private var locationManager = LocationHelper()
+    @State private var locationManager = LocationHelper()
 
     var body: some View {
         VStack(spacing: 24) {
@@ -45,7 +45,7 @@ struct OnboardingLocationView: View {
     }
 }
 
-class LocationHelper: NSObject, ObservableObject, CLLocationManagerDelegate {
+class LocationHelper: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var completion: ((Double, Double, String?, String?) -> Void)?
 

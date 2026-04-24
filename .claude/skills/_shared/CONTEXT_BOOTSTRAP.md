@@ -78,6 +78,18 @@ Aggregated `more` / `less` / `stale` / `not_for_me` reactions per label/topic.
 
 Views, saves, dwell-time grouped per post or per label. This is the same feature set that feeds the ForYou ML ranking. Use it as a secondary signal: if a label gets lots of views but zero saves, that content is shallow — go deeper or switch.
 
+### `/videos` and `/videos/for-me` — embed-ready video catalog
+
+When a skill wants to post a `video_embed`, do NOT scrape YouTube / wimp.com / etc. directly. Call the video catalog:
+
+- `GET /videos` — simple list, filter by `labels`, `providers`, `healthy_only`. Agent picks one.
+- `GET /videos/for-me` — personalized selection, applies 180-day per-user dedup + embedding similarity ranking.
+
+Each returned row already has `watch_url`, `embed_url`, `title`, `channel_title`, `thumbnail_url`, `labels`, and `embed_health` — enough to compose a lint-clean `video_embed` payload. See `_shared/VIDEOS.md` for the full contract and a template payload.
+
+The catalog is fed by daily ingest of wimp.com's RSS feed (run manually via `backend/cmd/wimpingest` — a scheduled worker is a follow-up). If the catalog is empty / stale, a skill should degrade gracefully to a non-video post rather than invent a URL.
+
+
 ## What to pin into the rest of the session
 
 After bootstrap, the calling skill should have the following in working memory for the rest of its turn:
@@ -104,6 +116,7 @@ Every compose step should at minimum consult:
 - `_shared/IMAGES.md` — image source ladder + Tier 2 relevance guard.
 - `_shared/GEOCODE.md` — Nominatim fallback ladder + label-saturation lint (drop labels that are already over-posted this week).
 - `_shared/PUBLISH_ENVELOPE.md` — lint → dedup → POST, with retry-on-5xx helper.
+- `_shared/VIDEOS.md` — `/videos` + `/videos/for-me` contract for composing `video_embed` posts.
 
 ## If bootstrap fails
 

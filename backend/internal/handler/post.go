@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -149,32 +150,39 @@ func validateURL(raw string) string {
 	return ""
 }
 
-// containsDateToken is a lightweight check that mirrors the iOS DateCard's
-// NSDataDetector-based date extraction: if the title or body obviously talks
-// about a specific date/time, the client can render the badge sensibly even
-// without a scheduled_at field.
+// dateTokenPattern matches text that the iOS DateCard's NSDataDetector is
+// likely to recognise as a specific date. It uses word boundaries so embedded
+// substrings don't match ("facebook" won't trigger on "feb", "smartphones"
+// won't trigger on "mar", etc.).
 //
-// The match is intentionally loose: full month names, short month names,
-// weekday names, or a "Month Day" pattern. We don't try to parse; we only
-// decide whether the event-without-date warning should fire.
+// Covered:
+//   - Full month names (January–December).
+//   - Short month names with word boundary (Jan, Feb, … Dec).
+//   - Full weekday names (Monday–Sunday).
+//   - Time-relative phrases like tonight / tomorrow / this weekend.
+//
+// Not covered on purpose: bare year ("2027"), bare numbers ("10th"), relative
+// phrases like "next month" — these don't reliably read as a specific date to
+// NSDataDetector so we shouldn't lie to the skill about having a date.
+var dateTokenPattern = regexp.MustCompile(
+	`(?i)\b(?:` +
+		`january|february|march|april|june|july|august|september|october|november|december` +
+		`|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec` +
+		`|monday|tuesday|wednesday|thursday|friday|saturday|sunday` +
+		`|tonight|tomorrow|(?:this|next)\s+weekend` +
+		`)\b` +
+		// Special "may" form: only a date when directly followed by a 1-2 digit day.
+		`|\bmay\s+\d{1,2}\b`,
+)
+
+// containsDateToken reports whether s contains a recognizable date reference.
+// Used by the event_without_date lint to decide whether a skill's event post
+// will render with a visible date badge on the iOS client.
 func containsDateToken(s string) bool {
 	if s == "" {
 		return false
 	}
-	lower := strings.ToLower(s)
-	tokens := []string{
-		"january", "february", "march", "april", "may", "june", "july",
-		"august", "september", "october", "november", "december",
-		"jan ", "feb ", "mar ", "apr ", "jun ", "jul ", "aug ", "sep ", "sept ",
-		"oct ", "nov ", "dec ",
-		"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-		"tonight", "tomorrow", "this weekend", "next weekend",
-	}
-	for _, tok := range tokens {
-		if strings.Contains(lower, tok) {
-			return true
-		}
-	}
+	return dateTokenPattern.MatchString(s)
 	return false
 }
 
@@ -324,23 +332,6 @@ func validatePost(req *createPostRequest) validationResult {
 				Message: fmt.Sprintf("display_hint %q renders a date badge but no scheduled_at was provided and no date token found in title/body. For evergreen content prefer display_hint=\"place\" or \"card\".", req.DisplayHint),
 			})
 		}
-	}
-
-	// Place hint + external_url guardrail.
-	//
-	// PlaceCard in iOS does not render external_url. Skills that put a booking
-	// or info link in external_url end up with an invisible CTA. Warn so the
-	// skill inlines the URL in the body text, or picks a hint whose card
-	// actually shows external_url (article, restaurant, destination).
-	//
-	// When PlaceCard is updated to render a "Visit" button, remove this warning
-	// in the same PR.
-	if req.DisplayHint == "place" && req.ExternalURL != "" {
-		warns = append(warns, validationIssue{
-			Field:   "external_url",
-			Code:    "place_external_url_not_rendered",
-			Message: "PlaceCard does not currently render external_url; inline the link in the body text, or use display_hint=\"restaurant\"/\"destination\" which do surface CTAs.",
-		})
 	}
 
 	// --- external_url schema validation for structured hints ---

@@ -1,21 +1,22 @@
 package ranking
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
 	"os"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 // checkpoint is the JSON serialisation of a trained two-tower model.
-// Each tower has two linear layers (W1→ReLU→W2) followed by L2 normalisation.
-// Weights are [out_dim][in_dim]; biases are [out_dim].
 type checkpoint struct {
-	InputDim int `json:"input_dim"`
+	InputDim  int `json:"input_dim"`
 	HiddenDim int `json:"hidden_dim"`
-	ReprDim  int `json:"repr_dim"`
+	ReprDim   int `json:"repr_dim"`
 
 	UserW1 [][]float32 `json:"user_weights_1"`
 	UserB1 []float32   `json:"user_bias_1"`
@@ -28,14 +29,9 @@ type checkpoint struct {
 	PostB2 []float32   `json:"post_bias_2"`
 }
 
-// Ranker scores (user, post) embedding pairs using a two-tower model.
-// Each tower applies: L2Norm(W2 @ ReLU(W1 @ x + b1) + b2)
-// The dot product of the two unit-norm representations is mapped to [0, 1].
-//
-// For inference at scale:
-//   - user repr is computed once per request via ProjectUser
-//   - post reprs are cached and reused across users via ProjectPost
-type Ranker struct {
+// rankerWeights holds all immutable weight data for one model version.
+// It is swapped atomically so in-flight Score calls always see a consistent set.
+type rankerWeights struct {
 	userW1, userW2 [][]float32
 	userB1, userB2 []float32
 	postW1, postW2 [][]float32
@@ -45,13 +41,159 @@ type Ranker struct {
 	reprDim        int
 }
 
-// NewRanker loads a checkpoint from the JSON file at path and returns a ready
-// Ranker. Returns (nil, nil) when path is empty so callers can disable ML without error.
-// Returns a descriptive error if the file is missing or malformed when path is set.
+// Ranker scores (user, post) pairs using a two-tower model.
+// Weights are held behind an atomic pointer so Reload never blocks in-flight calls.
+type Ranker struct {
+	weights atomic.Pointer[rankerWeights]
+}
+
+// NewRanker loads a checkpoint from the JSON file at path and returns a ready Ranker.
+// Returns (nil, nil) when path is empty so callers can disable ML without error.
 func NewRanker(path string) (*Ranker, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, nil
 	}
+	w, err := loadWeights(path)
+	if err != nil {
+		return nil, err
+	}
+	r := &Ranker{}
+	r.weights.Store(w)
+	return r, nil
+}
+
+// Reload atomically replaces the model weights with the checkpoint at path.
+// Returns an error and leaves the current weights intact if loading fails.
+func (r *Ranker) Reload(path string) error {
+	w, err := loadWeights(path)
+	if err != nil {
+		return err
+	}
+	r.weights.Store(w)
+	return nil
+}
+
+// StartWatcher polls path for mtime changes at interval and calls Reload on change.
+func (r *Ranker) StartWatcher(ctx context.Context, path string, interval time.Duration) {
+	go func() {
+		var lastMod time.Time
+		if fi, err := os.Stat(path); err == nil {
+			lastMod = fi.ModTime()
+		}
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				fi, err := os.Stat(path)
+				if err != nil {
+					continue
+				}
+				if fi.ModTime().After(lastMod) {
+					lastMod = fi.ModTime()
+					if err := r.Reload(path); err != nil {
+						slog.Warn("ranker: hot-reload failed", "path", path, "error", err)
+					} else {
+						slog.Info("ranker: hot-reloaded checkpoint", "path", path)
+					}
+				}
+			}
+		}
+	}()
+}
+
+// InputDim returns the expected dimension of user and post input vectors.
+func (r *Ranker) InputDim() int { return r.weights.Load().inputDim }
+
+// ReprDim returns the dimension of the L2-normalised representation vectors.
+func (r *Ranker) ReprDim() int { return r.weights.Load().reprDim }
+
+// Score returns a relevance score in [0, 1] for a single (user, post) pair.
+func (r *Ranker) Score(userVec, postVec []float32) (float32, error) {
+	w := r.weights.Load()
+	if containsNaN(userVec) || containsNaN(postVec) {
+		slog.Warn("ranker: NaN in input vector, returning 0.0")
+		return 0.0, nil
+	}
+	if err := checkDims(w, len(userVec), len(postVec)); err != nil {
+		return 0, err
+	}
+	uRepr := towerForward(w.userW1, w.userB1, w.userW2, w.userB2, userVec)
+	pRepr := towerForward(w.postW1, w.postB1, w.postW2, w.postB2, postVec)
+	return clamp01((dot(uRepr, pRepr) + 1) / 2), nil
+}
+
+// ScoreBatch scores one user against multiple post candidates.
+func (r *Ranker) ScoreBatch(userVec []float32, postVecs [][]float32) ([]float32, error) {
+	w := r.weights.Load()
+	scores := make([]float32, len(postVecs))
+	if len(postVecs) == 0 {
+		return scores, nil
+	}
+	if containsNaN(userVec) {
+		slog.Warn("ranker: NaN in user vector, returning all-zero batch scores")
+		return scores, nil
+	}
+	if len(userVec) != w.inputDim {
+		return nil, fmt.Errorf("ranker: user vec dim %d != input_dim %d", len(userVec), w.inputDim)
+	}
+	uRepr := towerForward(w.userW1, w.userB1, w.userW2, w.userB2, userVec)
+	for i, pv := range postVecs {
+		if containsNaN(pv) || len(pv) != w.inputDim {
+			scores[i] = 0.0
+			continue
+		}
+		pRepr := towerForward(w.postW1, w.postB1, w.postW2, w.postB2, pv)
+		scores[i] = clamp01((dot(uRepr, pRepr) + 1) / 2)
+	}
+	return scores, nil
+}
+
+// ProjectUser returns the L2-normalised representation for a user vector.
+func (r *Ranker) ProjectUser(userVec []float32) ([]float32, error) {
+	w := r.weights.Load()
+	if containsNaN(userVec) {
+		return make([]float32, w.reprDim), nil
+	}
+	if len(userVec) != w.inputDim {
+		return nil, fmt.Errorf("ranker: user vec dim %d != input_dim %d", len(userVec), w.inputDim)
+	}
+	return towerForward(w.userW1, w.userB1, w.userW2, w.userB2, userVec), nil
+}
+
+// ProjectPost returns the L2-normalised representation for a post vector.
+func (r *Ranker) ProjectPost(postVec []float32) ([]float32, error) {
+	w := r.weights.Load()
+	if containsNaN(postVec) {
+		return make([]float32, w.reprDim), nil
+	}
+	if len(postVec) != w.inputDim {
+		return nil, fmt.Errorf("ranker: post vec dim %d != input_dim %d", len(postVec), w.inputDim)
+	}
+	return towerForward(w.postW1, w.postB1, w.postW2, w.postB2, postVec), nil
+}
+
+// ScoreBatchFromReprs scores a pre-projected user repr against pre-projected post reprs.
+func (r *Ranker) ScoreBatchFromReprs(userRepr []float32, postReprs [][]float32) ([]float32, error) {
+	w := r.weights.Load()
+	if len(userRepr) != w.reprDim {
+		return nil, fmt.Errorf("ranker: user repr dim %d != repr_dim %d", len(userRepr), w.reprDim)
+	}
+	scores := make([]float32, len(postReprs))
+	for i, pr := range postReprs {
+		if len(pr) != w.reprDim {
+			return nil, fmt.Errorf("ranker: post repr[%d] dim %d != repr_dim %d", i, len(pr), w.reprDim)
+		}
+		scores[i] = clamp01((dot(userRepr, pr) + 1) / 2)
+	}
+	return scores, nil
+}
+
+// --- internal helpers ---
+
+func loadWeights(path string) (*rankerWeights, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("ranker: read %s: %w", path, err)
@@ -63,7 +205,7 @@ func NewRanker(path string) (*Ranker, error) {
 	if err := validateCheckpoint(&cp); err != nil {
 		return nil, fmt.Errorf("ranker: invalid checkpoint: %w", err)
 	}
-	return &Ranker{
+	return &rankerWeights{
 		userW1:    cp.UserW1,
 		userB1:    cp.UserB1,
 		userW2:    cp.UserW2,
@@ -78,113 +220,18 @@ func NewRanker(path string) (*Ranker, error) {
 	}, nil
 }
 
-// InputDim returns the expected dimension of user and post input vectors.
-func (r *Ranker) InputDim() int { return r.inputDim }
-
-// ReprDim returns the dimension of the L2-normalised representation vectors.
-func (r *Ranker) ReprDim() int { return r.reprDim }
-
-// Score returns a relevance score in [0, 1] for a single (user, post) pair.
-// Returns 0.0 (not an error) if either vector contains NaN so that callers
-// can safely use the score in feed ranking without propagating NaN.
-// Returns an error if either vector has the wrong dimension.
-func (r *Ranker) Score(userVec, postVec []float32) (float32, error) {
-	if containsNaN(userVec) || containsNaN(postVec) {
-		slog.Warn("ranker: NaN in input vector, returning 0.0")
-		return 0.0, nil
-	}
-	if err := r.checkDims(len(userVec), len(postVec)); err != nil {
-		return 0, err
-	}
-	uRepr := r.towerForward(r.userW1, r.userB1, r.userW2, r.userB2, userVec)
-	pRepr := r.towerForward(r.postW1, r.postB1, r.postW2, r.postB2, postVec)
-	return clamp01((dot(uRepr, pRepr) + 1) / 2), nil
-}
-
-// ScoreBatch scores one user against multiple post candidates in a single call.
-// The user vector is projected once; post vectors are projected individually.
-// Returns one score per candidate in the same order as postVecs.
-// NaN candidates receive score 0.0. Wrong-dimension candidates receive score 0.0.
-// Returns an error only if userVec has the wrong dimension.
-func (r *Ranker) ScoreBatch(userVec []float32, postVecs [][]float32) ([]float32, error) {
-	scores := make([]float32, len(postVecs))
-	if len(postVecs) == 0 {
-		return scores, nil
-	}
-	if containsNaN(userVec) {
-		slog.Warn("ranker: NaN in user vector, returning all-zero batch scores")
-		return scores, nil
-	}
-	if len(userVec) != r.inputDim {
-		return nil, fmt.Errorf("ranker: user vec dim %d != input_dim %d",
-			len(userVec), r.inputDim)
-	}
-	uRepr := r.towerForward(r.userW1, r.userB1, r.userW2, r.userB2, userVec)
-	for i, pv := range postVecs {
-		if containsNaN(pv) || len(pv) != r.inputDim {
-			scores[i] = 0.0
-			continue
-		}
-		pRepr := r.towerForward(r.postW1, r.postB1, r.postW2, r.postB2, pv)
-		scores[i] = clamp01((dot(uRepr, pRepr) + 1) / 2)
-	}
-	return scores, nil
-}
-
-// ProjectUser returns the L2-normalised representation for a user vector.
-// Pre-computing this once per request and reusing it with ScoreBatchFromReprs
-// avoids redundant projection work across many candidates.
-func (r *Ranker) ProjectUser(userVec []float32) ([]float32, error) {
-	if containsNaN(userVec) {
-		return make([]float32, r.reprDim), nil
-	}
-	if len(userVec) != r.inputDim {
-		return nil, fmt.Errorf("ranker: user vec dim %d != input_dim %d",
-			len(userVec), r.inputDim)
-	}
-	return r.towerForward(r.userW1, r.userB1, r.userW2, r.userB2, userVec), nil
-}
-
-// ProjectPost returns the L2-normalised representation for a post vector.
-// Cache this per post to avoid recomputing across user requests.
-func (r *Ranker) ProjectPost(postVec []float32) ([]float32, error) {
-	if containsNaN(postVec) {
-		return make([]float32, r.reprDim), nil
-	}
-	if len(postVec) != r.inputDim {
-		return nil, fmt.Errorf("ranker: post vec dim %d != input_dim %d",
-			len(postVec), r.inputDim)
-	}
-	return r.towerForward(r.postW1, r.postB1, r.postW2, r.postB2, postVec), nil
-}
-
-// ScoreBatchFromReprs scores a pre-projected user repr against pre-projected post
-// reprs. This is the fast path for feed ranking when post reprs are cached.
-// Returns an error if any repr has the wrong dimension.
-func (r *Ranker) ScoreBatchFromReprs(userRepr []float32, postReprs [][]float32) ([]float32, error) {
-	if len(userRepr) != r.reprDim {
-		return nil, fmt.Errorf("ranker: user repr dim %d != repr_dim %d",
-			len(userRepr), r.reprDim)
-	}
-	scores := make([]float32, len(postReprs))
-	for i, pr := range postReprs {
-		if len(pr) != r.reprDim {
-			return nil, fmt.Errorf("ranker: post repr[%d] dim %d != repr_dim %d",
-				i, len(pr), r.reprDim)
-		}
-		scores[i] = clamp01((dot(userRepr, pr) + 1) / 2)
-	}
-	return scores, nil
-}
-
-// --- helpers ---
-
-// towerForward applies the two-layer tower: L2Norm(W2 @ ReLU(W1 @ x + b1) + b2)
-func (r *Ranker) towerForward(w1 [][]float32, b1 []float32, w2 [][]float32, b2 []float32, x []float32) []float32 {
+func towerForward(w1 [][]float32, b1 []float32, w2 [][]float32, b2 []float32, x []float32) []float32 {
 	hidden := addBias(project(w1, x), b1)
 	activated := relu(hidden)
 	out := addBias(project(w2, activated), b2)
 	return l2norm(out)
+}
+
+func checkDims(w *rankerWeights, userLen, postLen int) error {
+	if userLen != w.inputDim || postLen != w.inputDim {
+		return fmt.Errorf("ranker: expected input_dim=%d, got user=%d post=%d", w.inputDim, userLen, postLen)
+	}
+	return nil
 }
 
 func validateCheckpoint(cp *checkpoint) error {
@@ -237,16 +284,6 @@ func validateBias(name string, b []float32, wantLen int) error {
 	return nil
 }
 
-func (r *Ranker) checkDims(userLen, postLen int) error {
-	if userLen != r.inputDim || postLen != r.inputDim {
-		return fmt.Errorf("ranker: expected input_dim=%d, got user=%d post=%d",
-			r.inputDim, userLen, postLen)
-	}
-	return nil
-}
-
-// project computes w @ v. If v is shorter than a row, only the covered columns
-// contribute (defense-in-depth; validateCheckpoint prevents this in practice).
 func project(w [][]float32, v []float32) []float32 {
 	out := make([]float32, len(w))
 	for i, row := range w {
@@ -300,7 +337,6 @@ func l2norm(v []float32) []float32 {
 	return out
 }
 
-// dot returns the inner product of a and b. Returns 0 if lengths differ.
 func dot(a, b []float32) float32 {
 	if len(a) != len(b) {
 		return 0

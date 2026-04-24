@@ -316,5 +316,17 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_ab_assignments_experiment ON ab_assignments(experiment)")
 	db.Exec("ALTER TABLE post_events ADD COLUMN IF NOT EXISTS ab_variant TEXT")
 
+	// ML model versioning — tracks trained checkpoints and deployment history
+	db.Exec(`CREATE TABLE IF NOT EXISTS model_versions (
+		id          BIGSERIAL PRIMARY KEY,
+		version     TEXT NOT NULL UNIQUE,
+		model_path  TEXT NOT NULL,
+		auc_roc     DOUBLE PRECISION NOT NULL DEFAULT 0,
+		status      TEXT NOT NULL DEFAULT 'trained',
+		trained_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		deployed_at TIMESTAMPTZ
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_model_versions_status ON model_versions(status, trained_at DESC)")
+
 	return db, nil
 }

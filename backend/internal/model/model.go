@@ -395,3 +395,14 @@ type CreateCreatorRequest struct {
 	Source       string          `json:"source"`
 	ImageURL     string          `json:"image_url"`
 }
+
+// ModelVersion records a trained ranking checkpoint and its deployment status.
+type ModelVersion struct {
+	ID         int64      `json:"id"`
+	Version    string     `json:"version"`
+	ModelPath  string     `json:"model_path"`
+	AUCROC     float64    `json:"auc_roc"`
+	Status     string     `json:"status"`
+	TrainedAt  time.Time  `json:"trained_at"`
+	DeployedAt *time.Time `json:"deployed_at,omitempty"`
+}

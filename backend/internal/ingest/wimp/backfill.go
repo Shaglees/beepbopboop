@@ -192,7 +192,7 @@ func (b *Backfiller) videoFromInspection(inspection Inspection) (model.Video, er
 		SourceURL:       inspection.Capture.IDURL(),
 		SourceDesc:      inspection.Metadata.Description,
 		Labels:          buildLabels(inspection.Capture, inspection.Metadata),
-		EmbedHealth:     "unknown",
+		EmbedHealth:     model.EmbedHealthUnknown,
 		SupportsPrevCap: video.PolicyForProvider(inspection.Embed.Provider).SupportsPreviewCap,
 	}
 	if t := inspection.Capture.CaptureTime(); !t.IsZero() {

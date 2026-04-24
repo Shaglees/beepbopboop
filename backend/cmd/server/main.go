@@ -23,6 +23,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 	"github.com/shanegleeson/beepbopboop/backend/internal/scheduler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/sports"
+	videoselector "github.com/shanegleeson/beepbopboop/backend/internal/video"
 	"github.com/shanegleeson/beepbopboop/backend/internal/videohealth"
 	"github.com/shanegleeson/beepbopboop/backend/internal/weather"
 	"google.golang.org/api/option"
@@ -117,6 +118,8 @@ func main() {
 	sportsH := handler.NewSportsHandler(sportsSvc)
 	feedbackH := handler.NewFeedbackHandler(userRepo, feedbackRepo)
 	userEmbedder := embedding.NewUserEmbedder(db, userEmbeddingRepo)
+	videoSelector := videoselector.NewSelector(videoRepo, userEmbeddingRepo)
+	videosH := handler.NewVideosHandler(agentRepo, videoRepo, videoSelector)
 
 	creatorRepo := repository.NewLocalCreatorRepo(db)
 	creatorsH := handler.NewCreatorsHandler(creatorRepo, userRepo, userSettingsRepo)
@@ -188,6 +191,8 @@ func main() {
 		r.Post("/creators", creatorsH.Create)
 		r.Get("/events/summary", eventsH.Summary)
 		r.Get("/reactions/summary", reactionsH.Summary)
+		r.Get("/videos", videosH.List)
+		r.Get("/videos/for-me", videosH.ForMe)
 		r.Get("/user/weights", weightsH.GetWeights)
 		r.Put("/user/weights", weightsH.UpdateWeights)
 		r.Get("/user/templates", templatesH.ListTemplatesAgent)

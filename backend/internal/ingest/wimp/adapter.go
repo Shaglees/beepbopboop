@@ -49,7 +49,7 @@ func NewAdapter(cfg Config) *Adapter {
 		cfg.HTTPClient = &http.Client{Timeout: 15 * time.Second}
 	}
 	if cfg.UserAgent == "" {
-		cfg.UserAgent = "beepbopboop-wimp-ingest/1.0 (+https://github.com/Shaglees/beepbopboop)"
+		cfg.UserAgent = defaultWimpUserAgent
 	}
 	return &Adapter{
 		cfg:  cfg,
@@ -84,7 +84,7 @@ func (a *Adapter) FromArchivedURL(ctx context.Context, wimpURL string) (model.Vi
 		SourceURL:       inspection.Capture.IDURL(), // canonical Wayback permalink, not adapter's BaseURL.
 		SourceDesc:      inspection.Metadata.Description,
 		Labels:          buildLabels(inspection.Capture, inspection.Metadata),
-		EmbedHealth:     "unknown",
+		EmbedHealth:     model.EmbedHealthUnknown,
 	}
 	if t := inspection.Capture.CaptureTime(); !t.IsZero() {
 		// CaptureTime is an UPPER BOUND on the page's publish date, but it's

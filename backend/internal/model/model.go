@@ -134,9 +134,10 @@ type EventBatchRequest struct {
 }
 
 type EventInput struct {
-	PostID    string `json:"post_id"`
-	EventType string `json:"event_type"`
-	DwellMs   *int   `json:"dwell_ms,omitempty"`
+	PostID    string  `json:"post_id"`
+	EventType string  `json:"event_type"`
+	DwellMs   *int    `json:"dwell_ms,omitempty"`
+	ABVariant *string `json:"ab_variant,omitempty"`
 }
 
 type LabelEngagement struct {
@@ -290,6 +291,13 @@ type LocalCreator struct {
 	ImageURL     string          `json:"image_url,omitempty"`
 	DiscoveredAt time.Time       `json:"discovered_at"`
 	VerifiedAt   *time.Time      `json:"verified_at,omitempty"`
+}
+
+// Experiment is an A/B experiment definition stored in ab_experiments.
+type Experiment struct {
+	Name         string `json:"name"`
+	TreatmentPct int    `json:"treatment_pct"`
+	Status       string `json:"status"` // running | paused
 }
 
 // TrainingPair is a labeled (user, post) pair for ML model training.

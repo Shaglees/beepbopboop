@@ -298,5 +298,23 @@ func Open(url string) (*sql.DB, error) {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_video_source_pages_source_name ON video_source_pages (source_name, fetched_at DESC)")
 
+	// A/B testing: experiment definitions and user variant assignments.
+	db.Exec(`CREATE TABLE IF NOT EXISTS ab_experiments (
+		name          TEXT PRIMARY KEY,
+		treatment_pct INTEGER NOT NULL DEFAULT 10,
+		status        TEXT NOT NULL DEFAULT 'running',
+		paused_at     TIMESTAMPTZ,
+		created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS ab_assignments (
+		user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		experiment  TEXT NOT NULL,
+		variant     TEXT NOT NULL,
+		assigned_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, experiment)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_ab_assignments_experiment ON ab_assignments(experiment)")
+	db.Exec("ALTER TABLE post_events ADD COLUMN IF NOT EXISTS ab_variant TEXT")
+
 	return db, nil
 }

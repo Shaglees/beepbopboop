@@ -296,14 +296,10 @@ struct CardFooter: View {
                 let wasSaved = isBookmarked
                 isBookmarked.toggle()
                 Task {
-                    do {
-                        try await apiService.trackEvent(
-                            postID: post.id,
-                            eventType: wasSaved ? "unsave" : "save"
-                        )
-                    } catch {
-                        isBookmarked = wasSaved
-                    }
+                    await apiService.trackEvent(
+                        postID: post.id,
+                        eventType: wasSaved ? "unsave" : "save"
+                    )
                 }
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
@@ -1421,14 +1417,10 @@ private struct OutfitBookmarkButton: View {
             let wasSaved = isBookmarked
             isBookmarked.toggle()
             Task {
-                do {
-                    try await apiService.trackEvent(
-                        postID: post.id,
-                        eventType: wasSaved ? "unsave" : "save"
-                    )
-                } catch {
-                    isBookmarked = wasSaved
-                }
+                await apiService.trackEvent(
+                    postID: post.id,
+                    eventType: wasSaved ? "unsave" : "save"
+                )
             }
         } label: {
             Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")

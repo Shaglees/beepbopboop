@@ -21,4 +21,18 @@ class AuthService: ObservableObject {
     func getToken() -> String {
         return userIdentifier
     }
+
+    @Published var profileInitialized: Bool = false
+    @Published var isLoadingProfile: Bool = false
+
+    func checkProfile(apiService: APIService) async {
+        isLoadingProfile = true
+        defer { isLoadingProfile = false }
+        do {
+            let profile = try await apiService.getProfile()
+            profileInitialized = profile.profileInitialized
+        } catch {
+            profileInitialized = false
+        }
+    }
 }

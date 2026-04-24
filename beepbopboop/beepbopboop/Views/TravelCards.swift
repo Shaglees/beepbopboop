@@ -169,6 +169,7 @@ struct DestinationCard: View {
             statCell(
                 icon: "airplane",
                 label: travel.flightPriceFrom ?? "—",
+                sublabel: "Flights",
                 color: flightPriceColor
             )
             Divider()
@@ -177,6 +178,7 @@ struct DestinationCard: View {
             statCell(
                 icon: "calendar",
                 label: travel.bestTimeToVisit ?? "—",
+                sublabel: "Best time",
                 color: .white.opacity(0.75)
             )
             Divider()
@@ -186,16 +188,24 @@ struct DestinationCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
+        .background(Color(.quaternarySystemFill), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 10)
         .background(Self.darkBg)
     }
 
-    private func statCell(icon: String, label: String, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .foregroundStyle(color.opacity(0.7))
+    private func statCell(icon: String, label: String, sublabel: String, color: Color) -> some View {
+        VStack(spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 9))
+                    .foregroundStyle(color.opacity(0.7))
+                Text(sublabel)
+                    .font(.system(size: 9, weight: .semibold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(color.opacity(0.7))
+            }
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundStyle(color)
                 .lineLimit(1)
         }
@@ -203,12 +213,18 @@ struct DestinationCard: View {
     }
 
     private var visaCell: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(visaColor)
-                .frame(width: 7, height: 7)
+        VStack(spacing: 3) {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(visaColor)
+                    .frame(width: 5, height: 5)
+                Text("Visa")
+                    .font(.system(size: 9, weight: .semibold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
             Text(visaLabel)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.75))
                 .lineLimit(1)
         }

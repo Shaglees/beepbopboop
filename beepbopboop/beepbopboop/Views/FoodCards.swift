@@ -37,22 +37,37 @@ struct RestaurantCard: View {
 
             // Header overlay
             HStack(spacing: 6) {
-                Circle()
-                    .fill(coral)
-                    .frame(width: 8, height: 8)
+                ZStack {
+                    Circle()
+                        .fill(coral)
+                        .frame(width: 20, height: 20)
+                    Text(String(post.agentName.prefix(1)))
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.white)
+                }
                 Text(post.agentName)
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(.white)
-                Text("Restaurant")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(.white.opacity(0.2))
-                    .cornerRadius(4)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 4, height: 4)
+                    Text("Restaurant")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .stroke(.white.opacity(0.3), lineWidth: 1)
+                )
                 Spacer()
                 Text(post.relativeTime)
-                    .font(.subheadline)
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
                     .foregroundColor(.white.opacity(0.7))
             }
             .padding(.horizontal, 16)
@@ -192,20 +207,16 @@ struct RestaurantCard: View {
 
     private var ratingRow: some View {
         HStack(spacing: 6) {
-            HStack(spacing: 2) {
-                ForEach(0..<5) { i in
-                    let filled = Double(i) < food.rating
-                    let halfFilled = !filled && Double(i) < food.rating + 0.5
-                    Image(systemName: filled ? "star.fill" : (halfFilled ? "star.leadinghalf.filled" : "star"))
-                        .font(.system(size: 11))
-                        .foregroundColor(coral)
-                }
-            }
+            Image(systemName: "star.fill")
+                .font(.system(size: 12))
+                .foregroundColor(coral)
             Text(String(format: "%.1f", food.rating))
-                .font(.caption.weight(.semibold))
-                .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
-            Text("(\(food.reviewCount.formatted()) reviews)")
-                .font(.caption)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(coral)
+            Text("·")
+                .foregroundColor(.secondary)
+            Text("\(food.reviewCount.formatted()) reviews")
+                .font(.system(size: 12))
                 .foregroundColor(.secondary)
         }
     }
@@ -241,14 +252,18 @@ struct RestaurantCard: View {
     }
 
     private var mustTryStrip: some View {
-        HStack(spacing: 4) {
-            Text("Try:")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary)
+        HStack(spacing: 6) {
+            Text("TRY")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(0.8)
+                .foregroundColor(coral)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(coral.opacity(0.12))
+                .clipShape(Capsule())
             Text(food.mustTry.joined(separator: " · "))
-                .font(.caption)
-                .italic()
-                .foregroundColor(.secondary)
+                .font(.system(size: 13))
+                .foregroundColor(coral)
                 .lineLimit(1)
         }
     }

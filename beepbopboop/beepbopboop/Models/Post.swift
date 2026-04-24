@@ -282,6 +282,7 @@ struct Post: Codable, Identifiable {
     // MARK: - Hint Display Properties
 
     var hintColor: Color {
+        BBBDesign.roleColor(for: displayHintValue, fallback: {
         switch displayHintValue {
         case .card: return typeColor
         case .place: return .green
@@ -315,6 +316,7 @@ struct Post: Codable, Identifiable {
         case .creatorSpotlight: return Color(red: 0.541, green: 0.169, blue: 0.886)
         case .videoEmbed: return Color(red: 0.898, green: 0.051, blue: 0.071)
         }
+        }())
     }
 
     var hintIcon: String {
@@ -366,7 +368,7 @@ struct Post: Codable, Identifiable {
         case .comparison: return "Compare"
         case .event: return "Event"
         case .outfit: return "Outfit"
-        case .scoreboard: return "Score"
+        case .scoreboard: return "Live"
         case .matchup: return "Matchup"
         case .standings: return "Scores"
         case .movie: return "Movie"
@@ -377,14 +379,14 @@ struct Post: Codable, Identifiable {
         case .concert: return "Concert"
         case .gameRelease: return "Release"
         case .gameReview: return "Review"
-        case .restaurant: return "Restaurant"
-        case .destination: return "Destination"
+        case .restaurant: return "Food"
+        case .destination: return "Travel"
         case .science: return "Science"
-        case .petSpotlight: return "Adoption"
+        case .petSpotlight: return "Adopt"
         case .fitness: return "Fitness"
         case .boxScore: return "Box Score"
-        case .feedback: return "Quick Question"
-        case .creatorSpotlight: return "Local Creator"
+        case .feedback: return "Ask"
+        case .creatorSpotlight: return "Local"
         case .videoEmbed: return "Video"
         }
     }
@@ -629,4 +631,3 @@ struct Post: Codable, Identifiable {
         imagesByRole("hero").first ?? images?.first
     }
 }
-

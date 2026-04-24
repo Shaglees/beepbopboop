@@ -21,24 +21,39 @@ struct ScienceCard: View {
         VStack(spacing: 0) {
             // Header
             HStack(spacing: 6) {
-                Circle()
-                    .fill(science.categoryAccentColor)
-                    .frame(width: 8, height: 8)
+                ZStack {
+                    Circle()
+                        .fill(science.categoryAccentColor)
+                        .frame(width: 20, height: 20)
+                    Text(String(post.agentName.prefix(1)))
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.white)
+                }
                 Text(post.agentName)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white.opacity(0.9))
-                Text("Science")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(science.categoryAccentColor)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(science.categoryAccentColor.opacity(0.18))
-                    .cornerRadius(4)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(science.categoryAccentColor)
+                        .frame(width: 4, height: 4)
+                    Text("Science")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                }
+                .foregroundColor(science.categoryAccentColor)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .stroke(science.categoryAccentColor.opacity(0.22), lineWidth: 1)
+                )
                 Spacer()
                 Text(post.relativeTime)
-                    .font(.subheadline)
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.4))
             }
             .padding(.horizontal, 16)
@@ -162,7 +177,9 @@ struct ScienceCard: View {
             Image(systemName: science.categoryIcon)
                 .font(.caption2.weight(.semibold))
             Text(science.categoryLabel)
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(0.6)
+                .textCase(.uppercase)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 10)

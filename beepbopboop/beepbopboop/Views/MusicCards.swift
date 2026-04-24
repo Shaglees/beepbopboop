@@ -74,14 +74,16 @@ struct AlbumCard: View {
                             .background(accentColor, in: Capsule())
 
                         // Artist name
-                        Text(music.artist)
-                            .font(.system(size: 11, weight: .regular))
+                        Text(music.artist.uppercased())
+                            .font(.system(size: 11, weight: .semibold))
+                            .tracking(1.0)
                             .foregroundStyle(.white.opacity(0.55))
                             .lineLimit(1)
 
                         // Album title
                         Text(music.title ?? post.title)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(size: 18, design: .serif))
+                            .italic()
                             .foregroundStyle(.white)
                             .lineLimit(2)
 
@@ -90,6 +92,13 @@ struct AlbumCard: View {
                                 .font(.system(size: 10))
                                 .foregroundStyle(.white.opacity(0.35))
                                 .lineLimit(1)
+                        }
+
+                        // Track/duration info
+                        if let tracks = music.trackCount {
+                            Text("\(tracks) tracks")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.45))
                         }
 
                         Spacer(minLength: 0)

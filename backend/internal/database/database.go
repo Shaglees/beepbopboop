@@ -329,5 +329,55 @@ func Open(url string) (*sql.DB, error) {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_model_versions_status ON model_versions(status, trained_at DESC)")
 
+	// User profile identity fields
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC+0'")
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS home_location TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS home_lat DOUBLE PRECISION")
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS home_lon DOUBLE PRECISION")
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_updated_at TIMESTAMPTZ")
+
+	// Rich user interests
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_interests (
+		id            TEXT PRIMARY KEY,
+		user_id       TEXT NOT NULL REFERENCES users(id),
+		category      TEXT NOT NULL,
+		topic         TEXT NOT NULL,
+		source        TEXT NOT NULL CHECK (source IN ('user', 'inferred')),
+		confidence    DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+		dismissed     BOOLEAN NOT NULL DEFAULT FALSE,
+		paused_until  TIMESTAMPTZ,
+		last_asked_at TIMESTAMPTZ,
+		times_asked   INT NOT NULL DEFAULT 0,
+		created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_interests_user ON user_interests(user_id)")
+
+	// User lifestyle tags
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_lifestyle_tags (
+		id           TEXT PRIMARY KEY,
+		user_id      TEXT NOT NULL REFERENCES users(id),
+		tag_category TEXT NOT NULL,
+		tag_value    TEXT NOT NULL,
+		created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(user_id, tag_category, tag_value)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_lifestyle_user ON user_lifestyle_tags(user_id)")
+
+	// User content preferences
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_content_prefs (
+		id          TEXT PRIMARY KEY,
+		user_id     TEXT NOT NULL REFERENCES users(id),
+		category    TEXT,
+		depth       TEXT NOT NULL DEFAULT 'standard',
+		tone        TEXT NOT NULL DEFAULT 'casual',
+		max_per_day INT,
+		updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(user_id, category)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_content_prefs_user ON user_content_prefs(user_id)")
+
 	return db, nil
 }

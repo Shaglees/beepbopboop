@@ -37,7 +37,28 @@ type decayCandidate struct {
 	LastAsked  *time.Time
 }
 
+func (d *DecayChecker) Run(ctx context.Context, interval time.Duration) {
+	slog.Info("interest decay checker started", "interval", interval)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := d.RunOnce(ctx); err != nil {
+				slog.Warn("interest decay check failed", "error", err)
+			}
+		}
+	}
+}
+
 func (d *DecayChecker) RunOnce(ctx context.Context) error {
+	if d.agentID == "" {
+		slog.Warn("decay checker skipped: FEEDBACK_AGENT_ID not set")
+		return nil
+	}
 	rows, err := d.db.QueryContext(ctx, `
 		SELECT ui.id, ui.user_id, ui.category, ui.topic, ui.times_asked, ui.last_asked_at
 		FROM user_interests ui
@@ -53,7 +74,7 @@ func (d *DecayChecker) RunOnce(ctx context.Context) error {
 			WHERE pe.user_id = ui.user_id
 			  AND pe.event_type IN ('save', 'dwell')
 			  AND pe.created_at > NOW() - INTERVAL '30 days'
-			  AND p.labels LIKE '%%' || ui.category || '%%'
+			  AND p.labels::jsonb ? ui.category
 		  )`, maxAsks)
 	if err != nil {
 		return fmt.Errorf("decay query: %w", err)

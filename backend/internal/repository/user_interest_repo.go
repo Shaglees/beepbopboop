@@ -111,37 +111,40 @@ func (r *UserInterestRepo) list(userID string, activeOnly bool) ([]model.UserInt
 }
 
 // Promote changes an inferred interest to user-declared.
-func (r *UserInterestRepo) Promote(id string) error {
-	_, err := r.db.Exec(`
+// Returns the number of rows affected (0 if no matching inferred interest found).
+func (r *UserInterestRepo) Promote(id, userID string) (int64, error) {
+	res, err := r.db.Exec(`
 		UPDATE user_interests SET source = 'user', confidence = 1.0, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1 AND source = 'inferred'`, id)
+		WHERE id = $1 AND user_id = $2 AND source = 'inferred'`, id, userID)
 	if err != nil {
-		return fmt.Errorf("promote interest: %w", err)
+		return 0, fmt.Errorf("promote interest: %w", err)
 	}
-	return nil
+	return res.RowsAffected()
 }
 
-// Dismiss marks an inferred interest as dismissed.
-func (r *UserInterestRepo) Dismiss(id string) error {
-	_, err := r.db.Exec(`
+// Dismiss marks an interest as dismissed. Only dismisses inferred interests.
+// Returns the number of rows affected.
+func (r *UserInterestRepo) Dismiss(id, userID string) (int64, error) {
+	res, err := r.db.Exec(`
 		UPDATE user_interests SET dismissed = TRUE, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1`, id)
+		WHERE id = $1 AND user_id = $2 AND source = 'inferred'`, id, userID)
 	if err != nil {
-		return fmt.Errorf("dismiss interest: %w", err)
+		return 0, fmt.Errorf("dismiss interest: %w", err)
 	}
-	return nil
+	return res.RowsAffected()
 }
 
 // Pause sets paused_until to N days from now.
-func (r *UserInterestRepo) Pause(id string, days int) error {
+// Returns the number of rows affected.
+func (r *UserInterestRepo) Pause(id, userID string, days int) (int64, error) {
 	pauseUntil := time.Now().AddDate(0, 0, days)
-	_, err := r.db.Exec(`
+	res, err := r.db.Exec(`
 		UPDATE user_interests SET paused_until = $2, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1`, id, pauseUntil)
+		WHERE id = $1 AND user_id = $3`, id, pauseUntil, userID)
 	if err != nil {
-		return fmt.Errorf("pause interest: %w", err)
+		return 0, fmt.Errorf("pause interest: %w", err)
 	}
-	return nil
+	return res.RowsAffected()
 }
 
 // MarkAsked records that the system asked the user about a declining interest.

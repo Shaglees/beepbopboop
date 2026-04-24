@@ -199,9 +199,20 @@ func (h *ProfileHandler) SetInterests(w http.ResponseWriter, r *http.Request) {
 
 // PromoteInterest handles POST /user/interests/{id}/promote.
 func (h *ProfileHandler) PromoteInterest(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.FirebaseUIDFromContext(r.Context())
+	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
+		return
+	}
 	id := chi.URLParam(r, "id")
-	if err := h.interestRepo.Promote(id); err != nil {
+	n, err := h.interestRepo.Promote(id, user.ID)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to promote interest"})
+		return
+	}
+	if n == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "interest not found or not inferred"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -209,9 +220,20 @@ func (h *ProfileHandler) PromoteInterest(w http.ResponseWriter, r *http.Request)
 
 // DismissInterest handles POST /user/interests/{id}/dismiss.
 func (h *ProfileHandler) DismissInterest(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.FirebaseUIDFromContext(r.Context())
+	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
+		return
+	}
 	id := chi.URLParam(r, "id")
-	if err := h.interestRepo.Dismiss(id); err != nil {
+	n, err := h.interestRepo.Dismiss(id, user.ID)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to dismiss interest"})
+		return
+	}
+	if n == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "interest not found or not inferred"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -219,6 +241,12 @@ func (h *ProfileHandler) DismissInterest(w http.ResponseWriter, r *http.Request)
 
 // PauseInterest handles POST /user/interests/{id}/pause.
 func (h *ProfileHandler) PauseInterest(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.FirebaseUIDFromContext(r.Context())
+	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
+		return
+	}
 	id := chi.URLParam(r, "id")
 	var req struct {
 		Days int `json:"days"`
@@ -227,8 +255,13 @@ func (h *ProfileHandler) PauseInterest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "days must be a positive integer"})
 		return
 	}
-	if err := h.interestRepo.Pause(id, req.Days); err != nil {
+	n, err := h.interestRepo.Pause(id, user.ID, req.Days)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to pause interest"})
+		return
+	}
+	if n == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "interest not found"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

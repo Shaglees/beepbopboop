@@ -39,7 +39,7 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 	rows, err := w.db.QueryContext(ctx, `
 		WITH engagement AS (
 			SELECT pe.user_id,
-				unnest(string_to_array(trim(both '[]"' from p.labels), '","')) AS label,
+				unnest(ARRAY(SELECT jsonb_array_elements_text(p.labels::jsonb))) AS label,
 				CASE
 					WHEN pe.event_type = 'save' THEN 3.0
 					WHEN pe.event_type = 'dwell' THEN 1.0
@@ -53,7 +53,7 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 			UNION ALL
 
 			SELECT pr.user_id,
-				unnest(string_to_array(trim(both '[]"' from p.labels), '","')) AS label,
+				unnest(ARRAY(SELECT jsonb_array_elements_text(p.labels::jsonb))) AS label,
 				CASE WHEN pr.reaction = 'more' THEN 5.0 ELSE 0.0 END AS weight
 			FROM post_reactions pr
 			JOIN posts p ON p.id = pr.post_id

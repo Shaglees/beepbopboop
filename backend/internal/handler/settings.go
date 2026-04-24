@@ -102,3 +102,31 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(settings)
 }
+
+func (h *SettingsHandler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
+	uid := middleware.FirebaseUIDFromContext(r.Context())
+
+	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
+		return
+	}
+
+	var req struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+		Name      string  `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+
+	lat, lon := req.Latitude, req.Longitude
+	if err := h.userSettingsRepo.SetLocation(user.ID, req.Name, &lat, &lon); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update location"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}

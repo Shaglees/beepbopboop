@@ -8,6 +8,7 @@ struct beepbopboopApp: App {
     @StateObject private var api: APIService
     @StateObject private var tracker: EventTracker
     @StateObject private var calendarService: CalendarService
+    @StateObject private var locationMonitor: LocationMonitor
     @AppStorage("onboardingComplete") private var onboardingComplete = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -21,6 +22,7 @@ struct beepbopboopApp: App {
             try? await apiSvc.postEventsBatch(events)
         })
         _calendarService = StateObject(wrappedValue: CalendarService())
+        _locationMonitor = StateObject(wrappedValue: LocationMonitor(apiService: apiSvc))
     }
 
     var body: some Scene {
@@ -43,7 +45,9 @@ struct beepbopboopApp: App {
                     }
                 }
                 .task(id: authService.isSignedIn) {
-                    guard authService.isSignedIn, !onboardingComplete else { return }
+                    guard authService.isSignedIn else { return }
+                    locationMonitor.startIfAuthorized()
+                    guard !onboardingComplete else { return }
                     if let profile = try? await api.getProfile(),
                        profile.profileInitialized {
                         onboardingComplete = true

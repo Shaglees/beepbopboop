@@ -188,6 +188,7 @@ func main() {
 		r.Get("/posts/saved", multiFeedH.GetSaved)
 		r.Get("/user/settings", settingsH.GetSettings)
 		r.Put("/user/settings", settingsH.UpdateSettings)
+		r.Patch("/user/location", settingsH.UpdateLocation)
 		r.Get("/user/weights", weightsH.GetWeightsFirebase)
 		r.Put("/user/weights", weightsH.UpdateWeightsFirebase)
 		r.Put("/user/push-token", pushTokenH.RegisterPushToken)

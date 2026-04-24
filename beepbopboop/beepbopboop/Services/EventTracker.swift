@@ -28,6 +28,8 @@ class EventTracker: ObservableObject {
     private static let viewThresholdMs = 1000
     private static let dwellThresholdMs = 3000
 
+    static let preview = EventTracker { _ in }
+
     init(flushThreshold: Int = 10, onFlush: @escaping @MainActor ([PendingEvent]) async -> Void) {
         self.flushThreshold = flushThreshold
         self.onFlush = onFlush

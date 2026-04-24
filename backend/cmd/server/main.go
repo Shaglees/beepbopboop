@@ -73,13 +73,13 @@ func main() {
 	templateRepo := repository.NewTemplateRepo(db)
 	reactionRepo := repository.NewReactionRepo(db)
 	pushTokenRepo := repository.NewPushTokenRepo(db)
+	modelVersionRepo := ranking.NewModelVersionRepo(db)
 	feedbackRepo := repository.NewFeedbackRepo(db)
 	calendarRepo := repository.NewCalendarRepo(db)
 	followRepo := repository.NewFollowRepo(db)
 	videoRepo := repository.NewVideoRepo(db)
 	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
 	postEmbeddingRepo := repository.NewPostEmbeddingRepo(db)
-	modelVersionRepo := ranking.NewModelVersionRepo(db)
 
 	var ranker *ranking.Ranker
 	if cfg.RankerModelPath != "" {

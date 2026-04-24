@@ -83,7 +83,13 @@ func (h *ExperimentsHandler) CreateExperiment(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]string{"name": req.Name, "status": "running"})
+	// Read back actual status (may still be "paused" if guardrail fired).
+	exp, err := h.expRepo.Get(r.Context(), req.Name)
+	if err != nil || exp == nil {
+		writeJSON(w, http.StatusCreated, map[string]string{"name": req.Name, "status": "running"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"name": req.Name, "status": exp.Status})
 }
 
 // GetResults returns per-variant engagement stats for a named experiment.
@@ -101,6 +107,8 @@ func (h *ExperimentsHandler) GetResults(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	if results == nil {
+		results = []repository.VariantResult{}
+	}
+	writeJSON(w, http.StatusOK, results)
 }

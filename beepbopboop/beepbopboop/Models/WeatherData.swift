@@ -83,7 +83,7 @@ struct WeatherData: Codable {
             formatter.dateFormat = "yyyy-MM-dd"
             guard let d = formatter.date(from: date) else { return date }
             if Calendar.current.isDateInToday(d) { return "Today" }
-            if Calendar.current.isDateInTomorrow(d) { return "Tmrw" }
+            if Calendar.current.isDateInTomorrow(d) { return "Tomorrow" }
             formatter.dateFormat = "EEE"
             return formatter.string(from: d)
         }

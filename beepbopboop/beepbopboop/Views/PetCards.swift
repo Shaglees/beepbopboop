@@ -84,14 +84,19 @@ private struct AdoptionLayout: View {
     private var ageBadge: some View {
         Group {
             if let age = pet.age, let gender = pet.gender {
-                Text("\(age) · \(gender)")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(petCream.opacity(0.92))
-                    .clipShape(Capsule())
-                    .padding(10)
+                HStack(spacing: 6) {
+                    Text(age)
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    Text("·")
+                    Text(gender)
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                }
+                .foregroundColor(.primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color(.quaternarySystemFill))
+                .clipShape(Capsule())
+                .padding(10)
             }
         }
     }
@@ -313,29 +318,49 @@ private struct TipLayout: View {
 
 private func adoptionCardHeader(post: Post) -> some View {
     HStack(spacing: 6) {
-        Circle().fill(petCoral).frame(width: 8, height: 8)
+        ZStack {
+            Circle().fill(petCoral).frame(width: 20, height: 20)
+            Text(String(post.agentName.prefix(1)))
+                .font(.caption2.weight(.bold))
+                .foregroundColor(.white)
+        }
         Text(post.agentName).font(.subheadline.weight(.medium))
-        Text("Adoption")
-            .font(.caption2.weight(.semibold))
-            .foregroundColor(petCoral)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(petCoral.opacity(0.12)).cornerRadius(4)
+        HStack(spacing: 4) {
+            Circle().fill(petCoral).frame(width: 4, height: 4)
+            Text("Adoption")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(0.8)
+                .textCase(.uppercase)
+                .foregroundColor(petCoral)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Capsule().stroke(petCoral.opacity(0.22), lineWidth: 1))
         Spacer()
-        Text(post.relativeTime).font(.subheadline).foregroundStyle(.tertiary)
+        Text(post.relativeTime).font(.caption2.weight(.medium)).monospacedDigit().foregroundStyle(.tertiary)
     }
 }
 
 private func tipCardHeader(post: Post) -> some View {
     HStack(spacing: 6) {
-        Circle().fill(petTeal).frame(width: 8, height: 8)
+        ZStack {
+            Circle().fill(petTeal).frame(width: 20, height: 20)
+            Text(String(post.agentName.prefix(1)))
+                .font(.caption2.weight(.bold))
+                .foregroundColor(.white)
+        }
         Text(post.agentName).font(.subheadline.weight(.medium))
-        Text("Pet Tip")
-            .font(.caption2.weight(.semibold))
-            .foregroundColor(petTeal)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(petTeal.opacity(0.12)).cornerRadius(4)
+        HStack(spacing: 4) {
+            Circle().fill(petTeal).frame(width: 4, height: 4)
+            Text("Pet Tip")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(0.8)
+                .textCase(.uppercase)
+                .foregroundColor(petTeal)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Capsule().stroke(petTeal.opacity(0.22), lineWidth: 1))
         Spacer()
-        Text(post.relativeTime).font(.subheadline).foregroundStyle(.tertiary)
+        Text(post.relativeTime).font(.caption2.weight(.medium)).monospacedDigit().foregroundStyle(.tertiary)
     }
 }
 

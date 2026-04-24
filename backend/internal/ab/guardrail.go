@@ -87,11 +87,13 @@ func (g *Guardrail) CheckAndPause(ctx context.Context, experiment string) (bool,
 		"threshold_pp", g.cfg.SaveRateDropPct,
 	)
 
+	pauseReason := "save_rate_drop"
 	if drop <= g.cfg.SaveRateDropPct {
 		sessionDrop := (float64(ctrl.impressions) - float64(tmt.impressions)) / float64(ctrl.impressions) * 100
 		if g.cfg.SessionDropPct == 0 || sessionDrop <= g.cfg.SessionDropPct {
 			return false, nil
 		}
+		pauseReason = "session_drop"
 	}
 
 	_, err = g.db.ExecContext(ctx, `
@@ -103,7 +105,7 @@ func (g *Guardrail) CheckAndPause(ctx context.Context, experiment string) (bool,
 		return false, fmt.Errorf("pause experiment: %w", err)
 	}
 
-	slog.Warn("guardrail: paused experiment due to save rate regression",
-		"experiment", experiment, "drop_pp", drop)
+	slog.Warn("guardrail: paused experiment",
+		"experiment", experiment, "reason", pauseReason, "drop_pp", drop)
 	return true, nil
 }

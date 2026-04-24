@@ -79,10 +79,9 @@ struct ScoreboardCard: View {
                     VStack(spacing: 6) {
                         // Team color badge
                         Text(game.away.abbr)
-                            .font(.system(size: 20, weight: .heavy, design: .rounded))
+                            .font(.system(size: 13, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                            .frame(width: 32, height: 32)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(game.away.swiftUIColor)
@@ -100,7 +99,8 @@ struct ScoreboardCard: View {
                     if let awayScore = game.away.score, let homeScore = game.home.score {
                         HStack(spacing: 10) {
                             Text("\(awayScore)")
-                                .font(.system(size: 52, weight: .thin, design: .rounded))
+                                .font(.system(size: 28, weight: .bold, design: .serif))
+                                .tracking(-0.6)
                                 .foregroundStyle(.white)
                                 .opacity(homeWins ? 0.45 : 1.0)
                                 .shadow(color: awayWins ? .white.opacity(0.4) : .clear, radius: 12)
@@ -108,7 +108,8 @@ struct ScoreboardCard: View {
                                 .font(.system(size: 24, weight: .ultraLight))
                                 .foregroundStyle(.white.opacity(0.3))
                             Text("\(homeScore)")
-                                .font(.system(size: 52, weight: .thin, design: .rounded))
+                                .font(.system(size: 28, weight: .bold, design: .serif))
+                                .tracking(-0.6)
                                 .foregroundStyle(.white)
                                 .opacity(awayWins ? 0.45 : 1.0)
                                 .shadow(color: homeWins ? .white.opacity(0.4) : .clear, radius: 12)
@@ -122,10 +123,9 @@ struct ScoreboardCard: View {
                     // Home team
                     VStack(spacing: 6) {
                         Text(game.home.abbr)
-                            .font(.system(size: 20, weight: .heavy, design: .rounded))
+                            .font(.system(size: 13, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                            .frame(width: 32, height: 32)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(game.home.swiftUIColor)
@@ -999,7 +999,7 @@ private struct StatusPill: View {
         HStack(spacing: 4) {
             if isLive {
                 Circle()
-                    .fill(color)
+                    .fill(.red)
                     .frame(width: 6, height: 6)
                     .modifier(PulseModifier())
             }

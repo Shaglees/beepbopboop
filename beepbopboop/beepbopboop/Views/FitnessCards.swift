@@ -42,25 +42,40 @@ private struct FitnessWorkoutCard: View {
                 VStack(spacing: 10) {
                     // Agent header
                     HStack(spacing: 6) {
-                        Circle()
-                            .fill(fitnessGreen)
-                            .frame(width: 8, height: 8)
+                        ZStack {
+                            Circle()
+                                .fill(fitnessGreen)
+                                .frame(width: 20, height: 20)
+                            Text(String(post.agentName.prefix(1)))
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(.white)
+                        }
                         Text(post.agentName)
                             .font(.subheadline.weight(.medium))
                             .foregroundColor(.white)
-                        Text("Fitness")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(fitnessGreen)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(fitnessGreen.opacity(0.18))
-                            .cornerRadius(4)
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(fitnessGreen)
+                                .frame(width: 4, height: 4)
+                            Text("Fitness")
+                                .font(.system(size: 10, weight: .bold))
+                                .tracking(0.8)
+                                .textCase(.uppercase)
+                        }
+                        .foregroundColor(fitnessGreen)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .stroke(fitnessGreen.opacity(0.22), lineWidth: 1)
+                        )
                         Spacer()
                         if let level = fitness.level {
                             LevelBadge(level: level)
                         }
                         Text(post.relativeTime)
-                            .font(.subheadline)
+                            .font(.caption2.weight(.medium))
+                            .monospacedDigit()
                             .foregroundColor(.white.opacity(0.4))
                     }
 
@@ -75,7 +90,7 @@ private struct FitnessWorkoutCard: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(post.title)
-                                .font(.headline)
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
                                 .lineLimit(2)
 
@@ -83,12 +98,12 @@ private struct FitnessWorkoutCard: View {
                             HStack(spacing: 12) {
                                 if let dur = fitness.durationMin {
                                     Label("\(dur) min", systemImage: "timer")
-                                        .font(.caption.weight(.medium))
+                                        .font(.system(size: 11, design: .monospaced))
                                         .foregroundColor(.white.opacity(0.7))
                                 }
                                 if let cal = fitness.caloriesBurn {
                                     Label(cal, systemImage: "flame")
-                                        .font(.caption.weight(.medium))
+                                        .font(.system(size: 11, design: .monospaced))
                                         .foregroundColor(.white.opacity(0.7))
                                 }
                             }
@@ -200,21 +215,36 @@ private struct FitnessEventCard: View {
         VStack(alignment: .leading, spacing: 8) {
             // Agent header
             HStack(spacing: 6) {
-                Circle()
-                    .fill(fitnessGreen)
-                    .frame(width: 8, height: 8)
+                ZStack {
+                    Circle()
+                        .fill(fitnessGreen)
+                        .frame(width: 20, height: 20)
+                    Text(String(post.agentName.prefix(1)))
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.white)
+                }
                 Text(post.agentName)
                     .font(.subheadline.weight(.medium))
-                Text("Fitness")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(fitnessGreen)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(fitnessGreen.opacity(0.12))
-                    .cornerRadius(4)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(fitnessGreen)
+                        .frame(width: 4, height: 4)
+                    Text("Fitness")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                }
+                .foregroundColor(fitnessGreen)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .stroke(fitnessGreen.opacity(0.22), lineWidth: 1)
+                )
                 Spacer()
                 Text(post.relativeTime)
-                    .font(.subheadline)
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
                     .foregroundStyle(.tertiary)
             }
 

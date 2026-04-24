@@ -2,10 +2,8 @@ import SwiftUI
 
 struct FeedListView: View {
     @ObservedObject var viewModel: FeedListViewModel
-    @Binding var isHeaderVisible: Bool
     var onSettingsTapped: () -> Void
     @State private var selectedPost: Post?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -26,46 +24,34 @@ struct FeedListView: View {
     // MARK: - Subviews
 
     private var feedList: some View {
-        List {
-            ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
-                Button {
-                    selectedPost = post
-                } label: {
-                    FeedItemView(post: post)
-                }
-                .buttonStyle(CardPressStyle())
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                .listRowBackground(Color.clear)
-                .modifier(StaggeredAppearance(index: index, reduceMotion: reduceMotion))
-                .onAppear {
-                    if viewModel.shouldLoadMore(currentPost: post) {
-                        Task { await viewModel.loadMore() }
+        ScrollView {
+            LazyVStack(spacing: 14) {
+                ForEach(viewModel.posts) { post in
+                    FeedCardRow(post: post) {
+                        selectedPost = post
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onAppear {
+                        if viewModel.shouldLoadMore(currentPost: post) {
+                            Task { await viewModel.loadMore() }
+                        }
                     }
                 }
-            }
 
-            if viewModel.isLoading && !viewModel.posts.isEmpty {
-                SkeletonCard()
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                if viewModel.isLoading && !viewModel.posts.isEmpty {
+                    SkeletonCard()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 28)
         }
-        .listStyle(.plain)
+        .background(BBBDesign.background)
         .scrollEdgeEffectStyle(.soft, for: .top)
         .refreshable { await viewModel.refresh() }
         .onAppear { viewModel.restartPollingIfNeeded() }
         .onDisappear { viewModel.stopPolling() }
-        .onScrollGeometryChange(for: CGFloat.self) { geo in
-            geo.contentOffset.y
-        } action: { oldValue, newValue in
-            let delta = newValue - oldValue
-            if delta > 5 && newValue > 60 {
-                isHeaderVisible = false
-            } else if delta < -5 || newValue < 20 {
-                isHeaderVisible = true
-            }
-        }
         .sheet(item: $selectedPost) { post in
             NavigationStack {
                 PostDetailView(post: post)
@@ -76,20 +62,22 @@ struct FeedListView: View {
 
     private var skeletonLoadingView: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            LazyVStack(spacing: 14) {
                 ForEach(0..<4, id: \.self) { _ in
                     SkeletonCard()
-                    Divider()
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
         }
+        .background(BBBDesign.background)
     }
 
     private var locationGateView: some View {
         VStack(spacing: 16) {
             Image(systemName: "location.circle")
                 .font(.system(size: 48))
-                .foregroundColor(.blue)
+                .foregroundColor(BBBDesign.clay)
                 .symbolEffect(.pulse, isActive: true)
             Text("Set Your Location")
                 .font(.headline)
@@ -103,13 +91,15 @@ struct FeedListView: View {
             .buttonStyle(.borderedProminent)
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(BBBDesign.background)
     }
 
     private func errorView(_ error: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.largeTitle)
-                .foregroundColor(.orange)
+                .foregroundColor(BBBDesign.clay)
                 .symbolEffect(.wiggle, isActive: true)
             Text(error)
                 .multilineTextAlignment(.center)
@@ -117,60 +107,150 @@ struct FeedListView: View {
                 .buttonStyle(.bordered)
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(BBBDesign.background)
     }
 
     @ViewBuilder
     private var emptyView: some View {
-        if viewModel.feedType == .personal {
-            AgentEmptyStateView()
-        } else if viewModel.feedType == .following {
-            FollowingEmptyStateView()
-        } else {
-            VStack(spacing: 12) {
-                Image(systemName: "tray")
-                    .font(.largeTitle)
-                    .foregroundColor(.secondary)
-                    .symbolEffect(.breathe, isActive: true)
-                Text("No posts yet")
-                    .foregroundColor(.secondary)
-                Text(viewModel.emptyMessage)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+        Group {
+            if viewModel.feedType == .personal {
+                AgentEmptyStateView()
+            } else if viewModel.feedType == .following {
+                FollowingEmptyStateView()
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "tray")
+                        .font(.largeTitle)
+                        .foregroundColor(.secondary)
+                        .symbolEffect(.breathe, isActive: true)
+                    Text("No posts yet")
+                        .foregroundColor(.secondary)
+                    Text(viewModel.emptyMessage)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(BBBDesign.background)
+    }
+}
+
+// MARK: - Feed Card Row
+//
+// `onTapGesture` on a plain container lets SwiftUI hit-test inner Buttons
+// first and only fires the tap gesture on the parent when nothing inside
+// claimed it. Swipe reactions use UIKit UISwipeGestureRecognizer via
+// SwipeGestureView to avoid conflicting with scroll/pull-to-refresh.
+
+private struct FeedCardRow: View {
+    let post: Post
+    let onTap: () -> Void
+    @State private var swipeReaction: String?
+    @EnvironmentObject private var apiService: APIService
+
+    var body: some View {
+        FeedItemView(post: post)
+            .contentShape(RoundedRectangle(cornerRadius: BBBDesign.cardRadius, style: .continuous))
+            .overlay(alignment: .center) {
+                // Flash overlay when a swipe reaction fires
+                if let reaction = swipeReaction {
+                    swipeFlash(reaction: reaction)
+                }
+            }
+            .onTapGesture {
+                onTap()
+            }
+            .background(
+                // UIKit swipe recognizers don't interfere with scroll
+                SwipeGestureView(
+                    onSwipeLeft: { commitReaction("less") },
+                    onSwipeRight: { commitReaction("more") }
+                )
+            )
+    }
+
+    @ViewBuilder
+    private func swipeFlash(reaction: String) -> some View {
+        let isMore = reaction == "more"
+        HStack(spacing: 6) {
+            Image(systemName: isMore ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
+                .font(.title2)
+            Text(isMore ? "More" : "Less")
+                .font(.subheadline.weight(.bold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Capsule().fill(isMore ? BBBDesign.reactionMore : BBBDesign.reactionLess))
+        .transition(.scale.combined(with: .opacity))
+        .allowsHitTesting(false)
+    }
+
+    private func commitReaction(_ key: String) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+
+        // Show flash
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            swipeReaction = key
+        }
+        // Hide flash after delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                swipeReaction = nil
+            }
+        }
+
+        Task {
+            try? await apiService.setReaction(postID: post.id, reaction: key)
         }
     }
 }
 
-// MARK: - Card Press Style
+// MARK: - UIKit Swipe Gesture (doesn't conflict with scroll)
 
-private struct CardPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+private struct SwipeGestureView: UIViewRepresentable {
+    let onSwipeLeft: () -> Void
+    let onSwipeRight: () -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+
+        let leftSwipe = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleSwipe(_:)))
+        leftSwipe.direction = .left
+        view.addGestureRecognizer(leftSwipe)
+
+        let rightSwipe = UISwipeGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleSwipe(_:)))
+        rightSwipe.direction = .right
+        view.addGestureRecognizer(rightSwipe)
+
+        return view
     }
-}
 
-// MARK: - Staggered Card Entrance Animation
+    func updateUIView(_ uiView: UIView, context: Context) {}
 
-private struct StaggeredAppearance: ViewModifier {
-    let index: Int
-    let reduceMotion: Bool
-    @State private var appeared = false
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onSwipeLeft: onSwipeLeft, onSwipeRight: onSwipeRight)
+    }
 
-    func body(content: Content) -> some View {
-        content
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 16)
-            .onAppear {
-                if reduceMotion {
-                    appeared = true
-                } else {
-                    withAnimation(.snappy(duration: 0.35).delay(Double(min(index, 8)) * 0.05)) {
-                        appeared = true
-                    }
-                }
+    class Coordinator: NSObject {
+        let onSwipeLeft: () -> Void
+        let onSwipeRight: () -> Void
+
+        init(onSwipeLeft: @escaping () -> Void, onSwipeRight: @escaping () -> Void) {
+            self.onSwipeLeft = onSwipeLeft
+            self.onSwipeRight = onSwipeRight
+        }
+
+        @objc func handleSwipe(_ gesture: UISwipeGestureRecognizer) {
+            switch gesture.direction {
+            case .left: onSwipeLeft()
+            case .right: onSwipeRight()
+            default: break
             }
+        }
     }
 }
 

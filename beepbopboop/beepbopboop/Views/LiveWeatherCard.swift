@@ -43,9 +43,14 @@ struct LiveWeatherCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     // Header
                     HStack(spacing: 6) {
-                        Circle()
-                            .fill(.cyan)
-                            .frame(width: 8, height: 8)
+                        ZStack {
+                            Circle()
+                                .fill(.cyan)
+                                .frame(width: 20, height: 20)
+                            Text("W")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(.white)
+                        }
                         Text("Weather")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(textColor.opacity(0.8))
@@ -141,7 +146,9 @@ struct LiveWeatherCard: View {
                         HStack(spacing: 0) {
                             Text(day.dayLabel)
                                 .font(.subheadline.weight(.medium))
-                                .frame(width: 50, alignment: .leading)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
+                                .frame(width: 74, alignment: .leading)
 
                             Image(systemName: WeatherData.icon(for: day.conditionCode))
                                 .font(.system(size: 16))

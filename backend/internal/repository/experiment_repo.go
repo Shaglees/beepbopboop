@@ -31,7 +31,8 @@ func (r *ExperimentRepo) Get(ctx context.Context, name string) (*model.Experimen
 	return &exp, nil
 }
 
-// Upsert creates or updates an experiment (resets to 'running' if re-created).
+// Upsert creates or updates an experiment. On conflict, only treatment_pct is
+// updated — status and paused_at are preserved.
 func (r *ExperimentRepo) Upsert(ctx context.Context, name string, treatmentPct int) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO ab_experiments (name, treatment_pct, status)

@@ -13,23 +13,8 @@ struct FeedItemView: View {
 
     @ViewBuilder
     private var styledContent: some View {
-        if [.outfit, .weather, .scoreboard, .matchup, .standings, .movie, .show, .playerSpotlight, .entertainment, .album, .concert, .gameRelease, .gameReview, .restaurant, .destination, .science, .petSpotlight, .fitness, .feedback, .creatorSpotlight, .videoEmbed].contains(post.displayHintValue) {
-            cardContent
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
-        } else {
-            cardContent
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.secondarySystemGroupedBackground))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(.separator).opacity(0.2), lineWidth: 0.5)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 2)
-        }
+        cardContent
+            .bbbCardChassis()
     }
 
     @ViewBuilder
@@ -174,31 +159,52 @@ struct CardHeader: View {
     @State private var showAgentProfile = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(post.hintColor)
-                .frame(width: 8, height: 8)
+        HStack(spacing: 8) {
+            Button {
+                showAgentProfile = true
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(post.hintColor)
+                        .frame(width: 20, height: 20)
+                    Text(String(post.agentName.prefix(1)))
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+            .buttonStyle(.plain)
             Button {
                 showAgentProfile = true
             } label: {
                 Text(post.agentName)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(-0.1)
+                    .foregroundStyle(BBBDesign.ink)
             }
             .buttonStyle(.plain)
-            Text(post.hintLabel)
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(post.hintColor)
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(post.hintColor.opacity(0.12))
-                .cornerRadius(4)
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(post.hintColor)
+                    .frame(width: 4, height: 4)
+                Text(post.hintLabel)
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.9)
+                    .textCase(.uppercase)
+                    .foregroundColor(post.hintColor)
+            }
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .stroke(post.hintColor.opacity(0.22), lineWidth: 1)
+            )
             Spacer()
             Text(post.relativeTime)
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(BBBDesign.ink3)
         }
         .sheet(isPresented: $showAgentProfile) {
             NavigationStack {
@@ -226,18 +232,48 @@ struct CardFooter: View {
         HStack(spacing: 6) {
             if let locality = post.locality, !locality.isEmpty {
                 Label(locality, systemImage: post.isSourceAttribution ? "link" : "location")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundColor(BBBDesign.ink3)
                     .lineLimit(1)
             }
 
             Spacer()
 
-            ReactionPicker(
-                activeReaction: $activeReaction,
-                postID: post.id,
-                style: .feedCompact
-            )
+            // Swipe-to-tune label or active reaction pill
+            if let active = activeReaction,
+               let reaction = ReactionPicker.reactionDefs.first(where: { $0.key == active }) {
+                // Active reaction: show colored pill (tappable to open full menu)
+                Menu {
+                    ForEach(ReactionPicker.reactionDefs) { r in
+                        Button { setReaction(r.key) } label: {
+                            Label(r.label, systemImage: r.icon)
+                        }
+                    }
+                    Divider()
+                    Button(role: .destructive) { clearReaction() } label: {
+                        Label("Clear reaction", systemImage: "xmark.circle")
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: reaction.icon + ".fill")
+                            .font(.caption2)
+                        Text(reaction.label)
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundColor(reaction.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(reaction.color.opacity(0.12))
+                    .clipShape(Capsule())
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+            } else {
+                // No reaction: passive "swipe to tune" label
+                Text("swipe to tune")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(BBBDesign.ink3)
+            }
 
             ShareLink(
                 item: post.shareURL,
@@ -246,7 +282,9 @@ struct CardFooter: View {
             ) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(BBBDesign.ink3)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .simultaneousGesture(TapGesture().onEnded {
@@ -270,10 +308,49 @@ struct CardFooter: View {
             } label: {
                 Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.caption)
-                    .foregroundColor(isBookmarked ? post.hintColor : .secondary)
+                    .foregroundColor(isBookmarked ? BBBDesign.clay : BBBDesign.ink3)
                     .contentTransition(.symbolEffect(.replace))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+        }
+        .onChange(of: post.saved) { _, newValue in
+            isBookmarked = newValue ?? false
+        }
+        .onChange(of: post.myReaction) { _, newValue in
+            activeReaction = newValue
+        }
+    }
+
+    private func setReaction(_ key: String) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let previous = activeReaction
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            activeReaction = key
+        }
+        Task {
+            do {
+                try await apiService.setReaction(postID: post.id, reaction: key)
+            } catch {
+                activeReaction = previous
+            }
+        }
+    }
+
+    private func clearReaction() {
+        guard activeReaction != nil else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let previous = activeReaction
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            activeReaction = nil
+        }
+        Task {
+            do {
+                try await apiService.removeReaction(postID: post.id)
+            } catch {
+                activeReaction = previous
+            }
         }
     }
 }
@@ -294,10 +371,9 @@ struct ReactionPicker: View {
     @Binding var activeReaction: String?
     let postID: String
     var style: ReactionPickerStyle
-    @State private var isExpanded = false
     @EnvironmentObject private var apiService: APIService
 
-    private struct ReactionDef: Identifiable {
+    struct ReactionDef: Identifiable {
         let key: String
         let icon: String
         let label: String
@@ -305,11 +381,11 @@ struct ReactionPicker: View {
         var id: String { key }
     }
 
-    private static let reactionDefs: [ReactionDef] = [
-        ReactionDef(key: "more", icon: "arrow.up.circle", label: "More", color: .green),
-        ReactionDef(key: "less", icon: "arrow.down.circle", label: "Less", color: .orange),
-        ReactionDef(key: "stale", icon: "repeat.circle", label: "Stale", color: .yellow),
-        ReactionDef(key: "not_for_me", icon: "xmark.circle", label: "Not for me", color: .red),
+    static let reactionDefs: [ReactionDef] = [
+        ReactionDef(key: "more", icon: "arrow.up.circle", label: "More", color: BBBDesign.reactionMore),
+        ReactionDef(key: "less", icon: "arrow.down.circle", label: "Less", color: BBBDesign.reactionLess),
+        ReactionDef(key: "stale", icon: "repeat.circle", label: "Stale", color: BBBDesign.reactionStale),
+        ReactionDef(key: "not_for_me", icon: "xmark.circle", label: "Not for me", color: BBBDesign.reactionNotForMe),
     ]
 
     var body: some View {
@@ -320,111 +396,72 @@ struct ReactionPicker: View {
         }
     }
 
-    // MARK: Feed Layout (compact trigger → floating picker)
+    // MARK: Feed Layout (compact trigger → Menu)
+    //
+    // Previously this used a manual overlay with a hand-rolled dismiss layer
+    // offset by (100, 100) — it didn't reliably dismiss on outside tap and the
+    // floating picker was clipped by the card's rounded-rect shape. A native
+    // Menu handles positioning, outside-tap dismissal, and keyboard focus for
+    // us, and it renders in its own window so it's never clipped by the row.
 
     @ViewBuilder
     private var feedLayout: some View {
-        feedTrigger
-            .overlay(alignment: .bottomTrailing) {
-                if isExpanded {
-                    Color.clear
-                        .frame(width: 320, height: 320)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                isExpanded = false
-                            }
-                        }
-                        .offset(x: 100, y: 100)
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if isExpanded {
-                    floatingPicker
-                        .offset(y: -48)
-                        .transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
-                }
-            }
-            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isExpanded)
-    }
-
-    @ViewBuilder
-    private var feedTrigger: some View {
-        if let active = activeReaction,
-           let reaction = Self.reactionDefs.first(where: { $0.key == active }) {
-            Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: reaction.icon + ".fill")
-                        .font(.caption2)
-                    Text(reaction.label)
-                        .font(.caption2.weight(.semibold))
-                }
-                .foregroundColor(reaction.color)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(reaction.color.opacity(0.12))
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Reacted with \(reaction.label). Double tap to change.")
-        } else {
-            Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                Image(systemName: isExpanded ? "face.smiling.fill" : "face.smiling")
-                    .font(.footnote)
-                    .foregroundColor(style.isDark ? .white.opacity(0.4) : .secondary)
-                    .contentTransition(.symbolEffect(.replace))
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("React to this post")
-        }
-    }
-
-    private var floatingPicker: some View {
-        HStack(spacing: 8) {
+        Menu {
             ForEach(Self.reactionDefs) { reaction in
                 Button {
                     selectReaction(reaction)
                 } label: {
-                    let isActive = activeReaction == reaction.key
-                    VStack(spacing: 4) {
-                        Image(systemName: isActive ? reaction.icon + ".fill" : reaction.icon)
-                            .font(.body)
-                            .contentTransition(.symbolEffect(.replace))
-                        Text(reaction.label)
-                            .font(.caption2)
-                    }
-                    .foregroundColor(isActive ? reaction.color : (style.isDark ? .white.opacity(0.5) : .secondary))
-                    .frame(minWidth: 56, minHeight: 56)
-                    .background(isActive ? reaction.color.opacity(0.12) : .clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    Label(reaction.label, systemImage: reaction.icon)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(reaction.label)
+            }
+            if activeReaction != nil {
+                Divider()
+                Button(role: .destructive) {
+                    clearReaction()
+                } label: {
+                    Label("Clear reaction", systemImage: "xmark.circle")
+                }
+            }
+        } label: {
+            feedTriggerLabel
+        } primaryAction: {
+            // Tapping the trigger when no reaction is set opens the menu
+            // (default). When a reaction is already set, we want a quick
+            // "remove" affordance — handled by long-press-to-open-menu; the
+            // primary tap here toggles the active reaction off.
+            if activeReaction != nil {
+                clearReaction()
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(pickerBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
-    private var pickerBackground: some View {
-        if style.isDark {
-            RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.7))
+    private var feedTriggerLabel: some View {
+        if let active = activeReaction,
+           let reaction = Self.reactionDefs.first(where: { $0.key == active }) {
+            HStack(spacing: 4) {
+                Image(systemName: reaction.icon + ".fill")
+                    .font(.caption2)
+                Text(reaction.label)
+                    .font(.caption2.weight(.semibold))
+            }
+            .foregroundColor(reaction.color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(reaction.color.opacity(0.12))
+            .clipShape(Capsule())
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .accessibilityLabel("Reacted with \(reaction.label). Double tap to change.")
         } else {
-            RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial)
+            Text("swipe to tune")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(style.isDark ? .white.opacity(0.45) : BBBDesign.ink3)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityLabel("Swipe or double tap to react to this post")
         }
     }
 
@@ -459,7 +496,6 @@ struct ReactionPicker: View {
         let previous = activeReaction
         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
             activeReaction = wasActive ? nil : reaction.key
-            isExpanded = false
         }
 
         Task {
@@ -469,6 +505,22 @@ struct ReactionPicker: View {
                 } else {
                     try await apiService.setReaction(postID: postID, reaction: reaction.key)
                 }
+            } catch {
+                activeReaction = previous
+            }
+        }
+    }
+
+    private func clearReaction() {
+        guard activeReaction != nil else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let previous = activeReaction
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            activeReaction = nil
+        }
+        Task {
+            do {
+                try await apiService.removeReaction(postID: postID)
             } catch {
                 activeReaction = previous
             }
@@ -486,12 +538,15 @@ private struct StandardCard: View {
             CardHeader(post: post)
 
             Text(post.title)
-                .font(.headline)
+                .font(.system(size: 15, weight: .semibold))
+                .tracking(-0.2)
+                .foregroundColor(BBBDesign.ink)
                 .lineLimit(2)
 
             Text(post.body)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .font(.system(size: 13))
+                .lineSpacing(2)
+                .foregroundColor(BBBDesign.ink2)
                 .lineLimit(3)
 
             // Article hint: hero image
@@ -534,17 +589,17 @@ private struct StandardCard: View {
                     Text("Comparison")
                 }
                 .font(.caption2.weight(.medium))
-                .foregroundColor(.mint)
+                .foregroundColor(BBBDesign.reactionMore)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(.mint.opacity(0.1))
+                .background(BBBDesign.reactionMore.opacity(0.1))
                 .cornerRadius(6)
             }
 
             CardFooter(post: post)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
     }
 }
 
@@ -553,24 +608,161 @@ private struct StandardCard: View {
 private struct WeatherCard: View {
     let post: Post
 
+    // Try to parse structured weather from external_url JSON
+    private var structuredWeather: StructuredWeather? {
+        guard let json = post.externalURL,
+              let data = json.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let current = dict["current"] as? [String: Any],
+              let tempC = current["temp_c"] as? Double else { return nil }
+        let condition = current["condition"] as? String ?? ""
+        let hiLo: (hi: Double, lo: Double)? = {
+            if let daily = dict["daily"] as? [[String: Any]], let first = daily.first,
+               let hi = first["high_c"] as? Double, let lo = first["low_c"] as? Double {
+                return (hi, lo)
+            }
+            return nil
+        }()
+        let hourly: [HourlyEntry] = {
+            guard let arr = dict["hourly"] as? [[String: Any]] else { return [] }
+            return arr.compactMap { h in
+                guard let time = h["time"] as? String,
+                      let temp = h["temp_c"] as? Double else { return nil }
+                let code = h["condition_code"] as? Int ?? 0
+                return HourlyEntry(time: time, tempC: temp, conditionCode: code)
+            }
+        }()
+        return StructuredWeather(tempC: tempC, condition: condition, hiLo: hiLo, hourly: hourly)
+    }
+
+    private struct StructuredWeather {
+        let tempC: Double
+        let condition: String
+        let hiLo: (hi: Double, lo: Double)?
+        let hourly: [HourlyEntry]
+    }
+
+    private struct HourlyEntry {
+        let time: String
+        let tempC: Double
+        let conditionCode: Int
+
+        var hourLabel: String {
+            if time.count >= 13 {
+                let hourString = String(time.dropFirst(11).prefix(2))
+                if let hour = Int(hourString) {
+                    if hour == 0 { return "12am" }
+                    if hour == 12 { return "12pm" }
+                    return hour < 12 ? "\(hour)am" : "\(hour - 12)pm"
+                }
+            }
+
+            if time.count >= 5 {
+                return String(time.prefix(5))
+            }
+
+            return time
+        }
+    }
+
     var body: some View {
+        if let sw = structuredWeather {
+            structuredBody(sw)
+        } else {
+            fallbackBody
+        }
+    }
+
+    // MARK: Structured weather layout (matches PDF)
+    private func structuredBody(_ sw: StructuredWeather) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                CardHeader(post: post)
+
+                HStack(alignment: .bottom, spacing: 14) {
+                    Text("\(Int(sw.tempC.rounded()))°")
+                        .font(.system(size: 52, weight: .regular, design: .serif))
+                        .tracking(-1.6)
+                        .foregroundColor(BBBDesign.ink)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(sw.condition.isEmpty ? post.title : sw.condition)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(BBBDesign.ink)
+                            .lineLimit(2)
+                        if let hiLo = sw.hiLo {
+                            Text("H \(Int(hiLo.hi.rounded()))° · L \(Int(hiLo.lo.rounded()))°")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(BBBDesign.ink3)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+
+                Text(post.body)
+                    .font(.system(size: 13))
+                    .lineSpacing(2)
+                    .foregroundColor(BBBDesign.ink2)
+                    .lineLimit(3)
+
+                CardFooter(post: post)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            // Hourly strip with sunken background
+            if !sw.hourly.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(Array(sw.hourly.enumerated()), id: \.offset) { _, hour in
+                            VStack(spacing: 4) {
+                                Text(hour.hourLabel)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(BBBDesign.ink3)
+                                Image(systemName: WeatherData.icon(for: hour.conditionCode, isDay: true))
+                                    .font(.system(size: 17))
+                                    .foregroundStyle(BBBDesign.ink)
+                                    .frame(height: 20)
+                                Text("\(Int(hour.tempC.rounded()))°")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(BBBDesign.ink)
+                            }
+                            .frame(minWidth: 40)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 5)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 10)
+                }
+                .background(BBBDesign.sunken)
+            }
+        }
+        .background(BBBDesign.surface)
+    }
+
+    // MARK: Fallback layout (no structured data)
+    private var fallbackBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             CardHeader(post: post)
 
             HStack(alignment: .top, spacing: 12) {
                 let weather = WeatherInfo.detect(from: post.title + " " + post.body)
                 Image(systemName: weather.icon)
-                    .font(.system(size: 32))
+                    .font(.system(size: 34))
                     .foregroundStyle(weather.primaryColor, weather.secondaryColor)
                     .frame(width: 44)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(post.title)
-                        .font(.headline)
+                        .font(.system(size: 22, weight: .regular, design: .serif))
+                        .tracking(-0.7)
+                        .foregroundColor(BBBDesign.ink)
                         .lineLimit(2)
                     Text(post.body)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 13))
+                        .lineSpacing(2)
+                        .foregroundColor(BBBDesign.ink2)
                         .lineLimit(4)
                 }
             }
@@ -579,13 +771,7 @@ private struct WeatherCard: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(
-            LinearGradient(
-                colors: [.cyan.opacity(0.08), .orange.opacity(0.05)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .background(BBBDesign.surface)
     }
 }
 
@@ -599,28 +785,32 @@ private struct CompactCard: View {
             CardHeader(post: post)
 
             Text(post.title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
+                .font(.system(size: 22, weight: .regular, design: .serif))
+                .tracking(-0.7)
+                .foregroundColor(BBBDesign.ink)
+                .lineLimit(2)
 
             // Show body as compact bullets — split on newlines
             let lines = post.body.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(lines.prefix(5).enumerated()), id: \.offset) { index, line in
-                    HStack(alignment: .top, spacing: 6) {
+                    HStack(alignment: .top, spacing: 8) {
                         if post.displayHintValue == .digest {
-                            Text("\(index + 1).")
-                                .font(.caption2.weight(.bold))
+                            Text(String(format: "%02d", index + 1))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .foregroundColor(post.hintColor)
-                                .frame(width: 16, alignment: .trailing)
+                                .frame(width: 18, alignment: .trailing)
                         } else {
-                            Text("\u{2022}")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                            Text(String(format: "%02d", index + 1))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(BBBDesign.ink3)
+                                .frame(width: 18, alignment: .trailing)
                         }
                         Text(line.trimmingCharacters(in: .whitespaces))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
+                            .font(.system(size: 13))
+                            .foregroundColor(BBBDesign.ink2)
+                            .lineSpacing(2)
+                            .lineLimit(2)
                     }
                 }
                 if lines.count > 5 {
@@ -633,7 +823,7 @@ private struct CompactCard: View {
             CardFooter(post: post)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
     }
 }
 
@@ -736,37 +926,132 @@ private struct DateCard: View {
 private struct DealCard: View {
     let post: Post
 
+    /// Try to extract a discount percentage from the post text or external data
+    private var discountPercent: Int? {
+        // Check steam deal data in externalURL JSON
+        if let json = post.externalURL,
+           let data = json.data(using: .utf8),
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let discount = dict["steamDiscount"] as? Int, discount > 0 {
+            return discount
+        }
+        // Regex fallback: look for "XX%" in title or body
+        let text = post.title + " " + post.body
+        let pattern = #"(\d+)\s*%"#
+        if let match = text.range(of: pattern, options: .regularExpression) {
+            let matched = String(text[match])
+            let numStr = matched.filter(\.isNumber)
+            if let num = Int(numStr), num > 0, num <= 100 { return num }
+        }
+        return nil
+    }
+
+    /// Try to extract prices from external data
+    private var prices: (current: String, original: String)? {
+        guard let json = post.externalURL,
+              let data = json.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        if let price = dict["steamPrice"] as? String,
+           let original = dict["steamOriginalPrice"] as? String {
+            return (price, original)
+        }
+        return nil
+    }
+
+    /// Try to extract "ends in" from external data
+    private var endsIn: String? {
+        guard let json = post.externalURL,
+              let data = json.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ends = dict["ends_in"] as? String else { return nil }
+        return ends
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             CardHeader(post: post)
 
-            // Deal accent banner
-            HStack(spacing: 6) {
-                Image(systemName: "tag.fill")
-                    .font(.caption)
-                Text("DEAL")
-                    .font(.caption.weight(.black))
+            // Deal highlight with gradient background
+            VStack(alignment: .leading, spacing: 10) {
+                if let percent = discountPercent {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("−\(percent)%")
+                            .font(.system(size: 34, weight: .heavy, design: .serif))
+                            .foregroundColor(post.hintColor)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(post.title)
+                                .font(.system(size: 15, weight: .semibold))
+                                .lineLimit(2)
+                        }
+                    }
+
+                    // Price line + ENDS badge
+                    if let prices = prices {
+                        HStack(spacing: 8) {
+                            Text(prices.current)
+                                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            Text(prices.original)
+                                .font(.system(size: 12, design: .monospaced))
+                                .strikethrough()
+                                .foregroundColor(.secondary)
+                            if let ends = endsIn {
+                                Text("ENDS \(ends.uppercased())")
+                                    .font(.system(size: 9, weight: .heavy))
+                                    .tracking(0.5)
+                                    .foregroundColor(.orange)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Color.orange.opacity(0.12))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback: banner style with updated typography
+                    HStack(spacing: 6) {
+                        Image(systemName: "tag.fill")
+                            .font(.caption)
+                        Text("DEAL")
+                            .font(.system(size: 10, weight: .black))
+                            .tracking(0.8)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        LinearGradient(
+                            colors: [.pink, .orange],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(8)
+
+                    Text(post.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(2)
+                }
+
+                Text(post.body)
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                    .lineLimit(3)
             }
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(14)
             .background(
-                LinearGradient(
-                    colors: [.pink, .orange],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            colors: [post.hintColor.opacity(0.18), post.hintColor.opacity(0.04)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
             )
-            .cornerRadius(8)
-
-            Text(post.title)
-                .font(.headline)
-                .lineLimit(2)
-
-            Text(post.body)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .lineLimit(3)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(post.hintColor.opacity(0.20), lineWidth: 1)
+            )
 
             if let imageURL = post.imageURL, !imageURL.isEmpty, let url = URL(string: imageURL) {
                 AsyncImage(url: url) { phase in

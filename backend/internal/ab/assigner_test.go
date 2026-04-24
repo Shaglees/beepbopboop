@@ -2,6 +2,7 @@ package ab_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 
@@ -10,9 +11,14 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/repository"
 )
 
+func ensureExperiment(db *sql.DB, name string) {
+	db.Exec("INSERT INTO ab_experiments (name, treatment_pct, status) VALUES ($1, 50, 'running') ON CONFLICT DO NOTHING", name)
+}
+
 func TestVariant_IsDeterministic(t *testing.T) {
 	db := database.OpenTestDB(t)
 	a := ab.NewAssigner(db)
+	ensureExperiment(db, "ml-feed-v1")
 
 	first := a.Variant(context.Background(), "user-abc", "ml-feed-v1", 10)
 	second := a.Variant(context.Background(), "user-abc", "ml-feed-v1", 10)
@@ -28,6 +34,7 @@ func TestVariant_IsDeterministic(t *testing.T) {
 func TestVariant_DistributionMatchesTarget(t *testing.T) {
 	db := database.OpenTestDB(t)
 	a := ab.NewAssigner(db)
+	ensureExperiment(db, "dist-test")
 
 	const n = 1000
 	const targetPct = 10
@@ -51,6 +58,7 @@ func TestVariant_PersistedToDatabase(t *testing.T) {
 	userRepo := repository.NewUserRepo(db)
 	u, _ := userRepo.FindOrCreateByFirebaseUID("firebase-ab-persist")
 
+	ensureExperiment(db, "persist-test")
 	variant := a.Variant(context.Background(), u.ID, "persist-test", 50)
 
 	var stored string
@@ -73,6 +81,8 @@ func TestVariant_DifferentExperimentsAreIndependent(t *testing.T) {
 	userRepo := repository.NewUserRepo(db)
 	u, _ := userRepo.FindOrCreateByFirebaseUID("firebase-ab-independent")
 
+	ensureExperiment(db, "exp-alpha")
+	ensureExperiment(db, "exp-beta")
 	v1 := a.Variant(context.Background(), u.ID, "exp-alpha", 50)
 	v2 := a.Variant(context.Background(), u.ID, "exp-beta", 50)
 
@@ -94,6 +104,7 @@ func TestVariant_DifferentExperimentsAreIndependent(t *testing.T) {
 func TestVariant_100PctTreatmentAssignsEveryone(t *testing.T) {
 	db := database.OpenTestDB(t)
 	a := ab.NewAssigner(db)
+	ensureExperiment(db, "hundred-pct")
 
 	for i := 0; i < 100; i++ {
 		userID := fmt.Sprintf("hundred-user-%d", i)
@@ -107,6 +118,7 @@ func TestVariant_100PctTreatmentAssignsEveryone(t *testing.T) {
 func TestVariant_0PctTreatmentAssignsNoOne(t *testing.T) {
 	db := database.OpenTestDB(t)
 	a := ab.NewAssigner(db)
+	ensureExperiment(db, "zero-pct")
 
 	for i := 0; i < 100; i++ {
 		userID := fmt.Sprintf("zero-user-%d", i)

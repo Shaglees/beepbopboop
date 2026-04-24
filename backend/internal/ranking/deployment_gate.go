@@ -12,9 +12,6 @@ func NewDeploymentGate(minImprovement float64) *DeploymentGate {
 	return &DeploymentGate{minImprovementFraction: minImprovement}
 }
 
-// MinImprovement returns the configured minimum improvement fraction.
-func (g *DeploymentGate) MinImprovement() float64 { return g.minImprovementFraction }
-
 // ShouldDeploy returns true when newAUC meets the improvement threshold over
 // currentAUC. When currentAUC is 0 (no deployed model), any positive newAUC passes.
 func (g *DeploymentGate) ShouldDeploy(currentAUC, newAUC float64) bool {

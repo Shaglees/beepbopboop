@@ -76,7 +76,6 @@ func (r *ModelVersionRepo) GetActive(ctx context.Context) (*model.ModelVersion, 
 
 // MarkDeployed sets status='deployed' and deployed_at=NOW() for the given ID,
 // and retires any previously deployed version.
-// Returns an error if the ID does not exist (no rows updated).
 func (r *ModelVersionRepo) MarkDeployed(ctx context.Context, id int64) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -84,6 +83,7 @@ func (r *ModelVersionRepo) MarkDeployed(ctx context.Context, id int64) error {
 	}
 	defer tx.Rollback()
 
+	// Retire the currently deployed version (if any).
 	if _, err := tx.ExecContext(ctx,
 		"UPDATE model_versions SET status = 'retired' WHERE status = 'deployed'",
 	); err != nil {
@@ -91,74 +91,11 @@ func (r *ModelVersionRepo) MarkDeployed(ctx context.Context, id int64) error {
 	}
 
 	now := time.Now().UTC()
-	res, err := tx.ExecContext(ctx, `
+	if _, err := tx.ExecContext(ctx, `
 		UPDATE model_versions SET status = 'deployed', deployed_at = $1 WHERE id = $2`,
 		now, id,
-	)
-	if err != nil {
-		return fmt.Errorf("mark deployed: %w", err)
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("mark deployed: model version %d not found", id)
-	}
-	return tx.Commit()
-}
-
-// MarkDeployedWithGate atomically checks the AUC improvement gate and deploys
-// the candidate if it passes. The gate check and deployment happen inside a
-// single transaction with FOR UPDATE locking on the deployed row to prevent
-// concurrent deployments from racing on a stale baseline.
-// Returns an error if the gate blocks or if the ID does not exist.
-func (r *ModelVersionRepo) MarkDeployedWithGate(ctx context.Context, candidateID int64, minImprovement float64) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Lock the currently deployed row (if any) to serialise concurrent deploys.
-	var currentAUC float64
-	err = tx.QueryRowContext(ctx, `
-		SELECT auc_roc FROM model_versions WHERE status = 'deployed'
-		ORDER BY deployed_at DESC LIMIT 1
-		FOR UPDATE`).Scan(&currentAUC)
-	if err != nil && err != sql.ErrNoRows {
-		return fmt.Errorf("lock active version: %w", err)
-	}
-	// err == sql.ErrNoRows means no current model — any positive AUC passes.
-
-	// Read candidate AUC.
-	var candidateAUC float64
-	if err2 := tx.QueryRowContext(ctx,
-		"SELECT auc_roc FROM model_versions WHERE id = $1", candidateID,
-	).Scan(&candidateAUC); err2 == sql.ErrNoRows {
-		return fmt.Errorf("mark deployed with gate: model version %d not found", candidateID)
-	} else if err2 != nil {
-		return fmt.Errorf("read candidate auc: %w", err2)
-	}
-
-	gate := NewDeploymentGate(minImprovement)
-	if !gate.ShouldDeploy(currentAUC, candidateAUC) {
-		return fmt.Errorf("deployment blocked: AUC %.4f does not improve over current %.4f by %.0f%%",
-			candidateAUC, currentAUC, minImprovement*100)
-	}
-
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE model_versions SET status = 'retired' WHERE status = 'deployed'",
 	); err != nil {
-		return fmt.Errorf("retire current model: %w", err)
-	}
-
-	now := time.Now().UTC()
-	res, err := tx.ExecContext(ctx, `
-		UPDATE model_versions SET status = 'deployed', deployed_at = $1 WHERE id = $2`,
-		now, candidateID,
-	)
-	if err != nil {
 		return fmt.Errorf("mark deployed: %w", err)
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("mark deployed: model version %d not found", candidateID)
 	}
 	return tx.Commit()
 }
@@ -199,11 +136,9 @@ func (r *ModelVersionRepo) List(ctx context.Context) ([]model.ModelVersion, erro
 	return versions, rows.Err()
 }
 
-// ReadyToRetrain returns true when the number of engagement post_events (save,
-// click, share) recorded after the active model's trained_at exceeds minNewPairs.
-// View and impression events are excluded — they are passive signals that don't
-// contribute to training pair quality. Returns false (not an error) when no
-// active model exists.
+// ReadyToRetrain returns true when the number of post_events recorded after
+// the active model's trained_at timestamp exceeds minNewPairs.
+// Returns false (not an error) when no active model exists.
 func (r *ModelVersionRepo) ReadyToRetrain(ctx context.Context, minNewPairs int) (bool, error) {
 	active, err := r.GetActive(ctx)
 	if err != nil {
@@ -215,9 +150,7 @@ func (r *ModelVersionRepo) ReadyToRetrain(ctx context.Context, minNewPairs int) 
 
 	var count int
 	if err := r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM post_events
-		WHERE created_at > $1
-		  AND event_type IN ('save', 'click', 'share')`, active.TrainedAt,
+		SELECT COUNT(*) FROM post_events WHERE created_at > $1`, active.TrainedAt,
 	).Scan(&count); err != nil {
 		return false, fmt.Errorf("count new pairs: %w", err)
 	}

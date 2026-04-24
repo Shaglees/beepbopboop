@@ -354,6 +354,9 @@ func Open(url string) (*sql.DB, error) {
 		updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_interests_user ON user_interests(user_id)")
+	db.Exec(`DO $$ BEGIN
+		ALTER TABLE user_interests ADD CONSTRAINT uq_user_interests_user_cat_topic UNIQUE (user_id, category, topic);
+	EXCEPTION WHEN duplicate_object THEN NULL; END $$`)
 
 	// User lifestyle tags
 	db.Exec(`CREATE TABLE IF NOT EXISTS user_lifestyle_tags (

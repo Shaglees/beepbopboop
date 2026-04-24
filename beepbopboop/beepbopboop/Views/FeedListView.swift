@@ -21,6 +21,12 @@ struct FeedListView: View {
                 feedList
             }
         }
+        .sheet(item: $selectedPost) { post in
+            NavigationStack {
+                PostDetailView(post: post)
+            }
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Subviews
@@ -65,12 +71,6 @@ struct FeedListView: View {
             } else if delta < -5 || newValue < 20 {
                 isHeaderVisible = true
             }
-        }
-        .sheet(item: $selectedPost) { post in
-            NavigationStack {
-                PostDetailView(post: post)
-            }
-            .presentationDragIndicator(.visible)
         }
     }
 

@@ -114,6 +114,23 @@ func (r *UserSettingsRepo) SetCalendarEnabled(userID string, enabled bool) error
 	return nil
 }
 
+// SetLocation updates only the location fields for a user, preserving all other settings.
+func (r *UserSettingsRepo) SetLocation(userID, locationName string, lat, lon *float64) error {
+	_, err := r.db.Exec(`
+		INSERT INTO user_settings (user_id, location_name, latitude, longitude, updated_at)
+		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+		ON CONFLICT(user_id) DO UPDATE SET
+			location_name = excluded.location_name,
+			latitude      = excluded.latitude,
+			longitude     = excluded.longitude,
+			updated_at    = CURRENT_TIMESTAMP`,
+		userID, nullString(locationName), nullFloat64(lat), nullFloat64(lon))
+	if err != nil {
+		return fmt.Errorf("set location: %w", err)
+	}
+	return nil
+}
+
 // UsersWithCalendarEnabled returns all user IDs that have calendar integration enabled.
 func (r *UserSettingsRepo) UsersWithCalendarEnabled() ([]string, error) {
 	rows, err := r.db.Query(`SELECT user_id FROM user_settings WHERE calendar_enabled = TRUE`)

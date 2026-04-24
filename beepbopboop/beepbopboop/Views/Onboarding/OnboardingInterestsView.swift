@@ -42,6 +42,8 @@ struct OnboardingInterestsView: View {
                         Button {
                             if expandedCategory == cat.id {
                                 expandedCategory = nil
+                                selectedCategories.remove(cat.id)
+                                interests.removeAll { $0.category == cat.id }
                             } else {
                                 expandedCategory = cat.id
                                 selectedCategories.insert(cat.id)

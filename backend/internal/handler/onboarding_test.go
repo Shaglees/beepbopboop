@@ -38,7 +38,8 @@ func TestOnboardingHandler_StoresEmbeddingForKnownInterests(t *testing.T) {
 
 	userRepo := repository.NewUserRepo(db)
 	userEmbRepo := repository.NewUserEmbeddingRepo(db)
-	h := handler.NewOnboardingHandler(userRepo, store, userEmbRepo)
+	interestRepo := repository.NewUserInterestRepo(db)
+	h := handler.NewOnboardingHandler(userRepo, store, userEmbRepo, interestRepo)
 
 	body := `{"interests":["Sports"]}`
 	req := httptest.NewRequest(http.MethodPost, "/user/interests", bytes.NewBufferString(body))
@@ -69,7 +70,8 @@ func TestOnboardingHandler_UnknownInterests_Returns200NoEmbedding(t *testing.T) 
 
 	userRepo := repository.NewUserRepo(db)
 	userEmbRepo := repository.NewUserEmbeddingRepo(db)
-	h := handler.NewOnboardingHandler(userRepo, store, userEmbRepo)
+	interestRepo := repository.NewUserInterestRepo(db)
+	h := handler.NewOnboardingHandler(userRepo, store, userEmbRepo, interestRepo)
 
 	body := `{"interests":["Unicorns","Alchemy"]}`
 	req := httptest.NewRequest(http.MethodPost, "/user/interests", bytes.NewBufferString(body))
@@ -95,7 +97,8 @@ func TestOnboardingHandler_InvalidJSON_Returns400(t *testing.T) {
 	store := embedding.NewPrototypeStore(db)
 	userRepo := repository.NewUserRepo(db)
 	userEmbRepo := repository.NewUserEmbeddingRepo(db)
-	h := handler.NewOnboardingHandler(userRepo, store, userEmbRepo)
+	interestRepo := repository.NewUserInterestRepo(db)
+	h := handler.NewOnboardingHandler(userRepo, store, userEmbRepo, interestRepo)
 
 	req := httptest.NewRequest(http.MethodPost, "/user/interests", bytes.NewBufferString("{bad json"))
 	req = req.WithContext(middleware.WithFirebaseUID(req.Context(), "firebase-onb-3"))

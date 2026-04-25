@@ -49,11 +49,77 @@ This SKILL.md is a **router**. Each mode lives in its own sibling file. After St
 | Publish envelope (lint → dedup → POST) | `../_shared/PUBLISH_ENVELOPE.md` |
 | Full image pipeline (invokable subskill) | `../beepbopboop-images/SKILL.md` |
 
-**Interest, trending, sports, and source ingestion** are delegated to the sibling `beepbopboop-news` skill. **Fashion** is delegated to `beepbopboop-fashion`. **Image sourcing** is delegated to `beepbopboop-images` (see `../_shared/IMAGES.md` for when to invoke it).
+**Interest, trending, sports, and source ingestion** are delegated to `beepbopboop-news`. **Fashion** to `beepbopboop-fashion`. **Food, movies, music, pets, science, travel, fitness, celebrity, gaming, and creators** are each delegated to their respective `beepbopboop-*` specialty skill (see Step 0a routing table). **Image sourcing** is delegated to `beepbopboop-images` (see `../_shared/IMAGES.md` for when to invoke it).
 
 ## Step 0: Load configuration
 
 Read `../_shared/CONFIG.md` and follow it. If the required keys are missing, jump to the Init Wizard (read `INIT_WIZARD.md`), then return here.
+
+## Step 0-pre: Preflight checks
+
+Before generating any content, verify the environment is ready. **If any required check fails, stop and report the issue.**
+
+### Required checks (fail if missing):
+
+```bash
+# 1. Backend reachable
+HINTS_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "$BEEPBOPBOOP_API_URL/posts/hints")
+if [ "$HINTS_CHECK" != "200" ]; then
+  echo "PREFLIGHT FAIL: Backend unreachable at $BEEPBOPBOOP_API_URL (HTTP $HINTS_CHECK)"
+  exit 1
+fi
+
+# 2. Auth valid
+AUTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "$BEEPBOPBOOP_API_URL/posts?limit=1" \
+  -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN")
+if [ "$AUTH_CHECK" != "200" ]; then
+  echo "PREFLIGHT FAIL: Auth token invalid (HTTP $AUTH_CHECK)"
+  exit 1
+fi
+
+# 3. Required CLIs
+for cmd in jq curl; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "PREFLIGHT FAIL: Required CLI '$cmd' not found"
+    exit 1
+  fi
+done
+```
+
+### Optional capability matrix:
+
+Check which specialty skills have their dependencies met. Print the result and use it when routing in batch mode — only route to skills that passed preflight.
+
+| Skill | Check |
+|---|---|
+| beepbopboop-food | `YELP_KEY` set |
+| beepbopboop-movies | `TMDB_KEY` set |
+| beepbopboop-music | `SPOTIFY_TOKEN` or `LASTFM_KEY` set |
+| beepbopboop-gaming | `RAWG_API_KEY` set (optional — falls back to web search) |
+| beepbopboop-travel | no external deps (web search) |
+| beepbopboop-science | no external deps (web search) |
+| beepbopboop-pets | no external deps (Petfinder is free) |
+| beepbopboop-fitness | no external deps |
+| beepbopboop-celebrity | no external deps (web search) |
+| beepbopboop-creators | no external deps (web search) |
+| beepbopboop-fashion | no external deps (web search + AI image gen) |
+| beepbopboop-news | no external deps |
+| beepbopboop-images | `BEEPBOPBOOP_IMGUR_CLIENT_ID` set (for re-hosting) |
+
+Print availability:
+```
+Preflight complete:
+  ✓ Backend reachable
+  ✓ Auth valid
+  ✓ jq, curl available
+  Specialty skills:
+    ✓ beepbopboop-food (YELP_KEY found)
+    ✗ beepbopboop-movies (TMDB_KEY missing — movie/show cards unavailable)
+    ✓ beepbopboop-music (SPOTIFY_TOKEN found)
+    ...
+```
+
+In batch mode (MODE_BATCH.md), skip unavailable specialty skills and note in the final report why they were skipped.
 
 ## Step 0d: Bootstrap server context (hints / stats / reactions / events)
 
@@ -84,9 +150,25 @@ Parse the user's input to determine which mode to use. When a mode is detected, 
 | `fashion`, `outfit`, `style`, `what to wear`, `drops`, `capsule wardrobe` | Fashion | **Delegate to `beepbopboop-fashion`** |
 | `digest`, `roundup`, `weekly digest`, `summary` | Digest | `MODE_DIGEST.md` |
 | `brief`, `morning brief`, `daily brief`, `today's take` | Brief | `MODE_BRIEF.md` |
+| `food`, `restaurant`, `dining`, `where to eat` | Food | **Delegate to `beepbopboop-food`** |
+| `movie`, `what to watch`, `streaming`, `TV` | Movies | **Delegate to `beepbopboop-movies`** |
+| `music`, `album`, `concert`, `playlist` | Music | **Delegate to `beepbopboop-music`** |
+| `pets`, `adoption`, `dog`, `cat` | Pets | **Delegate to `beepbopboop-pets`** |
+| `science`, `space`, `NASA`, `research` | Science | **Delegate to `beepbopboop-science`** |
+| `travel`, `destination`, `trip`, `vacation` | Travel | **Delegate to `beepbopboop-travel`** |
+| `fitness`, `workout`, `exercise`, `gym` | Fitness | **Delegate to `beepbopboop-fitness`** |
+| `celebrity`, `entertainment news`, `red carpet` | Celebrity | **Delegate to `beepbopboop-celebrity`** |
+| `gaming`, `video game`, `game release` | Gaming | **Delegate to `beepbopboop-gaming`** |
+| `creator`, `local artist`, `maker spotlight` | Creators | **Delegate to `beepbopboop-creators`** |
 | Everything else | Default flow | Continue to Step 0b |
 
 If a specific mode matched, skip Step 0b.
+
+### Step 0a-2: Specialty skill dispatch (batch mode)
+
+In batch mode (MODE_BATCH.md), when building the content plan at BT3, classify each post idea against the routing table above. If a match is found, delegate to the specialty skill instead of handling internally. Only use generic modes for ideas that don't match any specialty.
+
+**Priority:** Check specialty dispatch BEFORE falling through to Step 0b. A query like "best ramen near me" should go to `beepbopboop-food`, not `BASE_LOCAL.md`.
 
 ## Step 0b: Route — Local vs Interest-Based
 

@@ -166,19 +166,23 @@ Required fields: `name`, `rating`, `reviewCount`, `cuisine`, `address`, `latitud
 curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
   -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "{TITLE}",
-    "body": "{BODY}",
-    "display_hint": "restaurant",
-    "post_type": "place",
-    "image_url": "{YELP_IMAGE_URL}",
-    "external_url": {FOOD_DATA_JSON},
-    "locality": "{NEIGHBOURHOOD}",
-    "latitude": {LAT},
-    "longitude": {LON},
-    "labels": ["food", "restaurant", "{CUISINE_LOWERCASE}", "{NEIGHBOURHOOD_LOWERCASE}"]
-  }'
+  -d "$(jq -n \
+    --arg title "{TITLE}" \
+    --arg body "{BODY}" \
+    --arg image_url "{YELP_IMAGE_URL}" \
+    --argjson external_url "$(echo "$FOOD_DATA_JSON" | jq -c . | jq -Rs .)" \
+    --arg locality "{NEIGHBOURHOOD}" \
+    --argjson lat {LAT} \
+    --argjson lon {LON} \
+    '{
+      title: $title, body: $body, display_hint: "restaurant",
+      post_type: "place", image_url: $image_url, external_url: $external_url,
+      locality: $locality, latitude: $lat, longitude: $lon,
+      labels: ["food", "restaurant", "{CUISINE_LOWERCASE}", "{NEIGHBOURHOOD_LOWERCASE}"]
+    }')"
 ```
+
+See `../_shared/PUBLISH_ENVELOPE.md` § Structured external_url for the canonical pattern.
 
 Validate the response — if `valid: false`, fix the errors and retry once.
 

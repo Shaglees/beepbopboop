@@ -54,6 +54,12 @@ struct FeedItemView: View {
             } else {
                 StandardCard(post: post)
             }
+        case .boxScore:
+            if let card = BoxScoreCard(post: post) {
+                card
+            } else {
+                StandardCard(post: post)
+            }
         case .movie:
             if let card = MovieCard(post: post) {
                 card

@@ -414,5 +414,11 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_news_sources_geo ON news_sources (latitude, longitude)`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_news_sources_active ON news_sources (active) WHERE active = TRUE`)
 
+	// Wave 4: user photo storage
+	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS headshot_data BYTEA`)
+	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS headshot_type TEXT`)
+	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bodyshot_data BYTEA`)
+	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bodyshot_type TEXT`)
+
 	return db, nil
 }

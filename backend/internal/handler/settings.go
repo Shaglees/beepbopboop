@@ -113,17 +113,25 @@ func (h *SettingsHandler) UpdateLocation(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req struct {
-		Latitude  float64 `json:"latitude"`
-		Longitude float64 `json:"longitude"`
-		Name      string  `json:"name"`
+		Latitude  *float64 `json:"latitude"`
+		Longitude *float64 `json:"longitude"`
+		Name      string   `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
 		return
 	}
 
-	lat, lon := req.Latitude, req.Longitude
-	if err := h.userSettingsRepo.SetLocation(user.ID, req.Name, &lat, &lon); err != nil {
+	if req.Latitude == nil || req.Longitude == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "latitude and longitude are required"})
+		return
+	}
+	if *req.Latitude < -90 || *req.Latitude > 90 || *req.Longitude < -180 || *req.Longitude > 180 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "coordinates out of range"})
+		return
+	}
+
+	if err := h.userSettingsRepo.SetLocation(user.ID, req.Name, req.Latitude, req.Longitude); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update location"})
 		return
 	}

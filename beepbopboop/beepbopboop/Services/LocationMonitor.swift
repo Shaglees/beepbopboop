@@ -32,18 +32,20 @@ class LocationMonitor: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard location.distance(from: lastSent) > minimumDistance,
               timeSince > minimumInterval else { return }
 
-        lastSentLat = location.coordinate.latitude
-        lastSentLon = location.coordinate.longitude
-        lastSentTime = Date().timeIntervalSince1970
+        let lat = location.coordinate.latitude
+        let lon = location.coordinate.longitude
 
-        Task {
+        Task { @MainActor in
             let geocoder = CLGeocoder()
             let name = try? await geocoder.reverseGeocodeLocation(location).first?.locality
-            try? await apiService.updateLocation(
-                latitude: location.coordinate.latitude,
-                longitude: location.coordinate.longitude,
-                name: name
-            )
+            do {
+                try await apiService.updateLocation(latitude: lat, longitude: lon, name: name)
+                lastSentLat = lat
+                lastSentLon = lon
+                lastSentTime = Date().timeIntervalSince1970
+            } catch {
+                // Don't persist state — will retry on next location update
+            }
         }
     }
 

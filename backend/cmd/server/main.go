@@ -85,6 +85,7 @@ func main() {
 	lifestyleRepo := repository.NewUserLifestyleRepo(db)
 	contentPrefsRepo := repository.NewUserContentPrefsRepo(db)
 	newsSourceRepo := repository.NewNewsSourceRepo(db)
+	photoRepo := repository.NewUserPhotoRepo(db)
 
 	var ranker *ranking.Ranker
 	if cfg.RankerModelPath != "" {
@@ -167,6 +168,7 @@ func main() {
 	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo, interestRepo)
 	profileH := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, contentPrefsRepo, userSettingsRepo)
 	newsSourceH := handler.NewNewsSourceHandler(newsSourceRepo)
+	photoH := handler.NewPhotoHandler(userRepo, photoRepo, agentRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -227,6 +229,11 @@ func main() {
 		r.Get("/settings/spread", spreadH.GetSpread)
 		r.Put("/settings/spread", spreadH.PutSpread)
 		r.Get("/settings/spread/history", spreadH.GetHistory)
+		r.Put("/user/photos/headshot", photoH.UploadHeadshot)
+		r.Put("/user/photos/bodyshot", photoH.UploadBodyshot)
+		r.Get("/user/photos/headshot", photoH.GetHeadshot)
+		r.Get("/user/photos/bodyshot", photoH.GetBodyshot)
+		r.Delete("/user/photos/{type}", photoH.DeletePhoto)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -256,6 +263,8 @@ func main() {
 		r.Get("/news-sources", newsSourceH.List)
 		r.Post("/news-sources", newsSourceH.Create)
 		r.Get("/news-sources/{id}", newsSourceH.Get)
+		r.Get("/user/photos/headshot", photoH.GetHeadshot)
+		r.Get("/user/photos/bodyshot", photoH.GetBodyshot)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())

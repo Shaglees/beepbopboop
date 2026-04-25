@@ -84,6 +84,7 @@ func main() {
 	interestRepo := repository.NewUserInterestRepo(db)
 	lifestyleRepo := repository.NewUserLifestyleRepo(db)
 	contentPrefsRepo := repository.NewUserContentPrefsRepo(db)
+	newsSourceRepo := repository.NewNewsSourceRepo(db)
 
 	var ranker *ranking.Ranker
 	if cfg.RankerModelPath != "" {
@@ -165,6 +166,7 @@ func main() {
 	}()
 	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo, interestRepo)
 	profileH := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, contentPrefsRepo, userSettingsRepo)
+	newsSourceH := handler.NewNewsSourceHandler(newsSourceRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -251,6 +253,9 @@ func main() {
 		r.Get("/admin/ml/versions", mlAdminH.ListVersions)
 		r.Post("/admin/ml/models/{id}/deploy", mlAdminH.DeployVersion)
 		r.Get("/user/profile", profileH.GetProfileAgent)
+		r.Get("/news-sources", newsSourceH.List)
+		r.Post("/news-sources", newsSourceH.Create)
+		r.Get("/news-sources/{id}", newsSourceH.Get)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())

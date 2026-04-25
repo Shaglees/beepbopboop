@@ -119,6 +119,25 @@ func (r *CalendarEventRepo) IsPublished(eventKey, userID, window string) (bool, 
 	return exists, nil
 }
 
+// MarkPublished sets the status of a calendar event to "published".
+func (r *CalendarEventRepo) MarkPublished(eventKey string) error {
+	_, err := r.db.Exec(`UPDATE interest_calendar_events SET status = 'published', updated_at = CURRENT_TIMESTAMP WHERE event_key = $1`, eventKey)
+	if err != nil {
+		return fmt.Errorf("mark calendar event published: %w", err)
+	}
+	return nil
+}
+
+// DeletePostByID removes a post by ID. Used for cleanup when transactional
+// guarantees are needed (e.g. materialize worker dedup).
+func (r *CalendarEventRepo) DeletePostByID(postID string) error {
+	_, err := r.db.Exec(`DELETE FROM posts WHERE id = $1`, postID)
+	if err != nil {
+		return fmt.Errorf("delete post by id: %w", err)
+	}
+	return nil
+}
+
 // scanCalendarEvents scans a result set of interest calendar event rows.
 func scanCalendarEvents(rows *sql.Rows) ([]model.InterestCalendarEvent, error) {
 	var result []model.InterestCalendarEvent

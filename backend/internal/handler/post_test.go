@@ -1187,6 +1187,7 @@ func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
 		"restaurant":        `{"name":"Test Cafe","latitude":40.7,"longitude":-74.0}`,
 		"creator_spotlight": `{"designation":"Painter","source":"Brooklyn Rail"}`,
 		"video_embed":       `{"provider":"youtube","video_id":"dQw4w9WgXcQ","embed_url":"https://www.youtube.com/embed/dQw4w9WgXcQ","watch_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg","channel_title":"Rick Astley"}`,
+		"local_news":        `{"content_kind":"article","source_name":"Dublin Inquirer","source_url":"https://dublininquirer.com","article_url":"https://dublininquirer.com/2026/04/25/housing-report","trust_score":80}`,
 	}
 
 	for hint := range handler.ValidDisplayHints {

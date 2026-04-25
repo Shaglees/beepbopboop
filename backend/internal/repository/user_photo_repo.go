@@ -80,10 +80,18 @@ func (r *UserPhotoRepo) GetBodyshot(userID string) ([]byte, string, error) {
 }
 
 // DeletePhoto NULLs the data and type columns for the given photo type ("headshot" or "bodyshot").
+// photoType MUST be validated by the caller before calling this method.
 func (r *UserPhotoRepo) DeletePhoto(userID, photoType string) error {
-	dataCol := fmt.Sprintf("%s_data", photoType)
-	typeCol := fmt.Sprintf("%s_type", photoType)
-	query := fmt.Sprintf(`UPDATE users SET %s=NULL, %s=NULL WHERE id=$1`, dataCol, typeCol)
+	// Use explicit column mapping instead of string interpolation to prevent SQL injection.
+	var query string
+	switch photoType {
+	case "headshot":
+		query = `UPDATE users SET headshot_data=NULL, headshot_type=NULL WHERE id=$1`
+	case "bodyshot":
+		query = `UPDATE users SET bodyshot_data=NULL, bodyshot_type=NULL WHERE id=$1`
+	default:
+		return fmt.Errorf("delete photo: invalid photo type %q", photoType)
+	}
 	_, err := r.db.Exec(query, userID)
 	if err != nil {
 		return fmt.Errorf("delete %s: %w", photoType, err)

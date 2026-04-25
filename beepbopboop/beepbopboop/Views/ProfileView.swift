@@ -118,7 +118,7 @@ struct ProfileView: View {
                                         imageData: fullBodyData,
                                         isUploading: isUploadingFullBody,
                                         onUpload: { showFullBodyPicker = true },
-                                        onRemove: { Task { await removePhoto(type: "fullbody") } }
+                                        onRemove: { Task { await removePhoto(type: "bodyshot") } }
                                     )
                                 }
 
@@ -233,7 +233,7 @@ struct ProfileView: View {
                 ImagePicker(imageData: $fullBodyData)
                     .onChange(of: fullBodyData) { _, newData in
                         if let data = newData {
-                            Task { await uploadPhoto(type: "fullbody", data: data) }
+                            Task { await uploadPhoto(type: "bodyshot", data: data) }
                         }
                     }
             }
@@ -313,7 +313,7 @@ struct ProfileView: View {
 
     private func loadPhotos() async {
         async let headshot = try? await apiService.getPhoto(type: "headshot")
-        async let fullBody = try? await apiService.getPhoto(type: "fullbody")
+        async let fullBody = try? await apiService.getPhoto(type: "bodyshot")
         headshotData = await headshot
         fullBodyData = await fullBody
     }

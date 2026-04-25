@@ -161,14 +161,25 @@ func (w *MaterializeWorker) materializePost(userID string, event model.InterestC
 	}
 
 	if err := w.calendarRepo.LogPost(event.EventKey, userID, window, post.ID); err != nil {
-		// Non-fatal: post was created, dedup log may be missing but we can retry safely
-		// due to ON CONFLICT DO NOTHING in LogPost.
-		slog.Warn("materialize worker: log post failed",
+		// LogPost failed after post was created — clean up the orphan post to prevent
+		// duplicates on the next cycle (IsPublished would return false).
+		slog.Error("materialize worker: log post failed, cleaning up orphan post",
 			"event_key", event.EventKey,
 			"user_id", userID,
 			"post_id", post.ID,
 			"error", err,
 		)
+		if delErr := w.calendarRepo.DeletePostByID(post.ID); delErr != nil {
+			slog.Error("materialize worker: failed to clean up orphan post",
+				"post_id", post.ID, "error", delErr)
+		}
+		return fmt.Errorf("log post: %w", err)
+	}
+
+	// Mark the calendar event as published once at least one post exists for it.
+	if err := w.calendarRepo.MarkPublished(event.EventKey); err != nil {
+		slog.Warn("materialize worker: mark published failed",
+			"event_key", event.EventKey, "error", err)
 	}
 
 	slog.Info("materialize worker: post created",

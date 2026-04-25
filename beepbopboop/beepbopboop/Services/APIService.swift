@@ -513,6 +513,30 @@ class APIService: ObservableObject {
         return try JSONDecoder().decode(FeedbackSummary.self, from: data)
     }
 
+    // MARK: - Location
+
+    @MainActor
+    func updateLocation(latitude: Double, longitude: Double, name: String?) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/location") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var body: [String: Any] = ["latitude": latitude, "longitude": longitude]
+        if let name { body["name"] = name }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
     // MARK: - Profile
 
     @MainActor

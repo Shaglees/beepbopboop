@@ -1,5 +1,8 @@
 import SwiftUI
 
+private let previewTracker = EventTracker.preview
+private let previewAPI = APIService(authService: AuthService())
+
 struct OnboardingInterestCategory: Identifiable {
     let id: String
     let name: String
@@ -79,17 +82,16 @@ struct OnboardingInterestsView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(cat.previewHints, id: \.self) { hint in
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(Color(.systemGray5))
-                                        .frame(width: 240, height: 160)
-                                        .overlay(
-                                            Text(hint.replacingOccurrences(of: "_", with: " ").capitalized)
-                                                .font(.system(size: 15, weight: .semibold, design: .serif))
-                                        )
+                                    FeedItemView(post: MockPostFactory.post(for: hint))
+                                        .frame(width: 280)
+                                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                                        .allowsHitTesting(false)
                                 }
                             }
                             .padding(.horizontal)
                         }
+                        .environmentObject(previewTracker)
+                        .environmentObject(previewAPI)
 
                         FlowLayout(spacing: 8) {
                             ForEach(cat.topics, id: \.self) { topic in

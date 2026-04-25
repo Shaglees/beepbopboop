@@ -96,7 +96,7 @@ func (r *SpreadRepo) Actual30d(userID string) (map[string]float64, error) {
 		if !labelsRaw.Valid || labelsRaw.String == "" {
 			continue
 		}
-		// Labels stored as comma-separated string; first label is the vertical.
+		// Labels are stored as a JSON array; first element is the vertical.
 		primary := firstLabel(labelsRaw.String)
 		if primary != "" {
 			counts[primary]++
@@ -117,14 +117,13 @@ func (r *SpreadRepo) Actual30d(userID string) (map[string]float64, error) {
 	return result, nil
 }
 
-// firstLabel extracts the first label from a comma-separated labels string.
+// firstLabel extracts the first label from a JSON-array labels column.
 func firstLabel(labels string) string {
-	for i, c := range labels {
-		if c == ',' {
-			return labels[:i]
-		}
+	var arr []string
+	if err := json.Unmarshal([]byte(labels), &arr); err != nil || len(arr) == 0 {
+		return ""
 	}
-	return labels
+	return arr[0]
 }
 
 // InsertHistory writes a daily snapshot row.

@@ -230,6 +230,9 @@ func main() {
 	// Agent-token-authenticated routes (Claude skill / agent client)
 	r.Group(func(r chi.Router) {
 		r.Use(agentAuth)
+		r.Get("/settings/spread", spreadH.GetSpread)
+		r.Put("/settings/spread", spreadH.PutSpread)
+		r.Get("/settings/spread/history", spreadH.GetHistory)
 		r.Get("/posts", postH.ListPosts)
 		r.Get("/posts/stats", postH.GetPostStats)
 		r.Get("/posts/hints", postH.GetPostHints)

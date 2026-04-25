@@ -81,12 +81,31 @@ class ContentMixViewModel: ObservableObject {
     }
 
     func togglePin(_ vertical: String) {
-        if pinned.contains(vertical) {
+        let wasPinned = pinned.contains(vertical)
+        if wasPinned {
             pinned.remove(vertical)
         } else {
             pinned.insert(vertical)
         }
-        Task { await save() }
+        Task {
+            let req = PutSpreadRequest(
+                targets: targets,
+                omega: omega,
+                pinned: Array(pinned),
+                autoAdjust: autoAdjust
+            )
+            do {
+                try await apiService.updateSpreadTargets(req)
+            } catch {
+                // Rollback on failure
+                if wasPinned {
+                    pinned.insert(vertical)
+                } else {
+                    pinned.remove(vertical)
+                }
+                self.error = "Failed to save"
+            }
+        }
     }
 
     func updateWeight(_ vertical: String, newWeight: Double) {

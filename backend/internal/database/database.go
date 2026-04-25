@@ -420,5 +420,36 @@ func Open(url string) (*sql.DB, error) {
 	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bodyshot_data BYTEA`)
 	db.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bodyshot_type TEXT`)
 
+	// Wave 4: interest calendar events
+	db.Exec(`CREATE TABLE IF NOT EXISTS interest_calendar_events (
+		id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		event_key     TEXT NOT NULL UNIQUE,
+		domain        TEXT NOT NULL,
+		title         TEXT NOT NULL,
+		start_time    TIMESTAMPTZ NOT NULL,
+		end_time      TIMESTAMPTZ,
+		timezone      TEXT NOT NULL DEFAULT 'UTC',
+		status        TEXT NOT NULL DEFAULT 'scheduled',
+		entity_type   TEXT NOT NULL,
+		entity_ids    JSONB NOT NULL DEFAULT '{}',
+		interest_tags TEXT[] NOT NULL DEFAULT '{}',
+		payload       JSONB NOT NULL DEFAULT '{}',
+		created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_ice_domain_start ON interest_calendar_events (domain, start_time)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_ice_status ON interest_calendar_events (status) WHERE status = 'scheduled'`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_ice_tags ON interest_calendar_events USING GIN (interest_tags)`)
+
+	// Wave 4: calendar post dedup log
+	db.Exec(`CREATE TABLE IF NOT EXISTS calendar_post_log (
+		event_key  TEXT NOT NULL,
+		user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		window     TEXT NOT NULL,
+		post_id    UUID NOT NULL REFERENCES posts(id),
+		created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (event_key, user_id, window)
+	)`)
+
 	return db, nil
 }

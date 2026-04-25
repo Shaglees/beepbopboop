@@ -72,6 +72,7 @@ Read `../_shared/IMAGES.md` and the dedicated `../beepbopboop-images` subskill. 
 | `drops`, `new releases`, `collabs` | Drops | `MODE_DROPS.md` |
 | `seasonal`, `season`, `transition` | Seasonal | `MODE_SEASONAL.md` |
 | `capsule`, `wardrobe` | Capsule | `MODE_CAPSULE.md` |
+| `"try on" / "try-on" / "virtual fitting"` | tryon | `MODE_TRYON.md` |
 
 ## Publishing
 

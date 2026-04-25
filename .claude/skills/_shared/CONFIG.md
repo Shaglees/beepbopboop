@@ -87,4 +87,4 @@ Batch tuning:
 
 ## Gate
 
-**Do NOT proceed past Step 0 if `BEEPBOPBOOP_API_URL` or `BEEPBOPBOOP_AGENT_TOKEN` are missing.** Instead, invoke the init wizard of the calling skill (e.g. `beepbopboop-post/INIT_WIZARD.md`).
+**Do NOT proceed past Step 0 if `BEEPBOPBOOP_API_URL` or `BEEPBOPBOOP_AGENT_TOKEN` are missing.** Instead, invoke the init wizard of the calling skill (e.g. `beepbopboop-post/MODE_INIT.md`).

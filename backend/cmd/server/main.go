@@ -77,6 +77,7 @@ func main() {
 	modelVersionRepo := ranking.NewModelVersionRepo(db)
 	feedbackRepo := repository.NewFeedbackRepo(db)
 	calendarRepo := repository.NewCalendarRepo(db)
+	calendarEventRepo := repository.NewCalendarEventRepo(db)
 	followRepo := repository.NewFollowRepo(db)
 	videoRepo := repository.NewVideoRepo(db)
 	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
@@ -273,7 +274,7 @@ func main() {
 	weatherWorker := weather.NewWorker(weatherSvc, postRepo, userSettingsRepo, 30*time.Minute)
 	go weatherWorker.Run(workerCtx)
 
-	sportsWorker := sports.NewWorker(sportsSvc, postRepo, 10*time.Minute)
+	sportsWorker := sports.NewWorker(sportsSvc, postRepo, calendarEventRepo, 10*time.Minute)
 	go sportsWorker.Run(workerCtx)
 
 	schedulerWorker := scheduler.NewWorker(postRepo, 1*time.Minute)

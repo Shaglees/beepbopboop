@@ -1209,6 +1209,16 @@ private struct OutfitCard: View {
 
     private var content: OutfitContent { post.outfitContent }
 
+    private var isTryOn: Bool {
+        guard let raw = post.externalURL,
+              let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let variant = json["image_variant"] as? String else {
+            return false
+        }
+        return variant == "tryon"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Hero image with gradient overlays
@@ -1238,6 +1248,25 @@ private struct OutfitCard: View {
                     Rectangle()
                         .fill(darkBg)
                         .frame(height: 320)
+                }
+
+                // AI try-on label (bottom-left overlay)
+                if isTryOn {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Text("AI try-on preview")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(.black.opacity(0.55))
+                                .clipShape(Capsule())
+                                .padding(.leading, 12)
+                                .padding(.bottom, 12)
+                            Spacer()
+                        }
+                    }
                 }
 
                 // Top gradient with header info

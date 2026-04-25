@@ -1044,11 +1044,24 @@ func (r *PostRepo) UpsertWeatherPost(gridKey, title, body string, lat, lon float
 	return err
 }
 
+// validSportsHints is the set of display hints the sports worker is allowed to write.
+// It mirrors the relevant entries in handler.ValidDisplayHints without creating a circular import.
+var validSportsHints = map[string]bool{
+	"matchup":          true,
+	"scoreboard":       true,
+	"standings":        true,
+	"box_score":        true,
+	"player_spotlight": true,
+}
+
 // UpsertSportsPost creates or replaces a sports post for a specific ESPN game.
 // The ID is deterministic from gameID so the same game always updates in place.
 // gameDataJSON is serialized GameData stored in external_url for the iOS card.
-// displayHint should be "matchup" for pre-game or "scoreboard" for in-progress/final.
+// displayHint must be one of: matchup, scoreboard, standings, box_score, player_spotlight.
 func (r *PostRepo) UpsertSportsPost(gameID, title, body, league, gameDataJSON, displayHint string) error {
+	if !validSportsHints[displayHint] {
+		return fmt.Errorf("invalid sports display hint: %q", displayHint)
+	}
 	id := "sports-" + gameID
 	labelsJSON, _ := json.Marshal([]string{"sports", strings.ToLower(league)})
 

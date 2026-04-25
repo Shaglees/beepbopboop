@@ -175,6 +175,7 @@ func TestHints_StructuredHintsMarkedAsSuch(t *testing.T) {
 		"fitness": true, "science": true, "movie": true, "show": true,
 		"player_spotlight": true, "box_score": true,
 		"feedback": true, "creator_spotlight": true, "video_embed": true,
+		"local_news": true,
 	}
 	for _, e := range hr.DisplayHints {
 		want := structured[e.Hint]
@@ -244,7 +245,7 @@ func TestHints_RendersDocumentsClientBehavior(t *testing.T) {
 		"RestaurantCard": true, "DestinationCard": true,
 		"MovieCard": true, "ShowCard": true, "PetSpotlightCard": true,
 		"FitnessCard": true, "ScienceCard": true, "FeedbackCard": true,
-		"CreatorSpotlightCard": true, "VideoEmbedCard": true,
+		"CreatorSpotlightCard": true, "VideoEmbedCard": true, "LocalNewsCard": true,
 	}
 
 	for _, e := range hr.DisplayHints {

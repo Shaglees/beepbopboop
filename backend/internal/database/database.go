@@ -394,5 +394,25 @@ func Open(url string) (*sql.DB, error) {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_content_prefs_user ON user_content_prefs(user_id)")
 
+	// Wave 4: news sources
+	db.Exec(`CREATE TABLE IF NOT EXISTS news_sources (
+		id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		name         TEXT NOT NULL,
+		url          TEXT NOT NULL UNIQUE,
+		feed_url     TEXT,
+		area_label   TEXT NOT NULL,
+		latitude     DOUBLE PRECISION NOT NULL,
+		longitude    DOUBLE PRECISION NOT NULL,
+		radius_km    DOUBLE PRECISION NOT NULL DEFAULT 25.0,
+		topics       TEXT[] NOT NULL DEFAULT '{}',
+		trust_score  SMALLINT NOT NULL DEFAULT 50,
+		fetch_method TEXT NOT NULL DEFAULT 'rss',
+		active       BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_news_sources_geo ON news_sources (latitude, longitude)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_news_sources_active ON news_sources (active) WHERE active = TRUE`)
+
 	return db, nil
 }

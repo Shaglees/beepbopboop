@@ -51,6 +51,7 @@ type hintEntry struct {
 	Renders        *hintRenders    `json:"renders,omitempty"`
 	PickWhen       string          `json:"pick_when,omitempty"`
 	AvoidWhen      string          `json:"avoid_when,omitempty"`
+	Generator      string          `json:"generator,omitempty"`
 }
 
 // hintRenders documents what the iOS client actually draws for a given hint.
@@ -499,5 +500,19 @@ func TestHints_MetadataComplete(t *testing.T) {
 				t.Errorf("hint %q missing avoid_when guidance", e.Hint)
 			}
 		})
+	}
+}
+
+// TestHints_GeneratorFieldPresent ensures every hint declares which skill
+// produces it (or "system" for backend-only hints). Skills use this to
+// filter the catalog to their own hints without hard-coding hint names.
+func TestHints_GeneratorFieldPresent(t *testing.T) {
+	h := newHintsHandler(t)
+	hr := fetchHints(t, h)
+
+	for _, e := range hr.DisplayHints {
+		if e.Generator == "" {
+			t.Errorf("hint %q missing generator field", e.Hint)
+		}
 	}
 }

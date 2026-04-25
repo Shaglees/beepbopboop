@@ -422,3 +422,82 @@ func TestHints_EventHintNoWarningWhenDateInBody(t *testing.T) {
 		}
 	}
 }
+
+// TestHints_ExamplesDecodeForStructuredHints validates that every structured
+// hint's example has an external_url that decodes into the shape iOS expects.
+// This catches "lint passes but iOS card returns nil" drift.
+func TestHints_ExamplesDecodeForStructuredHints(t *testing.T) {
+	h := newHintsHandler(t)
+	hr := fetchHints(t, h)
+
+	for _, entry := range hr.DisplayHints {
+		if !entry.StructuredJSON {
+			continue
+		}
+		entry := entry
+		t.Run(entry.Hint, func(t *testing.T) {
+			// Decode the example to get external_url
+			var example struct {
+				ExternalURL string `json:"external_url"`
+			}
+			if err := json.Unmarshal(entry.Example, &example); err != nil {
+				t.Fatalf("cannot decode example: %v", err)
+			}
+			if example.ExternalURL == "" {
+				t.Fatalf("structured hint %q example has empty external_url", entry.Hint)
+			}
+
+			// Verify external_url is valid JSON (not a raw object in the request —
+			// it should be a JSON string that contains JSON)
+			var raw json.RawMessage
+			if err := json.Unmarshal([]byte(example.ExternalURL), &raw); err != nil {
+				t.Fatalf("external_url for %q is not valid JSON: %v\nvalue: %s", entry.Hint, err, example.ExternalURL)
+			}
+
+			// Verify all required_fields that start with "external_url:" are present
+			var parsed map[string]interface{}
+			if err := json.Unmarshal([]byte(example.ExternalURL), &parsed); err != nil {
+				t.Fatalf("external_url for %q cannot be parsed as object: %v", entry.Hint, err)
+			}
+			for _, rf := range entry.RequiredFields {
+				if len(rf) > len("external_url:") && rf[:len("external_url:")] == "external_url:" {
+					key := rf[len("external_url:"):]
+					if _, ok := parsed[key]; !ok {
+						t.Errorf("hint %q example external_url missing required field %q", entry.Hint, key)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestHints_MetadataComplete ensures every hint has the documentation
+// fields skills need: description, required_fields, example, renders,
+// pick_when, and avoid_when. Prevents undocumented hints from shipping.
+func TestHints_MetadataComplete(t *testing.T) {
+	h := newHintsHandler(t)
+	hr := fetchHints(t, h)
+
+	for _, e := range hr.DisplayHints {
+		t.Run(e.Hint, func(t *testing.T) {
+			if e.Description == "" {
+				t.Errorf("hint %q has empty description", e.Hint)
+			}
+			if len(e.RequiredFields) == 0 {
+				t.Errorf("hint %q has no required_fields", e.Hint)
+			}
+			if len(e.Example) == 0 {
+				t.Errorf("hint %q has empty example", e.Hint)
+			}
+			if e.Renders == nil || e.Renders.Card == "" {
+				t.Errorf("hint %q missing renders.card", e.Hint)
+			}
+			if e.PickWhen == "" {
+				t.Errorf("hint %q missing pick_when guidance", e.Hint)
+			}
+			if e.AvoidWhen == "" {
+				t.Errorf("hint %q missing avoid_when guidance", e.Hint)
+			}
+		})
+	}
+}

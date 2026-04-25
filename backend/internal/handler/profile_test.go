@@ -20,8 +20,9 @@ func TestGetProfile_Empty(t *testing.T) {
 	lifestyleRepo := repository.NewUserLifestyleRepo(db)
 	prefsRepo := repository.NewUserContentPrefsRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
+	settingsRepo := repository.NewUserSettingsRepo(db)
 
-	h := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, prefsRepo)
+	h := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, prefsRepo, settingsRepo)
 
 	req := httptest.NewRequest("GET", "/user/profile", nil)
 	ctx := middleware.WithFirebaseUID(req.Context(), "firebase-profile-empty")
@@ -52,8 +53,9 @@ func TestGetProfile_WithData(t *testing.T) {
 	lifestyleRepo := repository.NewUserLifestyleRepo(db)
 	prefsRepo := repository.NewUserContentPrefsRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
+	settingsRepo := repository.NewUserSettingsRepo(db)
 
-	h := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, prefsRepo)
+	h := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, prefsRepo, settingsRepo)
 
 	// Setup user with profile data
 	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-profile-data")

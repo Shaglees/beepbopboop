@@ -444,11 +444,11 @@ func Open(url string) (*sql.DB, error) {
 	// Wave 4: calendar post dedup log
 	db.Exec(`CREATE TABLE IF NOT EXISTS calendar_post_log (
 		event_key  TEXT NOT NULL,
-		user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		window     TEXT NOT NULL,
-		post_id    UUID NOT NULL REFERENCES posts(id),
+		user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		"window"   TEXT NOT NULL,
+		post_id    TEXT NOT NULL REFERENCES posts(id),
 		created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		PRIMARY KEY (event_key, user_id, window)
+		PRIMARY KEY (event_key, user_id, "window")
 	)`)
 
 	return db, nil

@@ -197,7 +197,7 @@ curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
   -d '{
     "title": "{TITLE}",
     "body": "{BODY}",
-    "external_url": {TRAVEL_JSON_STRING},
+    "external_url": $(echo "$TRAVEL_JSON" | jq -c . | jq -Rs .),
     "locality": "{City}",
     "latitude": {LAT},
     "longitude": {LON},

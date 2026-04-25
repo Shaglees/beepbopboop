@@ -222,7 +222,7 @@ curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
   -d '{
     "title": "<TITLE>",
     "body": "<BODY>",
-    "external_url": <FITNESS_JSON_STRING>,
+    "external_url": $(echo "$FITNESS_JSON" | jq -c . | jq -Rs .),
     "locality": "<CITY or SOURCE NAME>",
     "latitude": <LAT or null>,
     "longitude": <LON or null>,

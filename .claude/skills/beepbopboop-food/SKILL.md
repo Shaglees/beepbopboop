@@ -172,13 +172,15 @@ curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
     "display_hint": "restaurant",
     "post_type": "place",
     "image_url": "{YELP_IMAGE_URL}",
-    "external_url": {FOOD_DATA_JSON},
+    "external_url": $(echo "$FOOD_DATA_JSON" | jq -c . | jq -Rs .),
     "locality": "{NEIGHBOURHOOD}",
     "latitude": {LAT},
     "longitude": {LON},
     "labels": ["food", "restaurant", "{CUISINE_LOWERCASE}", "{NEIGHBOURHOOD_LOWERCASE}"]
   }'
 ```
+
+See `../_shared/PUBLISH_ENVELOPE.md` § Structured external_url for the canonical pattern.
 
 Validate the response — if `valid: false`, fix the errors and retry once.
 

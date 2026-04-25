@@ -106,9 +106,39 @@ Retry policy:
 Notes:
 
 - `latitude` / `longitude` must be `null` (unquoted) when absent, never `"null"` or `0`.
-- For structured hints (where `structured_json: true` in the hint catalog) `external_url` is a **JSON string** containing the payload, not a URL. Double-escape inside the outer JSON.
 - `images[]` is only used with `display_hint=outfit` today; each entry `{url, role, caption}` where `role` ∈ `hero|detail|product`.
 - On success you get the full created post; save the `id` if you need to follow-up with events/reactions.
+
+### Structured external_url — canonical pattern
+
+For hints where `structured_json: true` in the hint catalog, `external_url` carries a **JSON string** (not a raw object). The backend field is `ExternalURL string` — if you send a raw object, JSON decoding fails before lint even runs.
+
+**Correct pattern (using jq):**
+
+```bash
+# Build your data object
+DATA_JSON='{"name":"Ramen House","rating":4.5,"cuisine":["Japanese","Ramen"],"latitude":53.34,"longitude":-6.26}'
+
+# Stringify it for the outer JSON envelope
+EXTERNAL_URL=$(echo "$DATA_JSON" | jq -c . | jq -Rs .)
+
+# Use in payload — note $EXTERNAL_URL already has outer quotes from jq -Rs
+PAYLOAD=$(jq -n \
+  --arg title "Best Ramen in Dublin" \
+  --arg body "Rich tonkotsu broth..." \
+  --argjson ext "$EXTERNAL_URL" \
+  '{title: $title, body: $body, external_url: $ext, display_hint: "restaurant", post_type: "place"}')
+```
+
+**Result in the JSON body:**
+```json
+{"external_url": "{\"name\":\"Ramen House\",\"rating\":4.5}"}
+```
+
+**Common mistake (raw object — will fail):**
+```json
+{"external_url": {"name": "Ramen House", "rating": 4.5}}
+```
 
 ## Step P4: Per-batch summary
 

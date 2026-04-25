@@ -6,6 +6,22 @@ Steps IN1–IN10 for initial setup and configuration.
 
 **Skip this section unless Step 0a detected init mode or Step 0 found missing config.**
 
+## Non-interactive bootstrap
+
+If running in an environment without `AskUserQuestion` (OpenClaw, Codex, etc.):
+
+1. Check if `~/.config/beepbopboop/config` exists
+2. If yes: source it and skip the wizard — all config keys are loaded
+3. If no: print the config template from `../_shared/CONFIG.md` and stop
+
+The interactive wizard below writes to the same `~/.config/beepbopboop/config` file, so both paths converge.
+
+---
+
+## Interactive wizard (Claude Code)
+
+*The following steps use `AskUserQuestion` and are only available in Claude Code.*
+
 Interactive wizard using `AskUserQuestion` at each step. If re-running with an existing config, show current values as defaults.
 
 ## IN1: Welcome

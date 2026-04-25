@@ -525,10 +525,10 @@ func validateGameData(externalURL string, hint string, errs *[]validationIssue, 
 
 	// Warnings
 	if hint == "matchup" && g.GameTime == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.gameTime", Code: "missing", Message: "matchup without gameTime"})
+		*warns = append(*warns, validationIssue{Field: "external_url.gameTime", Code: "recommended", Message: `Add "gameTime": "<RFC3339 datetime>" to your external_url JSON. MatchupCard displays the scheduled tip-off/kick-off time. Example: "gameTime": "2026-04-16T19:00:00Z"`})
 	}
 	if g.Sport == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.sport", Code: "missing", Message: "missing sport field on game data"})
+		*warns = append(*warns, validationIssue{Field: "external_url.sport", Code: "recommended", Message: `Add "sport": "<sport>" to your external_url JSON. Example: "sport": "basketball"`})
 	}
 }
 
@@ -849,17 +849,24 @@ func validateFoodData(externalURL string, errs *[]validationIssue, warns *[]vali
 		*errs = append(*errs, validationIssue{Field: "external_url.name", Code: "required", Message: "restaurant data missing name"})
 	}
 	if fd.Rating == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.rating", Code: "missing", Message: "restaurant data missing rating"})
+		*warns = append(*warns, validationIssue{Field: "external_url.rating", Code: "recommended", Message: `Add "rating": <number 1.0-5.0> to your external_url JSON for a richer RestaurantCard render. Example: "rating": 4.3`})
 	}
 	if fd.Latitude == nil || fd.Longitude == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.latitude", Code: "missing", Message: "restaurant data missing coordinates"})
+		*warns = append(*warns, validationIssue{Field: "external_url.latitude", Code: "recommended", Message: `Add "latitude": <float> and "longitude": <float> to your external_url JSON. RestaurantCard shows a map pin when coordinates are present. Example: "latitude": 53.3498, "longitude": -6.2603`})
+	}
+	if fd.ReviewCount == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.reviewCount", Code: "recommended", Message: `Add "reviewCount": <integer> to your external_url JSON. RestaurantCard shows review count next to rating. Example: "reviewCount": 127`})
+	}
+	if len(fd.Cuisine) == 0 {
+		*warns = append(*warns, validationIssue{Field: "external_url.cuisine", Code: "recommended", Message: `Add "cuisine": ["Italian", "Pizza"] to your external_url JSON. RestaurantCard displays cuisine tags.`})
 	}
 }
 
 // --- Fitness data validation ---
 
 type fitnessDataValidation struct {
-	Activity *string `json:"activity"`
+	Activity    *string `json:"activity"`
+	DurationMin *int    `json:"duration_min"`
 }
 
 func validateFitnessData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
@@ -869,7 +876,10 @@ func validateFitnessData(externalURL string, errs *[]validationIssue, warns *[]v
 		return
 	}
 	if f.Activity == nil || *f.Activity == "" {
-		*warns = append(*warns, validationIssue{Field: "external_url.activity", Code: "missing", Message: "fitness data missing activity"})
+		*warns = append(*warns, validationIssue{Field: "external_url.activity", Code: "recommended", Message: `Add "activity": "<activity name>" to your external_url JSON. FitnessCard uses this as the card title. Example: "activity": "Morning HIIT Circuit"`})
+	}
+	if f.DurationMin == nil {
+		*warns = append(*warns, validationIssue{Field: "external_url.duration_min", Code: "recommended", Message: `Add "duration_min": <integer> to your external_url JSON. FitnessCard shows workout duration. Example: "duration_min": 30`})
 	}
 }
 
@@ -924,13 +934,13 @@ func validateMusicData(externalURL string, hint string, errs *[]validationIssue,
 		*errs = append(*errs, validationIssue{Field: "external_url.artist", Code: "required", Message: "artist is required"})
 	}
 	if hint == "album" && (m.Title == nil || *m.Title == "") {
-		*warns = append(*warns, validationIssue{Field: "external_url.title", Code: "missing", Message: "album missing title"})
+		*warns = append(*warns, validationIssue{Field: "external_url.title", Code: "recommended", Message: `Add "title": "<album name>" to your external_url JSON. AlbumCard displays this as the album title. Example: "title": "The Tortured Poets Department"`})
 	}
 	if hint == "concert" && m.Venue == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.venue", Code: "missing", Message: "concert missing venue"})
+		*warns = append(*warns, validationIssue{Field: "external_url.venue", Code: "recommended", Message: `Add "venue": "<venue name>" to your external_url JSON. ConcertCard displays the venue prominently. Example: "venue": "Levi's Stadium"`})
 	}
 	if hint == "concert" && m.Date == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.date", Code: "missing", Message: "concert missing date"})
+		*warns = append(*warns, validationIssue{Field: "external_url.date", Code: "recommended", Message: `Add "date": "<YYYY-MM-DD>" to your external_url JSON. ConcertCard shows the event date. Example: "date": "2026-09-10"`})
 	}
 }
 
@@ -955,7 +965,7 @@ func validateMediaData(externalURL string, hint string, errs *[]validationIssue,
 		*errs = append(*errs, validationIssue{Field: "external_url.title", Code: "required", Message: "title is required"})
 	}
 	if m.Type == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.type", Code: "missing", Message: "type field missing (movie | show)"})
+		*warns = append(*warns, validationIssue{Field: "external_url.type", Code: "recommended", Message: `Add "type": "movie" or "show" to your external_url JSON. Example: "type": "movie"`})
 	}
 }
 
@@ -980,7 +990,7 @@ func validatePlayerData(externalURL string, errs *[]validationIssue, warns *[]va
 		*errs = append(*errs, validationIssue{Field: "external_url.sport", Code: "required", Message: "sport is required"})
 	}
 	if p.Team == nil || *p.Team == "" {
-		*warns = append(*warns, validationIssue{Field: "external_url.team", Code: "missing", Message: "player_spotlight missing team"})
+		*warns = append(*warns, validationIssue{Field: "external_url.team", Code: "recommended", Message: `Add "team": "<team name>" to your external_url JSON. PlayerSpotlightCard displays the team. Example: "team": "Los Angeles Lakers"`})
 	}
 }
 
@@ -1014,14 +1024,17 @@ func validateBoxScoreData(externalURL string, errs *[]validationIssue, warns *[]
 		*errs = append(*errs, validationIssue{Field: "external_url.away", Code: "required", Message: "away team is required"})
 	}
 	if b.Sport == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.sport", Code: "missing", Message: "missing sport field on box_score data"})
+		*warns = append(*warns, validationIssue{Field: "external_url.sport", Code: "recommended", Message: `Add "sport": "<sport>" to your external_url JSON. Example: "sport": "basketball"`})
 	}
 }
 
 // --- Pet data validation ---
 
 type petDataValidation struct {
-	Type *string `json:"type"`
+	Type    *string `json:"type"`
+	Name    *string `json:"name"`
+	Species *string `json:"species"`
+	Breed   *string `json:"breed"`
 }
 
 func validatePetData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
@@ -1033,6 +1046,15 @@ func validatePetData(externalURL string, errs *[]validationIssue, warns *[]valid
 	if p.Type == nil || *p.Type == "" {
 		*errs = append(*errs, validationIssue{Field: "external_url.type", Code: "required", Message: "pet data type is required (adoption | tip | breed)"})
 	}
+	if p.Name == nil || *p.Name == "" {
+		*warns = append(*warns, validationIssue{Field: "external_url.name", Code: "recommended", Message: `Add "name": "<pet name>" to your external_url JSON. PetSpotlightCard displays the pet's name as the card title. Example: "name": "Biscuit"`})
+	}
+	if p.Species == nil || *p.Species == "" {
+		*warns = append(*warns, validationIssue{Field: "external_url.species", Code: "recommended", Message: `Add "species": "<species>" to your external_url JSON. PetSpotlightCard uses this for the adoption CTA. Example: "species": "dog"`})
+	}
+	if p.Breed == nil || *p.Breed == "" {
+		*warns = append(*warns, validationIssue{Field: "external_url.breed", Code: "recommended", Message: `Add "breed": "<breed name>" to your external_url JSON. PetSpotlightCard displays the breed. Example: "breed": "Labrador Mix"`})
+	}
 }
 
 // --- Travel data validation (destination) ---
@@ -1042,6 +1064,7 @@ type travelDataValidation struct {
 	Country   *string  `json:"country"`
 	Latitude  *float64 `json:"latitude"`
 	Longitude *float64 `json:"longitude"`
+	KnownFor  *string  `json:"knownFor"`
 }
 
 func validateTravelData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
@@ -1057,16 +1080,20 @@ func validateTravelData(externalURL string, errs *[]validationIssue, warns *[]va
 		*errs = append(*errs, validationIssue{Field: "external_url.country", Code: "required", Message: "country is required"})
 	}
 	if t.Latitude == nil || t.Longitude == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.latitude", Code: "missing", Message: "destination data missing coordinates"})
+		*warns = append(*warns, validationIssue{Field: "external_url.latitude", Code: "recommended", Message: `Add "latitude": <float> and "longitude": <float> to your external_url JSON. DestinationCard shows a map pin when coordinates are present. Example: "latitude": 48.8566, "longitude": 2.3522`})
+	}
+	if t.KnownFor == nil || *t.KnownFor == "" {
+		*warns = append(*warns, validationIssue{Field: "external_url.knownFor", Code: "recommended", Message: `Add "knownFor": "<description>" to your external_url JSON. DestinationCard uses this as a subtitle. Example: "knownFor": "Art museums and riverside walks"`})
 	}
 }
 
 // --- Science data validation ---
 
 type scienceDataValidation struct {
-	Category *string `json:"category"`
-	Source   *string `json:"source"`
-	Headline *string `json:"headline"`
+	Category *string  `json:"category"`
+	Source   *string  `json:"source"`
+	Headline *string  `json:"headline"`
+	Tags     []string `json:"tags"`
 }
 
 func validateScienceData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
@@ -1083,6 +1110,9 @@ func validateScienceData(externalURL string, errs *[]validationIssue, warns *[]v
 	}
 	if s.Headline == nil || *s.Headline == "" {
 		*errs = append(*errs, validationIssue{Field: "external_url.headline", Code: "required", Message: "headline is required"})
+	}
+	if len(s.Tags) == 0 {
+		*warns = append(*warns, validationIssue{Field: "external_url.tags", Code: "recommended", Message: `Add "tags": ["astronomy", "NASA"] to your external_url JSON. ScienceCard shows topic tags. Example: "tags": ["physics", "quantum"]`})
 	}
 }
 

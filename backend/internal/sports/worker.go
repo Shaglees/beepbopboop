@@ -78,7 +78,7 @@ func (w *Worker) processGame(g FetchedGame) error {
 		return fmt.Errorf("marshal game data: %w", err)
 	}
 
-	return w.postRepo.UpsertSportsPost(gameID, title, body, g.League, string(gameDataJSON))
+	return w.postRepo.UpsertSportsPost(gameID, title, body, g.League, string(gameDataJSON), HintForState(g.State))
 }
 
 func buildPostTitle(gd GameData) string {
@@ -86,6 +86,15 @@ func buildPostTitle(gd GameData) string {
 		return fmt.Sprintf("%s %d · %s %d", gd.Away.Abbr, *gd.Away.Score, gd.Home.Abbr, *gd.Home.Score)
 	}
 	return fmt.Sprintf("%s @ %s", gd.Away.Abbr, gd.Home.Abbr)
+}
+
+// HintForState maps an ESPN game state to the iOS display hint.
+// "pre" → "matchup" (pre-game card); all other states → "scoreboard" (live/final scores card).
+func HintForState(state string) string {
+	if state == "pre" {
+		return "matchup"
+	}
+	return "scoreboard"
 }
 
 func buildPostBody(gd GameData) string {

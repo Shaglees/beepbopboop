@@ -39,6 +39,7 @@ type TeamInfo struct {
 type FetchedGame struct {
 	EventID string
 	League  string
+	State   string // ESPN state: "pre", "in", "post"
 	Data    GameData
 }
 
@@ -49,10 +50,10 @@ type leagueDef struct {
 }
 
 var leagueDefs = []leagueDef{
-	{"hockey", "hockey/nhl", "nhl"},
-	{"basketball", "basketball/nba", "nba"},
-	{"baseball", "baseball/mlb", "mlb"},
-	{"football", "american-football/nfl", "nfl"},
+	{"hockey", "hockey/nhl", "NHL"},
+	{"basketball", "basketball/nba", "NBA"},
+	{"baseball", "baseball/mlb", "MLB"},
+	{"football", "american-football/nfl", "NFL"},
 }
 
 const (
@@ -158,10 +159,12 @@ func transformEvents(events []espnEvent, lg leagueDef) []FetchedGame {
 		if len(ev.Competitions) == 0 {
 			continue
 		}
-		gd := transformGame(ev.Date, ev.Competitions[0], lg)
+		comp := ev.Competitions[0]
+		gd := transformGame(ev.Date, comp, lg)
 		games = append(games, FetchedGame{
 			EventID: ev.ID,
 			League:  lg.name,
+			State:   comp.Status.Type.State,
 			Data:    gd,
 		})
 	}

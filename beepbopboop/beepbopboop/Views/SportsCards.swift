@@ -62,7 +62,7 @@ struct ScoreboardCard: View {
                         HStack(spacing: 4) {
                             Image(systemName: game.sportIcon)
                                 .font(.caption2)
-                            Text(league)
+                            Text(league.uppercased())
                                 .font(.caption.weight(.bold))
                         }
                         .foregroundStyle(.white.opacity(0.6))
@@ -245,7 +245,7 @@ struct MatchupCard: View {
                         HStack(spacing: 5) {
                             Image(systemName: game.sportIcon)
                                 .font(.caption2)
-                            Text(league)
+                            Text(league.uppercased())
                                 .font(.caption.weight(.bold))
                         }
                         .foregroundStyle(.white.opacity(0.7))
@@ -525,7 +525,7 @@ struct StandingsCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // League header bar
             HStack(spacing: 8) {
-                Text(standings.league)
+                Text(standings.league.uppercased())
                     .font(.system(size: 15, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                 Text("SCORES")
@@ -721,7 +721,7 @@ struct PlayerSpotlightCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Header: team + league
                     HStack(spacing: 6) {
-                        Text(player.league)
+                        Text(player.league.uppercased())
                             .font(.system(size: 10, weight: .heavy))
                             .tracking(1.5)
                             .foregroundStyle(.white.opacity(0.5))
@@ -1217,7 +1217,7 @@ struct BoxScoreCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: "figure.baseball")
                             .font(.caption2)
-                        Text(game.league)
+                        Text(game.league.uppercased())
                             .font(.caption.weight(.bold))
                     }
                     .foregroundStyle(.white.opacity(0.5))

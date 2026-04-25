@@ -370,7 +370,7 @@ struct PostDetailView: View {
                                     HStack(spacing: 4) {
                                         Image(systemName: game.sportIcon)
                                             .font(.caption2)
-                                        Text(league)
+                                        Text(league.uppercased())
                                             .font(.caption.weight(.bold))
                                     }
                                     .foregroundStyle(.white.opacity(0.6))
@@ -539,7 +539,7 @@ struct PostDetailView: View {
                                     HStack(spacing: 4) {
                                         Image(systemName: game.sportIcon)
                                             .font(.caption2)
-                                        Text(league)
+                                        Text(league.uppercased())
                                             .font(.caption.weight(.bold))
                                     }
                                     .foregroundStyle(.white.opacity(0.7))
@@ -687,7 +687,7 @@ struct PostDetailView: View {
 
                     // League header
                     HStack(spacing: 8) {
-                        Text(standings.league)
+                        Text(standings.league.uppercased())
                             .font(.system(size: 20, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
                         Text("SCORES")

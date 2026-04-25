@@ -16,6 +16,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/ab"
 	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
+	"github.com/shanegleeson/beepbopboop/backend/internal/entertainment"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
@@ -77,6 +78,7 @@ func main() {
 	modelVersionRepo := ranking.NewModelVersionRepo(db)
 	feedbackRepo := repository.NewFeedbackRepo(db)
 	calendarRepo := repository.NewCalendarRepo(db)
+	calendarEventRepo := repository.NewCalendarEventRepo(db)
 	followRepo := repository.NewFollowRepo(db)
 	videoRepo := repository.NewVideoRepo(db)
 	userEmbeddingRepo := repository.NewUserEmbeddingRepo(db)
@@ -84,6 +86,8 @@ func main() {
 	interestRepo := repository.NewUserInterestRepo(db)
 	lifestyleRepo := repository.NewUserLifestyleRepo(db)
 	contentPrefsRepo := repository.NewUserContentPrefsRepo(db)
+	newsSourceRepo := repository.NewNewsSourceRepo(db)
+	photoRepo := repository.NewUserPhotoRepo(db)
 
 	var ranker *ranking.Ranker
 	if cfg.RankerModelPath != "" {
@@ -165,6 +169,8 @@ func main() {
 	}()
 	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo, interestRepo)
 	profileH := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, contentPrefsRepo, userSettingsRepo)
+	newsSourceH := handler.NewNewsSourceHandler(newsSourceRepo)
+	photoH := handler.NewPhotoHandler(userRepo, photoRepo, agentRepo)
 
 	// Middleware
 	firebaseAuth := middleware.FirebaseAuth(firebaseAuthClient)
@@ -225,6 +231,11 @@ func main() {
 		r.Get("/settings/spread", spreadH.GetSpread)
 		r.Put("/settings/spread", spreadH.PutSpread)
 		r.Get("/settings/spread/history", spreadH.GetHistory)
+		r.Put("/user/photos/headshot", photoH.UploadHeadshot)
+		r.Put("/user/photos/bodyshot", photoH.UploadBodyshot)
+		r.Get("/user/photos/headshot", photoH.GetHeadshot)
+		r.Get("/user/photos/bodyshot", photoH.GetBodyshot)
+		r.Delete("/user/photos/{type}", photoH.DeletePhoto)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -251,6 +262,11 @@ func main() {
 		r.Get("/admin/ml/versions", mlAdminH.ListVersions)
 		r.Post("/admin/ml/models/{id}/deploy", mlAdminH.DeployVersion)
 		r.Get("/user/profile", profileH.GetProfileAgent)
+		r.Get("/news-sources", newsSourceH.List)
+		r.Post("/news-sources", newsSourceH.Create)
+		r.Get("/news-sources/{id}", newsSourceH.Get)
+		r.Get("/user/photos/headshot", photoH.GetHeadshot)
+		r.Get("/user/photos/bodyshot", photoH.GetBodyshot)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())
@@ -259,7 +275,7 @@ func main() {
 	weatherWorker := weather.NewWorker(weatherSvc, postRepo, userSettingsRepo, 30*time.Minute)
 	go weatherWorker.Run(workerCtx)
 
-	sportsWorker := sports.NewWorker(sportsSvc, postRepo, 10*time.Minute)
+	sportsWorker := sports.NewWorker(sportsSvc, postRepo, calendarEventRepo, 10*time.Minute)
 	go sportsWorker.Run(workerCtx)
 
 	schedulerWorker := scheduler.NewWorker(postRepo, 1*time.Minute)
@@ -279,6 +295,30 @@ func main() {
 
 	videoHealthWorker := videohealth.NewScheduledWorker(videoRepo, videohealth.NewHTTPChecker(nil), 6*time.Hour)
 	go videoHealthWorker.Run(workerCtx)
+
+	// Entertainment ingest worker (TMDB)
+	if cfg.TMDBKey != "" {
+		entertainmentWorker := entertainment.NewWorker(calendarEventRepo, "https://api.themoviedb.org", cfg.TMDBKey, "US")
+		go entertainmentWorker.Run(workerCtx)
+		slog.Info("entertainment ingest worker enabled")
+	} else {
+		slog.Warn("TMDB_KEY not set — entertainment ingest disabled")
+	}
+
+	// Calendar materialization worker
+	materializeAgent := os.Getenv("CALENDAR_AGENT_ID")
+	if materializeAgent == "" {
+		materializeAgent = os.Getenv("FEEDBACK_AGENT_ID")
+	}
+	if materializeAgent != "" {
+		materializeWorker := calendar.NewMaterializeWorker(
+			calendarEventRepo, postRepo, userRepo, interestRepo, materializeAgent,
+		)
+		go materializeWorker.Run(workerCtx)
+		slog.Info("calendar materialize worker enabled")
+	} else {
+		slog.Warn("no agent ID for calendar materialization — worker disabled")
+	}
 
 	if ranker != nil {
 		ranker.StartWatcher(workerCtx, cfg.RankerModelPath, 5*time.Minute)

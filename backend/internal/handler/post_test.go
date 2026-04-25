@@ -1187,6 +1187,7 @@ func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
 		"restaurant":        `{"name":"Test Cafe","latitude":40.7,"longitude":-74.0}`,
 		"creator_spotlight": `{"designation":"Painter","source":"Brooklyn Rail"}`,
 		"video_embed":       `{"provider":"youtube","video_id":"dQw4w9WgXcQ","embed_url":"https://www.youtube.com/embed/dQw4w9WgXcQ","watch_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg","channel_title":"Rick Astley"}`,
+		"local_news":        `{"content_kind":"article","source_name":"Dublin Inquirer","source_url":"https://dublininquirer.com","article_url":"https://dublininquirer.com/2026/04/25/housing-report","trust_score":80}`,
 	}
 
 	for hint := range handler.ValidDisplayHints {
@@ -1229,7 +1230,7 @@ func TestValidImageRoles_AllTestedViaLint(t *testing.T) {
 func TestValidationMaps_Sorted(t *testing.T) {
 	expectedPostTypes := []string{"article", "discovery", "event", "place", "video"}
 	expectedVisibility := []string{"personal", "private", "public"}
-	expectedHints := []string{"album", "article", "box_score", "brief", "calendar", "card", "comparison", "concert", "creator_spotlight", "deal", "destination", "digest", "entertainment", "event", "feedback", "fitness", "game_release", "game_review", "matchup", "movie", "outfit", "pet_spotlight", "place", "player_spotlight", "restaurant", "science", "scoreboard", "show", "standings", "video_embed", "weather"}
+	expectedHints := []string{"album", "article", "box_score", "brief", "calendar", "card", "comparison", "concert", "creator_spotlight", "deal", "destination", "digest", "entertainment", "event", "feedback", "fitness", "game_release", "game_review", "local_news", "matchup", "movie", "outfit", "pet_spotlight", "place", "player_spotlight", "restaurant", "science", "scoreboard", "show", "standings", "video_embed", "weather"}
 	expectedRoles := []string{"detail", "hero", "product"}
 
 	checkMap := func(name string, m map[string]bool, expected []string) {

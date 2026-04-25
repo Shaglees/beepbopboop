@@ -66,6 +66,7 @@ var ValidDisplayHints = map[string]bool{
 	"feedback":          true,
 	"creator_spotlight": true,
 	"video_embed":       true,
+	"local_news":        true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -261,7 +262,7 @@ func validatePost(req *createPostRequest) validationResult {
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
 		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" ||
 		req.DisplayHint == "feedback" || req.DisplayHint == "creator_spotlight" ||
-		req.DisplayHint == "video_embed"
+		req.DisplayHint == "video_embed" || req.DisplayHint == "local_news"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -376,13 +377,15 @@ func validatePost(req *createPostRequest) validationResult {
 			validateVideoEmbedData(req.ExternalURL, &errs, &warns)
 		case "creator_spotlight":
 			validateCreatorData(req.ExternalURL, &errs, &warns)
+		case "local_news":
+			validateLocalNewsData(req.ExternalURL, &errs, &warns)
 		}
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" ||
 		req.DisplayHint == "destination" || req.DisplayHint == "fitness" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
 		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" || req.DisplayHint == "pet_spotlight" || req.DisplayHint == "feedback" ||
-		req.DisplayHint == "video_embed" || req.DisplayHint == "creator_spotlight" {
+		req.DisplayHint == "video_embed" || req.DisplayHint == "creator_spotlight" || req.DisplayHint == "local_news" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",
@@ -1167,6 +1170,40 @@ func validateCreatorData(externalURL string, errs *[]validationIssue, warns *[]v
 			Code:    "recommended",
 			Message: "Add \"area_name\": \"<neighborhood or city>\" to your external_url JSON for local context.",
 		})
+	}
+}
+
+// --- Local news data validation ---
+
+type localNewsDataValidation struct {
+	ContentKind *string `json:"content_kind"`
+	SourceName  *string `json:"source_name"`
+	SourceURL   *string `json:"source_url"`
+	ArticleURL  *string `json:"article_url"`
+	TrustScore  *int    `json:"trust_score"`
+}
+
+func validateLocalNewsData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var n localNewsDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &n); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for local_news hint"})
+		return
+	}
+	if n.ContentKind == nil || *n.ContentKind == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.content_kind", Code: "required", Message: "content_kind is required (article, video, hybrid)"})
+	} else {
+		switch *n.ContentKind {
+		case "article", "video", "hybrid":
+			// valid
+		default:
+			*errs = append(*errs, validationIssue{Field: "external_url.content_kind", Code: "invalid", Message: fmt.Sprintf("unknown content_kind %q; must be article, video, or hybrid", *n.ContentKind)})
+		}
+	}
+	if n.SourceName == nil || *n.SourceName == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.source_name", Code: "required", Message: "source_name is required"})
+	}
+	if n.SourceURL == nil || *n.SourceURL == "" {
+		*warns = append(*warns, validationIssue{Field: "external_url.source_url", Code: "recommended", Message: `Add "source_url" to your external_url JSON for source attribution.`})
 	}
 }
 

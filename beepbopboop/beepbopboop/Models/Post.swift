@@ -195,6 +195,7 @@ struct Post: Codable, Identifiable {
         case feedback
         case creatorSpotlight
         case videoEmbed
+        case localNews
     }
 
     var displayHintValue: DisplayHintValue {
@@ -229,6 +230,7 @@ struct Post: Codable, Identifiable {
         case "feedback": return .feedback
         case "creator_spotlight": return .creatorSpotlight
         case "video_embed": return .videoEmbed
+        case "local_news": return .localNews
         default: return .card
         }
     }
@@ -316,6 +318,7 @@ struct Post: Codable, Identifiable {
         case .feedback: return Color(red: 0.365, green: 0.376, blue: 0.996)
         case .creatorSpotlight: return Color(red: 0.541, green: 0.169, blue: 0.886)
         case .videoEmbed: return Color(red: 0.898, green: 0.051, blue: 0.071)
+        case .localNews: return Color(red: 0.165, green: 0.478, blue: 0.839)
         }
         }())
     }
@@ -353,6 +356,7 @@ struct Post: Codable, Identifiable {
         case .feedback: return feedbackData?.feedbackType == "rating" ? "star.fill" : "checklist"
         case .creatorSpotlight: return "paintpalette"
         case .videoEmbed: return "play.rectangle.fill"
+        case .localNews: return "newspaper.fill"
         }
     }
 
@@ -389,6 +393,7 @@ struct Post: Codable, Identifiable {
         case .feedback: return "Ask"
         case .creatorSpotlight: return "Local"
         case .videoEmbed: return "Video"
+        case .localNews: return "Local News"
         }
     }
 

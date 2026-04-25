@@ -23,6 +23,7 @@ type Config struct {
 	EmbeddingOutputDimensionality int
 	EmbeddingAllowImageURLParts   bool
 	GoogleAPIKey                  string
+	TMDBKey                       string
 }
 
 func Load() Config {
@@ -39,6 +40,7 @@ func Load() Config {
 		EmbeddingOutputDimensionality: envInt("EMBEDDING_OUTPUT_DIM", 1536),
 		EmbeddingAllowImageURLParts:   envBool("EMBEDDING_ALLOW_IMAGE_URL_PARTS", false),
 		GoogleAPIKey:                  os.Getenv("GOOGLE_API_KEY"),
+		TMDBKey:                       os.Getenv("TMDB_KEY"),
 	}
 }
 

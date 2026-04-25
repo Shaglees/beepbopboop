@@ -20,11 +20,11 @@ func TestWorker_InfersFromEngagement(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		postID, _ := repository.GenerateTestID()
 		db.Exec(`INSERT INTO posts (id, agent_id, user_id, title, body, labels, status, display_hint)
-			VALUES ($1, 'agent1', $2, 'test', 'body', '["sports"]', 'published', 'card')`,
+			VALUES ($1, 'weather-bot', $2, 'test', 'body', '["sports"]', 'published', 'card')`,
 			postID, user.ID)
-		db.Exec(`INSERT INTO post_events (id, post_id, user_id, event_type, created_at)
-			VALUES ($1, $2, $3, 'save', NOW() - INTERVAL '1 day')`,
-			postID+"evt", postID, user.ID)
+		db.Exec(`INSERT INTO post_events (post_id, user_id, event_type, created_at)
+			VALUES ($1, $2, 'save', NOW() - INTERVAL '1 day')`,
+			postID, user.ID)
 	}
 
 	w := interest.NewWorker(db, interestRepo)

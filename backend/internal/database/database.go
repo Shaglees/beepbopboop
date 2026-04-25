@@ -162,6 +162,18 @@ func Open(url string) (*sql.DB, error) {
 	// Calendar integration opt-in flag per user
 	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS calendar_enabled BOOLEAN NOT NULL DEFAULT FALSE")
 
+	// Content-mix spread targets and history
+	db.Exec("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS spread_targets JSONB")
+
+	db.Exec(`CREATE TABLE IF NOT EXISTS spread_history (
+		user_id    TEXT NOT NULL REFERENCES users(id),
+		date       DATE NOT NULL,
+		targets    JSONB NOT NULL,
+		actuals    JSONB NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, date)
+	)`)
+
 	// Calendar events synced from device (EventKit/iOS)
 	db.Exec(`CREATE TABLE IF NOT EXISTS calendar_events (
 		id          TEXT NOT NULL,

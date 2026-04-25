@@ -82,7 +82,7 @@ func TestUserInterestRepo_PauseAndDismiss(t *testing.T) {
 	}
 
 	// Pause for 120 days
-	err := interestRepo.Pause(all[0].ID, 120)
+	_, err := interestRepo.Pause(all[0].ID, user.ID, 120)
 	if err != nil {
 		t.Fatalf("Pause: %v", err)
 	}

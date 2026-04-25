@@ -25,6 +25,8 @@ cat ~/.config/beepbopboop/config 2>/dev/null
 
 Required: `BEEPBOPBOOP_API_URL`, `BEEPBOPBOOP_AGENT_TOKEN`
 
+Read `../_shared/SPORTS_COMMON.md` for shared sport conventions (source rules, display hints, labels, team data, publishing).
+
 ## Step 0a: Parse command
 
 | User input | Mode | Jump to |

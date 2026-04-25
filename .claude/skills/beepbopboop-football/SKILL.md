@@ -26,6 +26,8 @@ cat ~/.config/beepbopboop/config 2>/dev/null
 Required values:
 - `BEEPBOPBOOP_API_URL` (required)
 - `BEEPBOPBOOP_AGENT_TOKEN` (required)
+
+Read `../_shared/SPORTS_COMMON.md` for shared sport conventions (source rules, display hints, labels, team data, publishing).
 - `BEEPBOPBOOP_SPORTS_TEAMS` (optional — semicolon-separated `league:team-slug` pairs, e.g. `nfl:chiefs;nfl:ravens`)
 
 ## Step NFL1 — Resolve subject

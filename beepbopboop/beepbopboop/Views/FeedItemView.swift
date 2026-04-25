@@ -152,6 +152,8 @@ struct FeedItemView: View {
             } else {
                 StandardCard(post: post)
             }
+        case .localNews:
+            LocalNewsCard(post: post)
         default:
             StandardCard(post: post)
         }

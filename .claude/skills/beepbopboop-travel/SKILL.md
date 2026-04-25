@@ -194,19 +194,22 @@ beepbopgraph check --title "{TITLE}" --labels travel,destination,{country-slug} 
 curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
   -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "{TITLE}",
-    "body": "{BODY}",
-    "external_url": $(echo "$TRAVEL_JSON" | jq -c . | jq -Rs .),
-    "locality": "{City}",
-    "latitude": {LAT},
-    "longitude": {LON},
-    "post_type": "discovery",
-    "visibility": "public",
-    "display_hint": "destination",
-    "labels": ["travel", "destination", "{country-slug}", "{continent}"],
-    "images": [{"url": "{HERO_URL}", "role": "hero", "caption": "{City}, {Country}"}]
-  }' | jq .
+  -d "$(jq -n \
+    --arg title "{TITLE}" \
+    --arg body "{BODY}" \
+    --argjson external_url "$(echo "$TRAVEL_JSON" | jq -c . | jq -Rs .)" \
+    --arg locality "{City}" \
+    --argjson lat {LAT} \
+    --argjson lon {LON} \
+    --arg hero_url "{HERO_URL}" \
+    --arg caption "{City}, {Country}" \
+    '{
+      title: $title, body: $body, external_url: $external_url,
+      locality: $locality, latitude: $lat, longitude: $lon,
+      post_type: "discovery", visibility: "public", display_hint: "destination",
+      labels: ["travel", "destination", "{country-slug}", "{continent}"],
+      images: [{url: $hero_url, role: "hero", caption: $caption}]
+    }')" | jq .
 ```
 
 ### Save to history

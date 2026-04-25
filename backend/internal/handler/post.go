@@ -382,7 +382,7 @@ func validatePost(req *createPostRequest) validationResult {
 		req.DisplayHint == "destination" || req.DisplayHint == "fitness" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
 		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" || req.DisplayHint == "pet_spotlight" || req.DisplayHint == "feedback" ||
-		req.DisplayHint == "video_embed" {
+		req.DisplayHint == "video_embed" || req.DisplayHint == "creator_spotlight" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",
@@ -1146,6 +1146,20 @@ func validateCreatorData(externalURL string, errs *[]validationIssue, warns *[]v
 			Code:    "recommended",
 			Message: "Add \"links\": {\"instagram\": \"@handle\", \"website\": \"https://...\"} to your external_url JSON. Supported keys: website, instagram, bandcamp, etsy, substack, soundcloud, behance.",
 		})
+	} else {
+		supportedLinkKeys := map[string]bool{
+			"website": true, "instagram": true, "bandcamp": true,
+			"etsy": true, "substack": true, "soundcloud": true, "behance": true,
+		}
+		for key := range c.Links {
+			if !supportedLinkKeys[key] {
+				*warns = append(*warns, validationIssue{
+					Field:   "external_url.links." + key,
+					Code:    "unsupported_key",
+					Message: fmt.Sprintf("Link key %q is not supported by iOS CreatorSpotlightCard. Supported keys: website, instagram, bandcamp, etsy, substack, soundcloud, behance.", key),
+				})
+			}
+		}
 	}
 	if c.AreaName == nil || *c.AreaName == "" {
 		*warns = append(*warns, validationIssue{

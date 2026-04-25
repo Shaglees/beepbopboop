@@ -133,6 +133,8 @@ func main() {
 	multiFeedH := handler.NewMultiFeedHandler(userRepo, postRepo, userSettingsRepo, weightsRepo, eventRepo, reactionRepo, followRepo, userEmbFront)
 	followH := handler.NewFollowHandler(userRepo, followRepo)
 	settingsH := handler.NewSettingsHandler(userRepo, userSettingsRepo)
+	spreadRepo := repository.NewSpreadRepo(db)
+	spreadH := handler.NewSpreadHandler(userRepo, spreadRepo)
 	eventsH := handler.NewEventsHandler(userRepo, agentRepo, eventRepo)
 	weightsH := handler.NewWeightsHandler(agentRepo, userRepo, weightsRepo)
 	weightsSummaryH := handler.NewWeightsSummaryHandler(userRepo, weightsRepo, eventRepo)
@@ -220,6 +222,9 @@ func main() {
 		r.Put("/user/lifestyle", profileH.SetLifestyle)
 		r.Put("/user/content-prefs", profileH.SetContentPrefs)
 		r.Get("/experiments/{name}/variant", experimentsH.GetVariant)
+		r.Get("/settings/spread", spreadH.GetSpread)
+		r.Put("/settings/spread", spreadH.PutSpread)
+		r.Get("/settings/spread/history", spreadH.GetHistory)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)

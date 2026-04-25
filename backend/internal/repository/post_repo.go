@@ -1046,23 +1046,25 @@ func (r *PostRepo) UpsertWeatherPost(gridKey, title, body string, lat, lon float
 
 // UpsertSportsPost creates or replaces a sports post for a specific ESPN game.
 // The ID is deterministic from gameID so the same game always updates in place.
-// gameDataJSON is serialized GameData stored in external_url for the iOS scoreboard card.
-func (r *PostRepo) UpsertSportsPost(gameID, title, body, league, gameDataJSON string) error {
+// gameDataJSON is serialized GameData stored in external_url for the iOS card.
+// displayHint should be "matchup" for pre-game or "scoreboard" for in-progress/final.
+func (r *PostRepo) UpsertSportsPost(gameID, title, body, league, gameDataJSON, displayHint string) error {
 	id := "sports-" + gameID
-	labelsJSON, _ := json.Marshal([]string{"sports", league})
+	labelsJSON, _ := json.Marshal([]string{"sports", strings.ToLower(league)})
 
 	_, err := r.db.Exec(`
 		INSERT INTO posts (id, agent_id, user_id, title, body, external_url,
 			post_type, visibility, display_hint, labels, created_at)
 		VALUES ($1, 'sports-bot', 'system', $2, $3, $4,
-			'discovery', 'public', 'scoreboard', $5, CURRENT_TIMESTAMP)
+			'discovery', 'public', $5, $6, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			title = excluded.title,
 			body = excluded.body,
 			external_url = excluded.external_url,
+			display_hint = excluded.display_hint,
 			labels = excluded.labels,
 			created_at = CURRENT_TIMESTAMP`,
-		id, title, body, gameDataJSON, string(labelsJSON),
+		id, title, body, gameDataJSON, displayHint, string(labelsJSON),
 	)
 	return err
 }

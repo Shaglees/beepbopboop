@@ -78,7 +78,12 @@ func (w *Worker) processGame(g FetchedGame) error {
 		return fmt.Errorf("marshal game data: %w", err)
 	}
 
-	return w.postRepo.UpsertSportsPost(gameID, title, body, g.League, string(gameDataJSON))
+	hint := "scoreboard"
+	if g.State == "pre" {
+		hint = "matchup"
+	}
+
+	return w.postRepo.UpsertSportsPost(gameID, title, body, g.League, string(gameDataJSON), hint)
 }
 
 func buildPostTitle(gd GameData) string {

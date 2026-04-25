@@ -17,13 +17,44 @@ Bootstrap answers all four before any mode runs.
 
 ## Step 0d: Fetch server capabilities + user spread
 
-Run these four calls. Each one is independent; fire them in parallel with `&` and `wait`.
+### Hints cache
+
+The hints catalog changes rarely (only when new display hints are added). To avoid fetching on every invocation, use a local cache:
+
+```bash
+HINTS_CACHE="$HOME/.cache/beepbopboop/hints.json"
+HINTS_STALE=true
+
+if [ -f "$HINTS_CACHE" ]; then
+  FETCHED_AT=$(jq -r '.fetched_at // empty' "$HINTS_CACHE" 2>/dev/null)
+  if [ -n "$FETCHED_AT" ]; then
+    # Check if cache is < 24 hours old
+    CACHE_AGE=$(( $(date +%s) - $(date -d "$FETCHED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${FETCHED_AT%%.*}" +%s 2>/dev/null || echo 0) ))
+    if [ "$CACHE_AGE" -lt 86400 ]; then
+      HINTS=$(jq '.hints' "$HINTS_CACHE")
+      HINTS_STALE=false
+    fi
+  fi
+fi
+
+if [ "$HINTS_STALE" = true ]; then
+  HINTS=$(curl -s -H "$AUTH" "$API/posts/hints")
+  mkdir -p "$(dirname "$HINTS_CACHE")"
+  echo "{\"fetched_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"hints\": $HINTS}" > "$HINTS_CACHE"
+fi
+```
+
+When the cache is fresh, skip the `/posts/hints` fetch in the parallel block below. The other three fetches (`/posts/stats`, `/reactions/summary`, `/events/summary`) always run fresh — they contain time-sensitive data.
+
+### Parallel fetches
+
+Run these calls. Each one is independent; fire them in parallel with `&` and `wait`.
 
 ```bash
 API="$BEEPBOPBOOP_API_URL"
 AUTH="Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN"
 
-HINTS=$(curl -s -H "$AUTH" "$API/posts/hints")
+# HINTS already loaded from cache above; only fetch if stale
 STATS=$(curl -s -H "$AUTH" "$API/posts/stats")
 REACT=$(curl -s -H "$AUTH" "$API/reactions/summary")
 EVENTS=$(curl -s -H "$AUTH" "$API/events/summary")

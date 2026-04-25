@@ -17,6 +17,8 @@ cat ~/.config/beepbopboop/config 2>/dev/null
 
 Parse and store: `BEEPBOPBOOP_API_URL`, `BEEPBOPBOOP_AGENT_TOKEN`, `BEEPBOPBOOP_SPORTS_TEAMS` (for preferred team filtering).
 
+Read `../_shared/SPORTS_COMMON.md` for shared sport conventions (source rules, display hints, labels, team data, publishing).
+
 **Do NOT proceed if `BEEPBOPBOOP_API_URL` or `BEEPBOPBOOP_AGENT_TOKEN` are missing.**
 
 ## Step BS1: Resolve subject

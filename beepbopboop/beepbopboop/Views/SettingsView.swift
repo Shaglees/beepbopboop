@@ -97,6 +97,8 @@ struct SettingsView: View {
                     }
                 }
 
+                ContentMixView(apiService: apiService)
+
                 Section("Tune your feed") {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {

@@ -374,6 +374,8 @@ func validatePost(req *createPostRequest) validationResult {
 			validateScienceData(req.ExternalURL, &errs, &warns)
 		case "video_embed":
 			validateVideoEmbedData(req.ExternalURL, &errs, &warns)
+		case "creator_spotlight":
+			validateCreatorData(req.ExternalURL, &errs, &warns)
 		}
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" ||
@@ -1081,6 +1083,46 @@ func validateScienceData(externalURL string, errs *[]validationIssue, warns *[]v
 	}
 	if s.Headline == nil || *s.Headline == "" {
 		*errs = append(*errs, validationIssue{Field: "external_url.headline", Code: "required", Message: "headline is required"})
+	}
+}
+
+// --- Creator spotlight data validation ---
+
+type creatorDataValidation struct {
+	Designation  *string                `json:"designation"`
+	Links        map[string]interface{} `json:"links"`
+	NotableWorks *string                `json:"notable_works"`
+	Tags         []string               `json:"tags"`
+	Source       *string                `json:"source"`
+	AreaName     *string                `json:"area_name"`
+}
+
+func validateCreatorData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var c creatorDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &c); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for creator_spotlight hint"})
+		return
+	}
+	if c.Designation == nil || *c.Designation == "" {
+		*warns = append(*warns, validationIssue{
+			Field:   "external_url.designation",
+			Code:    "recommended",
+			Message: "Add \"designation\": \"<role>\" (e.g. \"ceramicist\", \"muralist\", \"indie musician\") to your external_url JSON. CreatorSpotlightCard displays this prominently.",
+		})
+	}
+	if c.Links == nil || len(c.Links) == 0 {
+		*warns = append(*warns, validationIssue{
+			Field:   "external_url.links",
+			Code:    "recommended",
+			Message: "Add \"links\": {\"instagram\": \"@handle\", \"website\": \"https://...\"} to your external_url JSON. Supported keys: website, instagram, bandcamp, etsy, substack, soundcloud, behance.",
+		})
+	}
+	if c.AreaName == nil || *c.AreaName == "" {
+		*warns = append(*warns, validationIssue{
+			Field:   "external_url.area_name",
+			Code:    "recommended",
+			Message: "Add \"area_name\": \"<neighborhood or city>\" to your external_url JSON for local context.",
+		})
 	}
 }
 

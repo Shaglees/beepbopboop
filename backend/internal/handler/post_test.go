@@ -1361,6 +1361,49 @@ func jsonString(s string) string {
 	return string(b)
 }
 
+func TestPostHandler_LintCreatorSpotlight_RequiresDesignation(t *testing.T) {
+	db := database.OpenTestDB(t)
+	h := handler.NewPostHandler(repository.NewAgentRepo(db), repository.NewPostRepo(db))
+
+	body := []byte(`{
+		"title": "Local artist spotlight",
+		"body": "A ceramicist making waves in the community.",
+		"post_type": "discovery",
+		"display_hint": "creator_spotlight",
+		"locality": "Dublin",
+		"external_url": "{\"links\":{\"instagram\":\"@clay_maker\"}}",
+		"labels": ["creator"]
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/posts/lint", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.LintPost(rec, req)
+
+	var result struct {
+		Valid    bool `json:"valid"`
+		Warnings []struct {
+			Field string `json:"field"`
+			Code  string `json:"code"`
+		} `json:"warnings"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !result.Valid {
+		t.Fatalf("expected valid=true, got false")
+	}
+	found := false
+	for _, w := range result.Warnings {
+		if w.Field == "external_url.designation" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected warning for missing designation; got %+v", result.Warnings)
+	}
+}
+
 // ============================================================================
 // Scheduling tests
 // ============================================================================

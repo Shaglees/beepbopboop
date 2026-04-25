@@ -16,6 +16,7 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/ab"
 	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
+	"github.com/shanegleeson/beepbopboop/backend/internal/entertainment"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
@@ -294,6 +295,30 @@ func main() {
 
 	videoHealthWorker := videohealth.NewScheduledWorker(videoRepo, videohealth.NewHTTPChecker(nil), 6*time.Hour)
 	go videoHealthWorker.Run(workerCtx)
+
+	// Entertainment ingest worker (TMDB)
+	if cfg.TMDBKey != "" {
+		entertainmentWorker := entertainment.NewWorker(calendarEventRepo, "https://api.themoviedb.org", cfg.TMDBKey, "US")
+		go entertainmentWorker.Run(workerCtx)
+		slog.Info("entertainment ingest worker enabled")
+	} else {
+		slog.Warn("TMDB_KEY not set — entertainment ingest disabled")
+	}
+
+	// Calendar materialization worker
+	materializeAgent := os.Getenv("CALENDAR_AGENT_ID")
+	if materializeAgent == "" {
+		materializeAgent = os.Getenv("FEEDBACK_AGENT_ID")
+	}
+	if materializeAgent != "" {
+		materializeWorker := calendar.NewMaterializeWorker(
+			calendarEventRepo, postRepo, userRepo, interestRepo, materializeAgent,
+		)
+		go materializeWorker.Run(workerCtx)
+		slog.Info("calendar materialize worker enabled")
+	} else {
+		slog.Warn("no agent ID for calendar materialization — worker disabled")
+	}
 
 	if ranker != nil {
 		ranker.StartWatcher(workerCtx, cfg.RankerModelPath, 5*time.Minute)

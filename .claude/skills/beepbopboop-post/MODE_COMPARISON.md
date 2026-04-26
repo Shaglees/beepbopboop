@@ -25,7 +25,9 @@ The `comparison` hint **requires** a structured JSON string in `external_url`. W
 
 **Optional per-item keys:** `detail`, `score`, `price`, `address`, `image_url`
 
-**Always attempt the comparison hint.** After researching the options in CP2, you will have names, specialties and prices for each place — that is everything needed to fill in `items`. Use `display_hint: article` only if the comparison is too abstract to produce named items (e.g. "compare Austin vs. Dallas as a city").
+**`comparison` requires 3 or more named items.** If you only have 2 subjects (e.g. "Asahi Linux vs Ubuntu", "iOS vs Android", "Austin vs Dallas"), use `display_hint: "article"` — never `comparison`. `comparison` is ONLY for ranked lists of **3 or more specific named options**.
+
+**Always attempt the comparison hint for 3+ items.** After researching the options in CP2, you will have names, specialties and prices for each place — that is everything needed to fill in `items`. Use `display_hint: article` only if (a) you have fewer than 3 items, (b) the comparison is between exactly 2 subjects, or (c) the content is too abstract to produce named items (e.g. "compare Austin vs. Dallas as a city").
 
 ---
 

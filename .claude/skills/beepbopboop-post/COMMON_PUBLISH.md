@@ -22,6 +22,22 @@ Evaluate visibility AFTER generating post content (since the body text determine
 
 ---
 
+## Hint diversity requirement (batch mode)
+
+When publishing a batch of 8–10 posts, your `display_hint` selection **MUST** cover all of these categories. Do not publish a batch where any category is missing:
+
+| Category | Required hints (pick at least one) |
+|---|---|
+| Sports | `matchup`, `scoreboard`, `standings`, or `player_spotlight` |
+| Lifestyle | `fitness`, `restaurant`, `place`, or `deal` |
+| Culture | `entertainment`, `concert`, `album`, `movie`, or `show` |
+| Travel / Location | `destination` or `place` (with location focus) |
+| Analysis / Discovery | `comparison` (ranked 3+ items), `article`, or `card` |
+
+Before finalising your post plan, check this list. If any category is missing, add a post that covers it. Do not publish 10 `article` posts because they feel safe.
+
+---
+
 ## Step 4b: Find or generate post image
 
 Every post should have an image. The iOS app loads images via `AsyncImage`, so `image_url` must be a direct, fast-loading URL to an image file — not a slow generation endpoint.
@@ -245,14 +261,28 @@ Also dedup within the current batch — if two pending posts have high label ove
 
 Before publishing any post, answer these three questions. If any answer is NO, fix it first.
 
-**1. Is the image URL from the right tier?**
-- ✅ Tier 1 (preferred): `upload.wikimedia.org`, `commons.wikimedia.org`, `images.unsplash.com`, `i.imgur.com`, `image.tmdb.org`, news/org direct photo URLs
-- ⚠️ Tier 2 (last resort): `image.pollinations.ai`, `gen.pollinations.ai`, AI generator URLs — acceptable ONLY if Tier 1 sources returned nothing usable
-- If you used a Tier 2 source without exhausting Tier 1 → go back and try Priority 5 (Unsplash) first.
+**1. Is the image URL from the right tier? Log which tier you used.**
 
-**2. Is the image URL unique in this batch?**
-- Check: have you used this exact URL on any other post in this publishing session?
-- If duplicate → find a different image for this post. Same source, different search terms.
+After selecting an image, note which tier it came from so you can include `image_source_tier` in your Step 6 summary:
+
+| Tier | Sources | Log value |
+|---|---|---|
+| 1 | Direct promo (TMDB, Spotify, Wikipedia main image) | `tier-1-direct` |
+| 2 | Wikimedia Commons | `tier-2-wikimedia` |
+| 3 | Panoramax | `tier-3-panoramax` |
+| 4 | Google Places → imgur | `tier-4-places` |
+| 5 | Unsplash | `tier-5-unsplash` |
+| 6 | AI generator → imgur | `tier-6-ai` |
+| 7 | Empty string | `tier-7-empty` |
+
+- ✅ Tiers 1–5: always acceptable
+- ⚠️ Tier 6 (AI generator): last resort only — only if tiers 1–5 returned nothing
+- If you used Tier 6 without exhausting Tier 5 (Unsplash) → go back and try Unsplash first.
+
+**2. Is the image URL unique in this session?**
+- **Maintain a running list of image URLs used so far this session** (before any publish, check against this list — do NOT rely on querying the API, which may not yet reflect posts published seconds ago).
+- If the URL is already on your list → find a different image for this post. Same source, different search terms.
+- Add every image URL you use to your list immediately after selecting it.
 
 **3. Does the image depict the primary subject of this post?**
 - A Marvel movie post → shows Marvel content (poster, cast, premiere photo)

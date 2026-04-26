@@ -39,6 +39,7 @@ These are the exact bugs we shipped on 2026-04-20. If any of these are true, pic
 | Dated concert/festival | `event` (generic) | `concert` (structured with artist info) |
 | Recipe / how-to with no CTA | `article` (requires external_url you don't have) | `card` |
 | Stats/standings post | `article` | `standings` (structured) |
+| A vs B / ranked list with named items | `comparison` without `external_url` JSON (iOS shows StandardCard fallback) | `comparison` **with** `external_url: {"title":"...","items":[{"name":"...","verdict":"..."}]}` — or fall back to `card` if you can't produce the JSON |
 
 ## Structured hints (`structured_json: true`)
 

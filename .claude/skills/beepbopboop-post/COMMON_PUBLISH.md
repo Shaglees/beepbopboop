@@ -28,7 +28,11 @@ Every post should have an image. The iOS app loads images via `AsyncImage`, so `
 
 **Canonical reference: `../_shared/IMAGES.md`**, which documents the priority ladder and when to invoke the `../beepbopboop-images` subskill. The inline pipeline below is kept for quick lookups; if you add a new source or discover an edge case, update the subskill and the shared doc — not this file.
 
-**Routing decision:** If the post is **geographic** (`latitude` and `longitude` both set), try priorities 1–4 in order. Otherwise skip directly to priority 5 (Unsplash).
+**Routing decision:**
+- Post is **geographic** (`latitude` and `longitude` both set) → try priorities 1–4 in order, then 5, then 6.
+- Post is **non-geographic** (no coordinates) → skip directly to **priority 5 (Unsplash)**. Do NOT jump to priority 6 (Pollinations) without trying Unsplash first. Unsplash has images for every topic.
+
+> **BANNED at priority 6 for non-geographic editorial posts:** `image.pollinations.ai`, `gen.pollinations.ai`, and all other AI image generators. See `../_shared/IMAGES.md` CRITICAL section. If Unsplash also fails (API error, null result), use an empty `image_url` — a gradient placeholder is better than an AI-generated image.
 
 Try the pipeline in order, using the first that succeeds.
 
@@ -134,7 +138,11 @@ curl -s "https://api.unsplash.com/search/photos?query=SEARCH_KEYWORDS&per_page=1
 
 Unsplash CDN URLs are fast and permanent. If API returns `null`, fall through to priority 6.
 
-### Priority 6 — Pollinations AI → imgur (if `BEEPBOPBOOP_IMGUR_CLIENT_ID` set)
+### Priority 6 — Pollinations AI → imgur (last resort; only if Unsplash also failed)
+
+> ⚠️ **Only reach Priority 6 if Priority 5 (Unsplash) returned a null/error result.** For non-geographic editorial content, Unsplash has coverage for every topic — if you are reaching Priority 6 for an abstract tech article, a movie post, a digest, or a brief, you skipped Priority 5. Go back and try Unsplash.
+>
+> For geographic posts where geo-sources returned nothing and Unsplash also failed, Priority 6 is acceptable.
 
 Generate a custom AI image and upload to imgur for reliable hosting.
 
@@ -230,6 +238,28 @@ Each object in the array: `title`, `labels` (array), `post_type`, optional `loca
 - `OK` → proceed
 
 Also dedup within the current batch — if two pending posts have high label overlap, drop the weaker one.
+
+---
+
+## Pre-publish image validation (run before Step 5)
+
+Before publishing any post, answer these three questions. If any answer is NO, fix it first.
+
+**1. Is the image URL from an allowed source?**
+- ✅ Allowed: `upload.wikimedia.org`, `commons.wikimedia.org`, `images.unsplash.com`, `i.imgur.com`, `image.tmdb.org`, news/org direct photo URLs
+- ❌ BANNED: `image.pollinations.ai`, `gen.pollinations.ai`, `oaidalleapiprodscus.blob.core.windows.net`, `replicate.delivery`, `stability.ai`, `dreamstudio.ai`, or any URL containing `/prompt/` or `/generate/`
+- If banned → go back to Priority 5 (Unsplash) and get a real photo.
+
+**2. Is the image URL unique in this batch?**
+- Check: have you used this exact URL on any other post in this publishing session?
+- If duplicate → find a different image for this post. Same source, different search terms.
+
+**3. Does the image depict the primary subject of this post?**
+- A Marvel movie post → shows Marvel content (poster, cast, premiere photo)
+- A running/fitness post → shows a runner, not a hiker or cyclist
+- A tech article → shows computers/code/servers, not an abstract chip photo reused from 3 other posts
+- A weekly brief / digest → image from the lead story topic, not a generic skyline
+- If wrong subject → fetch from a different Wikimedia category or use Unsplash with topic-specific keywords.
 
 ---
 

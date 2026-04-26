@@ -2,16 +2,34 @@
 
 Every BeepBopBoop post should have an `image_url` that is a direct, fast-loading URL to an image file. The iOS app loads images via `AsyncImage` — slow endpoints or generation URLs break the card.
 
-## Hard rules — read before sourcing any image
+---
 
-**1. Never use AI image generators for editorial posts.**
-AI-generated images (Pollinations.ai, DALL-E, Stable Diffusion, Replicate, Midjourney, etc.) are
-banned for editorial content. They produce generic, hallucinated, or factually wrong visuals.
-Use a real photograph every time — even a mediocre real photo beats a polished AI render.
+## 🚫 CRITICAL: BANNED image sources
 
-The only exceptions are:
+**NEVER use any of these in `image_url`:**
+
+| Banned service | Example domain |
+|---|---|
+| Pollinations AI | `image.pollinations.ai`, `gen.pollinations.ai` |
+| DALL-E / OpenAI images | `oaidalleapiprodscus.blob.core.windows.net`, `dalle.openai.com` |
+| Replicate | `replicate.delivery`, `pbxt.replicate.delivery` |
+| Stability AI / DreamStudio | `stability.ai`, `stablediffusionapi.com`, `dreamstudio.ai` |
+| Midjourney | any `midjourney.com` image endpoint |
+| Any other AI image generator | if the URL contains `/prompt/` or `/generate/` treat it as banned |
+
+**These domains are BANNED. No exceptions for editorial posts.**
+
+The ONLY exceptions are:
 - `display_hint: outfit` — uses Flex.1 / Nanobanana outfit render pipeline (not for photos)
 - Fashion try-on mode — explicit AI render pipeline (see `beepbopboop-fashion/MODE_TRYON.md`)
+
+If you find yourself about to use a Pollinations URL because you couldn't find a real photo: **use Unsplash instead.** Unsplash always has something. See the per-category sourcing guide below.
+
+---
+
+## Hard rules — read before sourcing any image
+
+**1. Never use AI image generators for editorial posts.** (See CRITICAL section above.)
 
 **2. Never reuse an image URL from another post in the same batch.**
 Each post must have its own image sourced specifically for that post's topic. Reusing a URL means
@@ -23,6 +41,21 @@ A post about a movie must show the movie (poster, still, cast). A post about a r
 show the food or the venue. A post about a hiking trail must show the trail or the landscape — not
 a mushroom, a plaque, or a building that happens to be nearby. If Wikimedia geosearch returns
 something unrelated, skip it (see Tier 2 relevance guard below).
+
+**4. Per-category sourcing — use the right source for the content type:**
+
+| Content type | Primary source | Unsplash keywords |
+|---|---|---|
+| Sports game / match | Wikimedia (player/team photos) | `basketball arena crowd`, `hockey game ice`, `soccer stadium` |
+| Tech / AI article | Unsplash (not Wikimedia chip photos — they repeat) | `technology computer laptop`, `programming code screen`, `server datacenter` |
+| Food / restaurant | Wikimedia (dish photos), then Unsplash | `restaurant food dining`, `dish plate meal` |
+| Entertainment / film | Wikimedia (movie poster, premiere), then Unsplash | `cinema movie theatre`, `film premiere red carpet` |
+| Nature / outdoor | Wikimedia geosearch near coordinates, then Unsplash | `nature trail forest`, `outdoor park green` |
+| Travel / destination | Wikimedia (city/landmark), then Unsplash | `city skyline architecture`, destination name |
+| Science / research | Wikimedia (lab, instrument), then Unsplash | `science laboratory research`, `microscope lab` |
+| Fitness / running | Unsplash (not hiking photos for running posts) | `running athlete track`, `fitness gym workout` |
+| Music / concert | Wikimedia (venue/artist), then Unsplash | `concert stage music crowd`, `live music festival` |
+| Brief / digest / roundup | Unsplash — use topic of the lead story | keywords from the most prominent item in the post |
 
 Two classes of sources:
 

@@ -58,6 +58,14 @@ These hints require `external_url` to be a **JSON string** (not a URL). The iOS 
 ### Sports
 
 **`matchup`** — upcoming or live game preview
+
+> ⚠️ **COPY THIS LINE EXACTLY into `external_url`, then replace the ALLCAPS placeholders:**
+> ```
+> {"sport": "SPORT", "league": "LEAGUE", "date": "YYYY-MM-DD", "home": {"name": "HOME_TEAM", "abbr": "HOM"}, "away": {"name": "AWAY_TEAM", "abbr": "AWY"}}
+> ```
+> The field is **`date`** — there is no `gameTime` key. Do not use `gameTime`. `league` is required (NBA / NFL / MLB / NHL). Fallback: `event`
+
+Example filled in:
 ```json
 {
   "sport": "basketball",
@@ -67,7 +75,6 @@ These hints require `external_url` to be a **JSON string** (not a URL). The iOS 
   "away": {"name": "Mavericks", "abbr": "DAL"}
 }
 ```
-> ⚠️ **The field is called `date`, NOT `gameTime`**. If you are thinking "gameTime", put that value in the `date` field instead. `gameTime` is NOT a valid key and will cause the card to render as a plain StandardCard with no game info. `league` is required (NBA / NFL / MLB / NHL / etc.). Fallback: `event`
 
 **`scoreboard`** — final or in-progress game score
 ```json
@@ -184,13 +191,20 @@ These hints require `external_url` to be a **JSON string** (not a URL). The iOS 
 > ⚠️ `cuisine` is required — do NOT omit it. `latitude`/`longitude` are optional extras. Fallback: `place`
 
 **`destination`** — travel destination
+
+> ⚠️ **COPY THIS LINE EXACTLY into `external_url`, then replace the ALLCAPS placeholders:**
+> ```
+> {"name": "DESTINATION_NAME", "country": "COUNTRY"}
+> ```
+> The key is **`name`** — there is no `city`, `location`, or `place` key. Do not use `city`. Fallback: `place`
+
+Example filled in:
 ```json
 {
   "name": "Banff National Park",
   "country": "Canada"
 }
 ```
-> ⚠️ Key is `name`, NOT `city`, `location`, or `place`. Fallback: `place`
 
 **`pet_spotlight`** — pet feature / adoption
 ```json
@@ -206,22 +220,36 @@ These hints require `external_url` to be a **JSON string** (not a URL). The iOS 
 ### Lifestyle
 
 **`entertainment`** — general entertainment content (non-music, non-film)
+
+> ⚠️ **COPY THIS LINE EXACTLY into `external_url`, then replace the ALLCAPS placeholders:**
+> ```
+> {"title": "POST_TITLE", "type": "TYPE_VALUE"}
+> ```
+> Keys are **`title`** and **`type`** — nothing else. Do NOT use `subject`, `headline`, `category`, `tags`, or any other key. Valid `type` values: `music`, `film`, `tv`, `podcast`, `event`, `other`. Fallback: `card`
+
+Example filled in:
 ```json
 {
   "title": "Austin Bandcamp Friday Picks",
   "type": "music"
 }
 ```
-> ⚠️ Keys are `title` and `type`. Do NOT use `subject`, `headline`, `category`, or `tags`. Valid `type` values: `music`, `film`, `tv`, `podcast`, `event`, `other`. Fallback: `card`
 
 **`fitness`** — fitness or health content
+
+> ⚠️ **COPY THIS LINE EXACTLY into `external_url`, then replace the ALLCAPS placeholders:**
+> ```
+> {"title": "POST_TITLE", "type": "TYPE_VALUE"}
+> ```
+> Keys are **`title`** and **`type`** — nothing else. Do NOT use `activity`, `intensity`, `duration_min`, or `notes`. Valid `type` values: `run`, `workout`, `yoga`, `cycling`, `swim`, `other`. Fallback: `card`
+
+Example filled in:
 ```json
 {
   "title": "5K Training Plan — Week 4",
   "type": "run"
 }
 ```
-> ⚠️ Keys are `title` and `type`. Do NOT use `activity`, `intensity`, `duration_min`, or `notes`. Valid `type` values: `run`, `workout`, `yoga`, `cycling`, `swim`, `other`. Fallback: `card`
 
 **`weather`** — weather update
 ```json
@@ -266,6 +294,13 @@ These hints require `external_url` to be a **JSON string** (not a URL). The iOS 
 > | "Top 4 running trails near downtown Austin" | `comparison` |
 > | "iOS vs Android for privacy" | `article` |
 
+> ⚠️ **`external_url` is REQUIRED. COPY THIS LINE EXACTLY into `external_url`, then replace the ALLCAPS placeholders:**
+> ```
+> {"title": "RANKING_TITLE", "items": [{"name": "ITEM_1", "verdict": "VERDICT_1"}, {"name": "ITEM_2", "verdict": "VERDICT_2"}, {"name": "ITEM_3", "verdict": "VERDICT_3"}]}
+> ```
+> Without `external_url`, the card silently falls back to a plain StandardCard — the comparison layout is never shown. Each item requires `name` and `verdict`. Minimum 3 items. Fallback: `article`
+
+Example filled in:
 ```json
 {
   "title": "Austin's 5 best BBQ spots, ranked",
@@ -276,7 +311,6 @@ These hints require `external_url` to be a **JSON string** (not a URL). The iOS 
   ]
 }
 ```
-> Each item requires `name` and `verdict`. Minimum 3 items. Fallback: `article`
 
 ## Lint feedback loop
 

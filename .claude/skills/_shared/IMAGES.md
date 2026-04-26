@@ -2,16 +2,30 @@
 
 Every BeepBopBoop post should have an `image_url` that is a direct, fast-loading URL to an image file. The iOS app loads images via `AsyncImage` — slow endpoints or generation URLs break the card.
 
+---
+
+## Image source tiers
+
+Use the **highest tier you can reach** before falling back. AI generators (Tier 1) are last resort — not a default.
+
+| Tier | Sources | When to use |
+|---|---|---|
+| **Tier 1 (preferred)** | Wikimedia Commons, Unsplash, Pexels, direct promo images (TMDB, Spotify, Wikipedia) | Always try these first |
+| **Tier 2 (last resort)** | AI generators: Pollinations AI, DALL-E, Stable Diffusion, Midjourney, Replicate | Only if Tier 1 is exhausted |
+
+**The ordering matters.** Reach for Tier 2 only after Tier 1 sources have returned nothing usable. The priority ladder below makes this concrete.
+
+**AI generator URLs require re-hosting.** Never embed a generation endpoint URL directly in `image_url` — slow generation endpoints break `AsyncImage`. Always download and re-upload to imgur first (see Priority 6 in the ladder).
+
+**Exceptions where AI generation is normal:**
+- `display_hint: outfit` — uses Flex.1 / Nanobanana outfit render pipeline
+- Fashion try-on mode — explicit AI render pipeline (see `beepbopboop-fashion/MODE_TRYON.md`)
+
+---
+
 ## Hard rules — read before sourcing any image
 
-**1. Never use AI image generators for editorial posts.**
-AI-generated images (Pollinations.ai, DALL-E, Stable Diffusion, Replicate, Midjourney, etc.) are
-banned for editorial content. They produce generic, hallucinated, or factually wrong visuals.
-Use a real photograph every time — even a mediocre real photo beats a polished AI render.
-
-The only exceptions are:
-- `display_hint: outfit` — uses Flex.1 / Nanobanana outfit render pipeline (not for photos)
-- Fashion try-on mode — explicit AI render pipeline (see `beepbopboop-fashion/MODE_TRYON.md`)
+**1. Prefer real photos over AI-generated images.** Exhaust Tier 1 sources (Wikimedia, Unsplash) before reaching for AI generators.
 
 **2. Never reuse an image URL from another post in the same batch.**
 Each post must have its own image sourced specifically for that post's topic. Reusing a URL means
@@ -24,13 +38,28 @@ show the food or the venue. A post about a hiking trail must show the trail or t
 a mushroom, a plaque, or a building that happens to be nearby. If Wikimedia geosearch returns
 something unrelated, skip it (see Tier 2 relevance guard below).
 
+**4. Per-category sourcing — use the right source for the content type:**
+
+| Content type | Primary source | Unsplash keywords |
+|---|---|---|
+| Sports game / match | Wikimedia (player/team photos) | `basketball arena crowd`, `hockey game ice`, `soccer stadium` |
+| Tech / AI article | Unsplash (not Wikimedia chip photos — they repeat) | `technology computer laptop`, `programming code screen`, `server datacenter` |
+| Food / restaurant | Wikimedia (dish photos), then Unsplash | `restaurant food dining`, `dish plate meal` |
+| Entertainment / film | Wikimedia (movie poster, premiere), then Unsplash | `cinema movie theatre`, `film premiere red carpet` |
+| Nature / outdoor | Wikimedia geosearch near coordinates, then Unsplash | `nature trail forest`, `outdoor park green` |
+| Travel / destination | Wikimedia (city/landmark), then Unsplash | `city skyline architecture`, destination name |
+| Science / research | Wikimedia (lab, instrument), then Unsplash | `science laboratory research`, `microscope lab` |
+| Fitness / running | Unsplash (not hiking photos for running posts) | `running athlete track`, `fitness gym workout` |
+| Music / concert | Wikimedia (venue/artist), then Unsplash | `concert stage music crowd`, `live music festival` |
+| Brief / digest / roundup | Unsplash — use topic of the lead story | keywords from the most prominent item in the post |
+
 Two classes of sources:
 
 > **Full pipeline + all curl snippets live in the `beepbopboop-images` skill.** This file is the quick reference every other skill links to so the pipeline is never "invisibly skipped."
 
 ## Priority ladder
 
-Try in order; use the first that succeeds.
+Try in order; use the first that succeeds. Priorities 1–5 are **Tier 1 (preferred)**. Priority 6 is **Tier 2 (last resort)** — only reach it if 1–5 all fail.
 
 | # | Source | When | Keys needed |
 |---|---|---|---|
@@ -39,8 +68,8 @@ Try in order; use the first that succeeds.
 | 3 | Panoramax | Post is geographic | none |
 | 4 | Google Places Photos → imgur rehost | Post is geographic AND specific venue | `BEEPBOPBOOP_GOOGLE_PLACES_KEY` + `BEEPBOPBOOP_IMGUR_CLIENT_ID` |
 | 5 | Unsplash search | Any post; good for abstract/non-geographic | `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` |
-| 6 | Pollinations AI → imgur rehost | Fallback | `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional `BEEPBOPBOOP_POLLINATIONS_TOKEN`) |
-| 7 | Empty string | Last resort; iOS renders a gradient placeholder | none |
+| 6 | AI generator (Pollinations AI, etc.) → imgur rehost | **Last resort only** — all of 1–5 returned nothing usable | `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional `BEEPBOPBOOP_POLLINATIONS_TOKEN`) |
+| 7 | Empty string | iOS renders a gradient placeholder | none |
 
 ## For AI generation
 

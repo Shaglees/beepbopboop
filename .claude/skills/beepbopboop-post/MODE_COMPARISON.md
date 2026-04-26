@@ -4,10 +4,16 @@
 
 ---
 
-## Required `external_url` JSON — copy and fill this in
+## Required `external_url` — COPY THIS, then fill in
 
 The `comparison` hint **requires** a structured JSON string in `external_url`. Without it, iOS falls back to a plain StandardCard and the comparison layout is never shown.
 
+**COPY THIS LINE EXACTLY into `external_url`, then replace the ALLCAPS placeholders:**
+```
+{"title": "RANKING_TITLE", "items": [{"name": "ITEM_1", "verdict": "VERDICT_1"}, {"name": "ITEM_2", "verdict": "VERDICT_2"}, {"name": "ITEM_3", "verdict": "VERDICT_3"}]}
+```
+
+Example filled in (add more items as needed):
 ```json
 {
   "title": "Austin's 5 best BBQ spots, ranked",

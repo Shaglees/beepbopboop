@@ -1,0 +1,228 @@
+{
+  "_comment": "iOS render requirements per display_hint. Source: FeedItemView.swift, *Data.swift models.",
+  "_valid_post_types": ["event", "place", "discovery", "article", "video"],
+  "_valid_display_hints": [
+    "card", "place", "article", "weather", "calendar", "deal", "digest", "brief",
+    "comparison", "event", "outfit", "scoreboard", "matchup", "standings", "movie",
+    "show", "player_spotlight", "entertainment", "album", "concert", "game_release",
+    "game_review", "restaurant", "destination", "science", "pet_spotlight", "fitness",
+    "box_score", "feedback", "creator_spotlight", "video_embed"
+  ],
+  "hints": {
+    "card": {
+      "required_fields": ["title", "body", "image_url"],
+      "external_url_json": false,
+      "description": "Standard card — always renders"
+    },
+    "place": {
+      "required_fields": ["title", "body", "image_url"],
+      "recommended_fields": ["latitude", "longitude"],
+      "external_url_json": false,
+      "description": "Place card with optional map"
+    },
+    "article": {
+      "required_fields": ["title", "body", "external_url"],
+      "recommended_fields": ["image_url"],
+      "external_url_json": false,
+      "description": "Article preview with link"
+    },
+    "weather": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["location", "temp_f", "condition"],
+      "json_optional_keys": ["icon", "forecast"],
+      "description": "Weather card with conditions"
+    },
+    "calendar": {
+      "required_fields": ["title", "body"],
+      "recommended_fields": ["image_url"],
+      "external_url_json": false,
+      "description": "Calendar/date event card"
+    },
+    "deal": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["title", "original_price", "sale_price"],
+      "json_optional_keys": ["store", "link", "image_url"],
+      "description": "Deal/discount card"
+    },
+    "digest": {
+      "required_fields": ["title", "body"],
+      "external_url_json": false,
+      "description": "Digest/summary card"
+    },
+    "brief": {
+      "required_fields": ["title", "body"],
+      "external_url_json": false,
+      "description": "Brief/short-form card"
+    },
+    "comparison": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["title", "items"],
+      "description": "Side-by-side comparison"
+    },
+    "event": {
+      "required_fields": ["title", "body", "image_url"],
+      "recommended_fields": ["latitude", "longitude"],
+      "external_url_json": false,
+      "description": "Event card with optional location"
+    },
+    "outfit": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["items"],
+      "json_optional_keys": ["occasion", "style_notes"],
+      "description": "Outfit card with item list"
+    },
+    "scoreboard": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["sport", "league", "status", "home", "away"],
+      "json_nested": {
+        "home": ["name", "score"],
+        "away": ["name", "score"]
+      },
+      "description": "Live/final scoreboard"
+    },
+    "matchup": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["sport", "league", "date", "home", "away"],
+      "json_nested": {
+        "home": ["name"],
+        "away": ["name"]
+      },
+      "json_optional_keys": ["broadcast", "odds"],
+      "description": "Upcoming matchup preview"
+    },
+    "standings": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["league", "season", "teams"],
+      "json_optional_keys": ["conference"],
+      "description": "League standings table"
+    },
+    "movie": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["title"],
+      "json_optional_keys": ["year", "rating", "genre", "poster_url", "synopsis"],
+      "description": "Movie spotlight card"
+    },
+    "show": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["title"],
+      "json_optional_keys": ["network", "season", "genre", "poster_url", "synopsis"],
+      "description": "TV show spotlight card"
+    },
+    "player_spotlight": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["name", "team", "position", "stats"],
+      "json_optional_keys": ["image_url", "headline"],
+      "description": "Player stats spotlight"
+    },
+    "entertainment": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["title", "type"],
+      "json_optional_keys": ["image_url", "description"],
+      "description": "Generic entertainment card"
+    },
+    "album": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["title", "artist"],
+      "json_optional_keys": ["cover_art_url", "release_date", "tracks"],
+      "description": "Album spotlight card"
+    },
+    "concert": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["artist", "venue", "date"],
+      "json_optional_keys": ["ticket_url", "price", "image_url"],
+      "description": "Concert/live event card"
+    },
+    "game_release": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["title", "platform"],
+      "json_optional_keys": ["release_date", "genre", "image_url"],
+      "description": "Video game release card"
+    },
+    "game_review": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["title", "score"],
+      "json_optional_keys": ["platform", "reviewer", "summary"],
+      "description": "Game review card"
+    },
+    "restaurant": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["name", "cuisine"],
+      "json_optional_keys": ["rating", "price_range", "address", "image_url"],
+      "description": "Restaurant card"
+    },
+    "destination": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["name"],
+      "json_optional_keys": ["highlights", "weather", "flight_price", "image_url"],
+      "description": "Travel destination card"
+    },
+    "science": {
+      "required_fields": ["title", "body"],
+      "recommended_fields": ["image_url", "external_url"],
+      "external_url_json": false,
+      "description": "Science/research card"
+    },
+    "pet_spotlight": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["name", "type"],
+      "json_optional_keys": ["breed", "age", "image_url"],
+      "description": "Pet spotlight card"
+    },
+    "fitness": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["title", "type"],
+      "json_optional_keys": ["duration", "difficulty", "equipment"],
+      "description": "Fitness/workout card"
+    },
+    "box_score": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["sport", "teams", "quarters"],
+      "description": "Detailed box score"
+    },
+    "feedback": {
+      "required_fields": ["title", "body"],
+      "external_url_json": false,
+      "description": "Feedback/survey card"
+    },
+    "creator_spotlight": {
+      "required_fields": ["external_url"],
+      "external_url_json": true,
+      "json_required_keys": ["name"],
+      "json_optional_keys": ["bio", "image_url", "links"],
+      "description": "Creator profile spotlight"
+    },
+    "video_embed": {
+      "required_fields": ["external_url", "title"],
+      "external_url_json": false,
+      "description": "Video embed (YouTube/video URL in external_url)"
+    }
+  },
+  "test_user_profile": {
+    "location": "Austin, TX",
+    "interests": ["sports", "food", "music", "technology"],
+    "family": {
+      "partner": true,
+      "kids": [{"age": 4}, {"age": 7}]
+    }
+  }
+}

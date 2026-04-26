@@ -35,14 +35,17 @@ parse_models_conf() {
 
 parse_models_conf
 
-# Deterministic tokens — computed from key
+# Deterministic tokens — computed from key using a hash suffix so they don't
+# look like redacted placeholders to the LLM agent (all-zero padding caused
+# Claude to refuse to use the token, treating it as a censored value).
 get_token() {
   local prefix="bbp_test_${1}_"
   local target_len=64
   local pad_len=$(( target_len - ${#prefix} ))
   if (( pad_len < 0 )); then pad_len=0; fi
-  printf '%s' "$prefix"
-  printf '0%.0s' $(seq 1 "$pad_len")
+  local suffix
+  suffix=$(printf '%s' "bbp_seed_${1}" | shasum -a 256 | cut -c1-${pad_len})
+  printf '%s%s' "$prefix" "$suffix"
 }
 
 # Lookup helpers (bash 3.2 compatible — no associative arrays)
@@ -298,11 +301,13 @@ fi
 echo "Models to run: ${RUN_MODELS[*]}"
 echo ""
 
-# Pre-flight: verify tokens authenticate before building images
-if ! $SKIP_SETUP; then
+# Pre-flight: verify tokens authenticate before building images.
+# Only runs when --skip-setup is active — if we're running full setup, tokens
+# are created in Section 4 and won't exist in the DB yet at this point.
+if $SKIP_SETUP; then
   preflight_check_tokens "${RUN_MODELS[@]}"
 else
-  echo "  (--skip-setup: skipping token pre-flight; use without --skip-setup if you get auth errors)"
+  echo "  (full setup mode: tokens will be created in Section 4, skipping pre-flight)"
   echo ""
 fi
 

@@ -67,7 +67,7 @@ These hints require `external_url` to be a **JSON string** (not a URL). The iOS 
   "away": {"name": "Mavericks", "abbr": "DAL"}
 }
 ```
-> ⚠️ Key is `date` (ISO date string), NOT `gameTime` or `game_time`. `league` is required (NBA / NFL / MLB / NHL / etc.). Fallback: `event`
+> ⚠️ **The field is called `date`, NOT `gameTime`**. If you are thinking "gameTime", put that value in the `date` field instead. `gameTime` is NOT a valid key and will cause the card to render as a plain StandardCard with no game info. `league` is required (NBA / NFL / MLB / NHL / etc.). Fallback: `event`
 
 **`scoreboard`** — final or in-progress game score
 ```json
@@ -255,7 +255,17 @@ These hints require `external_url` to be a **JSON string** (not a URL). The iOS 
 ```
 > Fallback: `card`
 
-**`comparison`** — ranked list or A-vs-B
+**`comparison`** — ranked list of 3 or more named items
+
+> ⚠️ **NEVER use `comparison` for head-to-head between just 2 subjects** (e.g. "Asahi Linux vs Ubuntu", "iOS vs Android", "Austin vs Dallas"). Two-subject analysis → use `article`. `comparison` is ONLY for ranked lists of **3 or more specific named options** where each gets a verdict.
+>
+> | Content | Correct hint |
+> |---|---|
+> | "5 best BBQ spots in Austin, ranked" | `comparison` |
+> | "Asahi Linux vs Ubuntu — which to install" | `article` |
+> | "Top 4 running trails near downtown Austin" | `comparison` |
+> | "iOS vs Android for privacy" | `article` |
+
 ```json
 {
   "title": "Austin's 5 best BBQ spots, ranked",
@@ -266,7 +276,7 @@ These hints require `external_url` to be a **JSON string** (not a URL). The iOS 
   ]
 }
 ```
-> Each item requires `name` and `verdict`. If you cannot produce at least 3 named items with real verdicts, use `display_hint: article` instead. Fallback: `article`
+> Each item requires `name` and `verdict`. Minimum 3 items. Fallback: `article`
 
 ## Lint feedback loop
 

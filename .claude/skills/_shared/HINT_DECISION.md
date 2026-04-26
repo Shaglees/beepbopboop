@@ -36,21 +36,237 @@ These are the exact bugs we shipped on 2026-04-20. If any of these are true, pic
 | Evergreen trail / cafe / recommendation with no date | `event` (client will fabricate a date badge from createdAt) | `place` |
 | Place post whose main CTA is a booking URL | `place` with `external_url` set (silently dropped by PlaceCard) | `place` with URL **inlined in body text**, or `restaurant` / `destination` which render CTAs |
 | News article with title+source | `card` | `article` (required external_url, proper source display) |
-| Dated concert/festival | `event` (generic) | `concert` (structured with artist info) |
+| Dated concert/festival | `event` (generic) | `concert` (structured — `external_url` JSON with `artist`, `venue`, `date` is **required**; `scheduled_at` alone is not enough) |
 | Recipe / how-to with no CTA | `article` (requires external_url you don't have) | `card` |
 | Stats/standings post | `article` | `standings` (structured) |
-| A vs B / ranked list with named items | `comparison` without `external_url` JSON (iOS shows StandardCard fallback) | `comparison` **with** `external_url: {"title":"...","items":[{"name":"...","verdict":"..."}]}` — or fall back to `card` if you can't produce the JSON |
+| A vs B / ranked list with named items | `comparison` without `external_url` JSON (iOS shows StandardCard fallback) | `comparison` **with** `external_url: {"title":"...","items":[{"name":"...","verdict":"..."}]}` — or fall back to `article` if you can't produce the JSON |
+| matchup post using `gameTime` key | `matchup` with `gameTime` in external_url | `matchup` with `date` (ISO string) — key must be `date` not `gameTime` |
+| matchup post without `league` | `matchup` missing `league` key | Add `"league": "NBA"` (or NFL / MLB / NHL) — it is required |
+| restaurant post without `cuisine` | `restaurant` external_url missing `cuisine` | Add `"cuisine": "..."` — required alongside `name` |
+| entertainment post with `subject`/`headline` | `entertainment` with wrong keys | Use `title` + `type` only — not `subject`, `headline`, `category`, or `tags` |
+| fitness post with `activity`/`intensity` | `fitness` with wrong keys | Use `title` + `type` only — not `activity`, `intensity`, `duration_min`, or `notes` |
+| destination post with `city` key | `destination` with `city` | Use `name` — not `city`, `location`, or `place` |
 
-## Structured hints (`structured_json: true`)
+## Structured hints — required `external_url` JSON schemas
 
-These hints store JSON in `external_url`, not a URL. The server validates the shape. If you're not sure you can produce the right structure, fall back to the simpler hint (`article`, `card`, `place`) instead of guessing.
+These hints require `external_url` to be a **JSON string** (not a URL). The iOS client parses it to render the structured card. If the keys are wrong or missing, the card silently falls back to a plain StandardCard.
 
-- Sports: `scoreboard`, `matchup`, `standings`, `box_score`, `player_spotlight`
-- Content: `movie`, `show`, `album`, `concert`, `game_release`, `game_review`
-- Location+metadata: `restaurant`, `destination`, `pet_spotlight`
-- Other: `weather`, `entertainment`, `science`, `fitness`, `feedback`, `creator_spotlight`, `video_embed`
+**Before publishing any structured hint:** verify your `external_url` JSON contains ALL the required keys listed below. If you cannot produce all required keys, use the listed fallback hint instead.
 
-For each, `GET /posts/hints` returns a lint-clean example you can copy and mutate. Always start from that example.
+---
+
+### Sports
+
+**`matchup`** — upcoming or live game preview
+```json
+{
+  "sport": "basketball",
+  "league": "NBA",
+  "date": "2026-04-26",
+  "home": {"name": "Thunder", "abbr": "OKC"},
+  "away": {"name": "Mavericks", "abbr": "DAL"}
+}
+```
+> ⚠️ Key is `date` (ISO date string), NOT `gameTime` or `game_time`. `league` is required (NBA / NFL / MLB / NHL / etc.). Fallback: `event`
+
+**`scoreboard`** — final or in-progress game score
+```json
+{
+  "sport": "basketball",
+  "league": "NBA",
+  "status": "Final",
+  "home": {"name": "Thunder", "score": 112, "abbr": "OKC"},
+  "away": {"name": "Mavericks", "score": 104, "abbr": "DAL"}
+}
+```
+> Fallback: `card`
+
+**`standings`** — league standings table
+```json
+{
+  "league": "NBA",
+  "season": "2025-26",
+  "teams": [{"rank": 1, "name": "Thunder", "wins": 68, "losses": 14}]
+}
+```
+> Fallback: `card`
+
+**`box_score`** — detailed game stats
+```json
+{
+  "sport": "basketball",
+  "teams": ["Thunder", "Mavericks"],
+  "quarters": [28, 31, 27, 26]
+}
+```
+> Fallback: `card`
+
+**`player_spotlight`** — player feature
+```json
+{
+  "name": "Shai Gilgeous-Alexander",
+  "team": "OKC Thunder",
+  "position": "Guard",
+  "stats": {"points": 32.7, "assists": 6.4}
+}
+```
+> Fallback: `card`
+
+---
+
+### Entertainment / Music
+
+**`concert`** — live music event
+```json
+{
+  "artist": "Billie Eilish",
+  "venue": "Moody Center",
+  "date": "2026-05-03",
+  "ticketUrl": "https://..."
+}
+```
+> ⚠️ `external_url` JSON is REQUIRED — `scheduled_at` alone is not enough. Without the JSON, the artist name and venue will NOT appear on the card. Fallback: `event`
+
+**`album`** — music release
+```json
+{
+  "title": "HIT ME HARD AND SOFT",
+  "artist": "Billie Eilish"
+}
+```
+> Fallback: `card`
+
+**`movie`** — film feature
+```json
+{
+  "title": "Mission: Impossible — The Final Reckoning"
+}
+```
+> Fallback: `article`
+
+**`show`** — TV show feature
+```json
+{
+  "title": "Severance"
+}
+```
+> Fallback: `article`
+
+**`game_release`** — upcoming game
+```json
+{
+  "title": "Grand Theft Auto VI",
+  "platform": "PS5 / Xbox Series X"
+}
+```
+> Fallback: `card`
+
+**`game_review`** — game review
+```json
+{
+  "title": "Grand Theft Auto VI",
+  "score": 9.5
+}
+```
+> Fallback: `card`
+
+---
+
+### Location + Metadata
+
+**`restaurant`** — restaurant or food venue
+```json
+{
+  "name": "Franklin Barbecue",
+  "cuisine": "BBQ / Central Texas"
+}
+```
+> ⚠️ `cuisine` is required — do NOT omit it. `latitude`/`longitude` are optional extras. Fallback: `place`
+
+**`destination`** — travel destination
+```json
+{
+  "name": "Banff National Park",
+  "country": "Canada"
+}
+```
+> ⚠️ Key is `name`, NOT `city`, `location`, or `place`. Fallback: `place`
+
+**`pet_spotlight`** — pet feature / adoption
+```json
+{
+  "name": "Biscuit",
+  "type": "dog"
+}
+```
+> Fallback: `card`
+
+---
+
+### Lifestyle
+
+**`entertainment`** — general entertainment content (non-music, non-film)
+```json
+{
+  "title": "Austin Bandcamp Friday Picks",
+  "type": "music"
+}
+```
+> ⚠️ Keys are `title` and `type`. Do NOT use `subject`, `headline`, `category`, or `tags`. Valid `type` values: `music`, `film`, `tv`, `podcast`, `event`, `other`. Fallback: `card`
+
+**`fitness`** — fitness or health content
+```json
+{
+  "title": "5K Training Plan — Week 4",
+  "type": "run"
+}
+```
+> ⚠️ Keys are `title` and `type`. Do NOT use `activity`, `intensity`, `duration_min`, or `notes`. Valid `type` values: `run`, `workout`, `yoga`, `cycling`, `swim`, `other`. Fallback: `card`
+
+**`weather`** — weather update
+```json
+{
+  "location": "Austin, TX",
+  "temp_f": 84,
+  "condition": "Sunny"
+}
+```
+> Fallback: `card`
+
+**`deal`** — sale or offer
+```json
+{
+  "title": "REI Anniversary Sale",
+  "original_price": "$189",
+  "sale_price": "$119"
+}
+```
+> Fallback: `card`
+
+---
+
+### People / Community
+
+**`creator_spotlight`** — creator or account feature
+```json
+{
+  "name": "Austin Eastciders"
+}
+```
+> Fallback: `card`
+
+**`comparison`** — ranked list or A-vs-B
+```json
+{
+  "title": "Austin's 5 best BBQ spots, ranked",
+  "items": [
+    {"name": "Franklin Barbecue", "verdict": "Best brisket"},
+    {"name": "La Barbecue", "verdict": "Best beef rib"},
+    {"name": "Micklethwait", "verdict": "Best sides"}
+  ]
+}
+```
+> Each item requires `name` and `verdict`. If you cannot produce at least 3 named items with real verdicts, use `display_hint: article` instead. Fallback: `article`
 
 ## Lint feedback loop
 

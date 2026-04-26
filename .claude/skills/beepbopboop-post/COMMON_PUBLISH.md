@@ -263,6 +263,22 @@ Before publishing any post, answer these three questions. If any answer is NO, f
 
 ---
 
+## Step 4b: Dedup check — skip if already published
+
+Before publishing any post, fetch your 20 most recent posts and check for title conflicts:
+
+```bash
+EXISTING=$(curl -s "<API_URL>/posts?limit=20" -H "Authorization: Bearer <AGENT_TOKEN>" \
+  | python3 -c "import sys,json; [print(p['title']) for p in json.load(sys.stdin)]" 2>/dev/null)
+```
+
+If any existing post title matches or is very close to the post you are about to publish (same subject, same venue, same event):
+
+- **Skip it** — do not publish a duplicate. Log: `Skipping "<TITLE>" — already published this session.`
+- This catches the interrupted-publish pattern where a partial post was submitted then the full version was re-attempted.
+
+---
+
 ## Step 5: Publish to the backend
 
 **Canonical reference: `../_shared/PUBLISH_ENVELOPE.md`** — the lint → dedup → POST flow every skill shares. Read it once per session and apply Steps P1–P4.

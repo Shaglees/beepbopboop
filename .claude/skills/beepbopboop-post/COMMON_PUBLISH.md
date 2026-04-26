@@ -30,9 +30,9 @@ Every post should have an image. The iOS app loads images via `AsyncImage`, so `
 
 **Routing decision:**
 - Post is **geographic** (`latitude` and `longitude` both set) → try priorities 1–4 in order, then 5, then 6.
-- Post is **non-geographic** (no coordinates) → skip directly to **priority 5 (Unsplash)**. Do NOT jump to priority 6 (Pollinations) without trying Unsplash first. Unsplash has images for every topic.
+- Post is **non-geographic** (no coordinates) → skip directly to **priority 5 (Unsplash)**. Do NOT jump to priority 6 (AI generator) without trying Unsplash first. Unsplash has images for every topic.
 
-> **BANNED at priority 6 for non-geographic editorial posts:** `image.pollinations.ai`, `gen.pollinations.ai`, and all other AI image generators. See `../_shared/IMAGES.md` CRITICAL section. If Unsplash also fails (API error, null result), use an empty `image_url` — a gradient placeholder is better than an AI-generated image.
+> **AI generators are last resort (priority 6) — not a default.** For non-geographic editorial content (articles, digests, music, entertainment), Unsplash always has coverage. Only reach priority 6 if priority 5 returned a null/error. See `../_shared/IMAGES.md` for the full tier breakdown.
 
 Try the pipeline in order, using the first that succeeds.
 
@@ -245,10 +245,10 @@ Also dedup within the current batch — if two pending posts have high label ove
 
 Before publishing any post, answer these three questions. If any answer is NO, fix it first.
 
-**1. Is the image URL from an allowed source?**
-- ✅ Allowed: `upload.wikimedia.org`, `commons.wikimedia.org`, `images.unsplash.com`, `i.imgur.com`, `image.tmdb.org`, news/org direct photo URLs
-- ❌ BANNED: `image.pollinations.ai`, `gen.pollinations.ai`, `oaidalleapiprodscus.blob.core.windows.net`, `replicate.delivery`, `stability.ai`, `dreamstudio.ai`, or any URL containing `/prompt/` or `/generate/`
-- If banned → go back to Priority 5 (Unsplash) and get a real photo.
+**1. Is the image URL from the right tier?**
+- ✅ Tier 1 (preferred): `upload.wikimedia.org`, `commons.wikimedia.org`, `images.unsplash.com`, `i.imgur.com`, `image.tmdb.org`, news/org direct photo URLs
+- ⚠️ Tier 2 (last resort): `image.pollinations.ai`, `gen.pollinations.ai`, AI generator URLs — acceptable ONLY if Tier 1 sources returned nothing usable
+- If you used a Tier 2 source without exhausting Tier 1 → go back and try Priority 5 (Unsplash) first.
 
 **2. Is the image URL unique in this batch?**
 - Check: have you used this exact URL on any other post in this publishing session?

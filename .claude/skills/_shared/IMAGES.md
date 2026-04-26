@@ -4,32 +4,28 @@ Every BeepBopBoop post should have an `image_url` that is a direct, fast-loading
 
 ---
 
-## 🚫 CRITICAL: BANNED image sources
+## Image source tiers
 
-**NEVER use any of these in `image_url`:**
+Use the **highest tier you can reach** before falling back. AI generators (Tier 1) are last resort — not a default.
 
-| Banned service | Example domain |
-|---|---|
-| Pollinations AI | `image.pollinations.ai`, `gen.pollinations.ai` |
-| DALL-E / OpenAI images | `oaidalleapiprodscus.blob.core.windows.net`, `dalle.openai.com` |
-| Replicate | `replicate.delivery`, `pbxt.replicate.delivery` |
-| Stability AI / DreamStudio | `stability.ai`, `stablediffusionapi.com`, `dreamstudio.ai` |
-| Midjourney | any `midjourney.com` image endpoint |
-| Any other AI image generator | if the URL contains `/prompt/` or `/generate/` treat it as banned |
+| Tier | Sources | When to use |
+|---|---|---|
+| **Tier 1 (preferred)** | Wikimedia Commons, Unsplash, Pexels, direct promo images (TMDB, Spotify, Wikipedia) | Always try these first |
+| **Tier 2 (last resort)** | AI generators: Pollinations AI, DALL-E, Stable Diffusion, Midjourney, Replicate | Only if Tier 1 is exhausted |
 
-**These domains are BANNED. No exceptions for editorial posts.**
+**The ordering matters.** Reach for Tier 2 only after Tier 1 sources have returned nothing usable. The priority ladder below makes this concrete.
 
-The ONLY exceptions are:
-- `display_hint: outfit` — uses Flex.1 / Nanobanana outfit render pipeline (not for photos)
+**AI generator URLs require re-hosting.** Never embed a generation endpoint URL directly in `image_url` — slow generation endpoints break `AsyncImage`. Always download and re-upload to imgur first (see Priority 6 in the ladder).
+
+**Exceptions where AI generation is normal:**
+- `display_hint: outfit` — uses Flex.1 / Nanobanana outfit render pipeline
 - Fashion try-on mode — explicit AI render pipeline (see `beepbopboop-fashion/MODE_TRYON.md`)
-
-If you find yourself about to use a Pollinations URL because you couldn't find a real photo: **use Unsplash instead.** Unsplash always has something. See the per-category sourcing guide below.
 
 ---
 
 ## Hard rules — read before sourcing any image
 
-**1. Never use AI image generators for editorial posts.** (See CRITICAL section above.)
+**1. Prefer real photos over AI-generated images.** Exhaust Tier 1 sources (Wikimedia, Unsplash) before reaching for AI generators.
 
 **2. Never reuse an image URL from another post in the same batch.**
 Each post must have its own image sourced specifically for that post's topic. Reusing a URL means
@@ -63,7 +59,7 @@ Two classes of sources:
 
 ## Priority ladder
 
-Try in order; use the first that succeeds.
+Try in order; use the first that succeeds. Priorities 1–5 are **Tier 1 (preferred)**. Priority 6 is **Tier 2 (last resort)** — only reach it if 1–5 all fail.
 
 | # | Source | When | Keys needed |
 |---|---|---|---|
@@ -72,8 +68,8 @@ Try in order; use the first that succeeds.
 | 3 | Panoramax | Post is geographic | none |
 | 4 | Google Places Photos → imgur rehost | Post is geographic AND specific venue | `BEEPBOPBOOP_GOOGLE_PLACES_KEY` + `BEEPBOPBOOP_IMGUR_CLIENT_ID` |
 | 5 | Unsplash search | Any post; good for abstract/non-geographic | `BEEPBOPBOOP_UNSPLASH_ACCESS_KEY` |
-| 6 | Pollinations AI → imgur rehost | Fallback | `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional `BEEPBOPBOOP_POLLINATIONS_TOKEN`) |
-| 7 | Empty string | Last resort; iOS renders a gradient placeholder | none |
+| 6 | AI generator (Pollinations AI, etc.) → imgur rehost | **Last resort only** — all of 1–5 returned nothing usable | `BEEPBOPBOOP_IMGUR_CLIENT_ID` (optional `BEEPBOPBOOP_POLLINATIONS_TOKEN`) |
+| 7 | Empty string | iOS renders a gradient placeholder | none |
 
 ## For AI generation
 

@@ -84,6 +84,109 @@ def load_expectations(path):
         return json.load(f)
 
 
+# ─── Utility label helpers ───
+
+# Labels injected by the test pipeline for identification — not real content labels.
+# Strip these before evaluating label count and format rules.
+_UTILITY_LABEL_PATTERNS = ("llm-compare", "test-")
+
+
+def strip_utility_labels(labels):
+    """Return labels with test-pipeline utility labels removed.
+
+    Removes exact match 'llm-compare' and any label starting with 'test-'.
+    """
+    return [
+        l for l in labels
+        if l != "llm-compare" and not l.startswith("test-")
+    ]
+
+
+# ─── AI image generator domain blocklist ───
+
+# These domains produce AI-generated images. Real photographs are preferred;
+# AI generators score 0 per post for image quality.
+_AI_GENERATOR_DOMAINS = (
+    "pollinations.ai",
+    "image.pollinations.ai",
+    "gen.pollinations.ai",
+    "oaidalleapiprodscus.blob.core.windows.net",
+    "dalle.openai.com",
+    "replicate.delivery",
+    "pbxt.replicate.delivery",
+    "stability.ai",
+    "stablediffusionapi.com",
+    "dreamstudio.ai",
+)
+
+# Preferred real-photo domains get a quality bonus.
+_PREFERRED_IMAGE_DOMAINS = (
+    "upload.wikimedia.org",
+    "commons.wikimedia.org",
+    "images.unsplash.com",
+    "live.staticflickr.com",
+    "cdn.pixabay.com",
+    "images.pexels.com",
+    "i.imgur.com",
+    "tmdb.org",
+    "image.tmdb.org",
+)
+
+
+def _is_ai_generated(url):
+    """Return True if url points to a known AI image generator."""
+    if not url:
+        return False
+    url_lower = url.lower()
+    return any(domain in url_lower for domain in _AI_GENERATOR_DOMAINS)
+
+
+def _is_preferred_source(url):
+    """Return True if url is from a preferred real-photo source."""
+    if not url:
+        return False
+    url_lower = url.lower()
+    return any(domain in url_lower for domain in _PREFERRED_IMAGE_DOMAINS)
+
+
+def score_image_quality_deterministic(posts):
+    """Deterministic image quality score (0-10) for a batch of posts.
+
+    Checks three things per post:
+    1. Image URL is present.
+    2. Image URL is NOT from a known AI generator domain (blocklist).
+    3. Image URL is unique — not reused from another post in the batch.
+
+    Returns average score across posts (0-10).
+    """
+    if not posts:
+        return 0.0
+
+    # Build duplicate URL index
+    url_counts = {}
+    for p in posts:
+        url = p.get("image_url") or ""
+        if url:
+            url_counts[url] = url_counts.get(url, 0) + 1
+
+    scores = []
+    for p in posts:
+        url = p.get("image_url") or ""
+        if not url:
+            scores.append(0.0)
+            continue
+        if _is_ai_generated(url):
+            scores.append(2.0)  # Penalized but not zero — image exists
+            continue
+        post_score = 8.0 if not _is_preferred_source(url) else 10.0
+        # Deduct 3 points if image URL is reused across posts
+        if url_counts.get(url, 1) > 1:
+            post_score = max(0.0, post_score - 3.0)
+        scores.append(post_score)
+
+    return sum(scores) / len(scores)
+
+
 # ─── Deterministic Scoring ───
 
 def score_rule_following(post, expectations):
@@ -110,12 +213,12 @@ def score_rule_following(post, expectations):
     hint = post.get("display_hint", "")
     checks.append(hint in valid_hints)
 
-    # Has labels (3-8)
-    labels = post.get("labels", []) or []
+    # Has labels (3-8) — strip utility/test labels before counting
+    labels = strip_utility_labels(post.get("labels", []) or [])
     label_count = len(labels)
     checks.append(3 <= label_count <= 8)
 
-    # Labels are lowercase-hyphenated
+    # Labels are lowercase-hyphenated (check real labels only)
     if labels:
         valid_labels = all(
             l == l.lower() and " " not in l
@@ -409,16 +512,18 @@ def score_model(posts, model_key, expectations, compare_model=None, api_key=None
         "non_repetition": score_non_repetition(posts),
         "profile_matching": None,
         "sophistication": None,
-        "image_quality": None,
+        # Deterministic image quality runs always; LLM judge may override.
+        "image_quality": score_image_quality_deterministic(posts),
     }
 
-    # LLM judge scores
+    # LLM judge scores (override deterministic image_quality with richer assessment)
     if compare_model and api_key:
         print(f"  Judging {model_key} with {compare_model}...")
         judge = llm_judge_score(posts, model_key, expectations, compare_model, api_key)
         scores["profile_matching"] = judge["profile_matching"]
         scores["sophistication"] = judge["sophistication"]
-        scores["image_quality"] = judge["image_quality"]
+        if judge["image_quality"] is not None:
+            scores["image_quality"] = judge["image_quality"]
 
     return scores, len(posts)
 

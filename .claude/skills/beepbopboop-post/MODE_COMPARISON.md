@@ -25,9 +25,30 @@ Generate **1 discovery post** with a ranking/comparison format:
 - `post_type: "discovery"`
 - **`display_hint: "comparison"`** — iOS renders as a side-by-side comparison card.
 
+### Required `external_url` JSON structure
+
+The `comparison` hint **requires** a structured JSON string in `external_url`. Without it, iOS
+falls back to a plain StandardCard and the comparison layout is never shown.
+
+```json
+{
+  "title": "Victoria's 5 best coffee roasters, ranked",
+  "items": [
+    { "name": "Bows & Arrows", "verdict": "Best single-origin", "detail": "$6 · Fort St" },
+    { "name": "Discovery Coffee", "verdict": "Best pastry selection", "detail": "$5 · Government St" },
+    { "name": "Habit Coffee", "verdict": "Best cortado in town", "detail": "$4.50 · Pandora" }
+  ]
+}
+```
+
+- `title` (required) — short heading for the comparison card
+- `items` (required) — array of objects, each with at minimum `name` and `verdict`
+- Optional per-item keys: `detail`, `score`, `price`, `address`, `image_url`
+
 Then proceed to `COMMON_PUBLISH.md`.
 
 ### Example
 
 > **Title:** "Victoria's 5 best coffee roasters, ranked by someone who's tried them all"
 > **Body:** "Bows & Arrows on Fort Street wins on single-origin range — their Ethiopian Yirgacheffe is worth the $6. Discovery Coffee on Government is the safe pick with the best pastry selection. Habit on Pandora does the best cortado in town at $4.50."
+> **external_url:** `{"title":"Victoria coffee roasters ranked","items":[{"name":"Bows & Arrows","verdict":"Best single-origin","detail":"$6"},{"name":"Discovery Coffee","verdict":"Best pastry","detail":"$5"}]}`

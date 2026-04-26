@@ -144,6 +144,7 @@ Each model gets a deterministic test token: `bbp_test_{key}_` padded with zeros 
 | Render Expectation | 3x | Does the post have all fields the iOS card needs? Validated against `expectations.json` |
 | Content Diversity | 2x | Hint variety, ≥2 post types, label concentration ≤60%, max 3 consecutive same-type |
 | Non-Repetition | 1x | Unique titles, varied bodies, varied label sets |
+| Image Quality | 1x | Direct URLs, preferred sources (Wikimedia/Unsplash), no AI generators, no duplicate URLs |
 
 ### LLM judge dimensions (requires `--compare-model`)
 
@@ -151,7 +152,12 @@ Each model gets a deterministic test token: `bbp_test_{key}_` padded with zeros 
 |-----------|--------|----------------|
 | Profile Matching | 2x | Posts align with test user's location, interests, family |
 | Sophistication | 1x | Multi-image, lat/lon, structured JSON, external_url usage |
-| Image Quality | 1x | Direct URLs (not generators), quality sources (Wikimedia, Unsplash) |
+
+### Scoring notes
+
+- **Utility labels** (`llm-compare`, `test-*`) are stripped before label count checks — they don't count against the 3–8 label budget or show as repetition.
+- **Image Quality** is now always computed deterministically. AI generator URLs (Pollinations.ai, DALL-E, Replicate, Stability AI) score 2/10. Preferred sources (Wikimedia, Unsplash, Imgur) score 10/10. Duplicate image URLs across posts are penalized. The LLM judge score overrides this only when `--compare-model` is set.
+- **Pre-flight token check** runs before any containers start. If a token fails auth, the run aborts with a clear error rather than wasting container time.
 
 ### Report tables
 
@@ -196,6 +202,7 @@ scripts/
     models.conf                      # Model registry
     expectations.json                # iOS render requirements per display_hint
     llm_compare_report.py            # Scoring engine + report tables
+    test_report.py                   # Unit tests for scoring functions
     Dockerfile                       # Hermes Agent + skills image
     entrypoint.sh                    # Container entrypoint (config + launch)
     hermes-config.yaml               # Hermes base config
@@ -219,11 +226,13 @@ Check the container log at `/tmp/bbp-run-<key>.log`. Common causes:
 ### Token authentication errors
 The script auto-generates tokens and inserts SHA-256 hashes into the DB. If you get `{"error":"invalid or revoked token"}`, the hash may be stale. Run without `--skip-setup` to re-create test users.
 
+Pre-flight token verification now runs automatically before containers start and will abort with a clear error if any token fails.
+
 ### Container hangs past timeout
 The default timeout is 600s (10 min). Set `MODEL_TIMEOUT=900` for slower models. The script kills the container and proceeds to capture whatever posts were created.
 
 ### Report shows "N/A" for some dimensions
-Profile Matching, Sophistication, and Image Quality require `--compare-model <id>`. Without it, only deterministic dimensions are scored.
+Profile Matching and Sophistication require `--compare-model <id>`. Image Quality now scores deterministically without a judge model — it will no longer show N/A.
 
 ### `beepbopgraph` build fails
 Ensure Go is installed and you're on the right branch:

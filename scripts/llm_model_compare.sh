@@ -223,6 +223,45 @@ if $REPORT_ONLY; then
   exit 0
 fi
 
+# ─── Section 1b: Pre-flight token health check ───
+# Verifies that each model's deterministic token authenticates against the
+# backend before wasting time building Docker images. Catches the "invalid or
+# revoked token" failure that caused 5 of 6 models to produce zero posts in
+# the first comparison run (#247).
+preflight_check_tokens() {
+  local models_to_check=("$@")
+  local all_ok=true
+
+  echo "=== Pre-flight: verifying tokens for ${#models_to_check[@]} model(s) ==="
+  for key in "${models_to_check[@]}"; do
+    local token
+    token="$(get_token "$key")"
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+      "$API_URL/posts?limit=1" \
+      -H "Authorization: Bearer $token" 2>/dev/null || echo "000")
+
+    if [[ "$http_code" == "200" ]]; then
+      echo "  ✓ $key — token OK (HTTP $http_code)"
+    else
+      echo "  ✗ $key — token FAILED (HTTP $http_code)"
+      echo "    Token: ${token:0:20}..."
+      echo "    Fix: re-run without --skip-setup to recreate the token in DB,"
+      echo "         or check that the DB container is accessible."
+      all_ok=false
+    fi
+  done
+
+  if ! $all_ok; then
+    echo ""
+    echo "ERROR: One or more tokens failed pre-flight check. Aborting."
+    echo "  Run without --skip-setup to recreate test users and tokens."
+    exit 1
+  fi
+  echo "  All tokens verified."
+  echo ""
+}
+
 # ─── Determine which models to run ───
 RUN_MODELS=()
 if [[ -n "$RUN_MODEL" ]]; then
@@ -256,6 +295,14 @@ fi
 
 echo "Models to run: ${RUN_MODELS[*]}"
 echo ""
+
+# Pre-flight: verify tokens authenticate before building images
+if ! $SKIP_SETUP; then
+  preflight_check_tokens "${RUN_MODELS[@]}"
+else
+  echo "  (--skip-setup: skipping token pre-flight; use without --skip-setup if you get auth errors)"
+  echo ""
+fi
 
 # ─── Section 2: Generate docker-compose.yml ───
 echo "=== Generating docker-compose.yml ==="

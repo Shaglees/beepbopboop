@@ -2,10 +2,29 @@
 
 Every BeepBopBoop post should have an `image_url` that is a direct, fast-loading URL to an image file. The iOS app loads images via `AsyncImage` — slow endpoints or generation URLs break the card.
 
-Two classes of sources:
+## Hard rules — read before sourcing any image
 
-1. **Real images** — stock, Wikimedia, Panoramax, Google Places. Preferred for every post.
-2. **AI-generated images** — Pollinations (flux), Flex.1 / Nanobanana for fashion. Fallback when nothing real fits.
+**1. Never use AI image generators for editorial posts.**
+AI-generated images (Pollinations.ai, DALL-E, Stable Diffusion, Replicate, Midjourney, etc.) are
+banned for editorial content. They produce generic, hallucinated, or factually wrong visuals.
+Use a real photograph every time — even a mediocre real photo beats a polished AI render.
+
+The only exceptions are:
+- `display_hint: outfit` — uses Flex.1 / Nanobanana outfit render pipeline (not for photos)
+- Fashion try-on mode — explicit AI render pipeline (see `beepbopboop-fashion/MODE_TRYON.md`)
+
+**2. Never reuse an image URL from another post in the same batch.**
+Each post must have its own image sourced specifically for that post's topic. Reusing a URL means
+iOS users see the same photo twice in the feed. If you can't find a unique image for a post,
+fall through to the next tier — do not copy a URL from a post you just published.
+
+**3. Image must depict the primary subject of the post.**
+A post about a movie must show the movie (poster, still, cast). A post about a restaurant must
+show the food or the venue. A post about a hiking trail must show the trail or the landscape — not
+a mushroom, a plaque, or a building that happens to be nearby. If Wikimedia geosearch returns
+something unrelated, skip it (see Tier 2 relevance guard below).
+
+Two classes of sources:
 
 > **Full pipeline + all curl snippets live in the `beepbopboop-images` skill.** This file is the quick reference every other skill links to so the pipeline is never "invisibly skipped."
 

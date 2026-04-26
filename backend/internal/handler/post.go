@@ -803,11 +803,11 @@ func (v videoEmbedDataValidation) watchURLWithFallback() string {
 // --- Video game data validation (game_release / game_review) ---
 
 type videoGameDataValidation struct {
-	Title       *string          `json:"title"`
-	Status      *string          `json:"status"`
-	Platforms   *json.RawMessage `json:"platforms"`
-	Genres      *json.RawMessage `json:"genres"`
-	ReleaseDate *string          `json:"releaseDate"`
+	Title       *string  `json:"title"`
+	Status      *string  `json:"status"`
+	Platforms   []string `json:"platforms"`
+	Genres      []string `json:"genres"`
+	ReleaseDate *string  `json:"releaseDate"`
 }
 
 func validateVideoGameData(externalURL string, hint string, errs *[]validationIssue, warns *[]validationIssue) {
@@ -821,7 +821,13 @@ func validateVideoGameData(externalURL string, hint string, errs *[]validationIs
 		*errs = append(*errs, validationIssue{Field: "external_url.title", Code: "required", Message: "game title is required"})
 	}
 	if g.Status == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.status", Code: "missing", Message: "missing status field (upcoming | released | early_access)"})
+		*errs = append(*errs, validationIssue{Field: "external_url.status", Code: "required", Message: "status is required (iOS GameCard cannot decode without it). Values: upcoming | released | early_access"})
+	}
+	if g.Platforms == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.platforms", Code: "required", Message: "platforms array is required (iOS GameCard cannot decode without it; use [] if unknown). Example: \"platforms\": [\"PC\", \"PS5\"]"})
+	}
+	if g.Genres == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.genres", Code: "required", Message: "genres array is required (iOS GameCard cannot decode without it; use [] if unknown). Example: \"genres\": [\"RPG\", \"Action\"]"})
 	}
 	if hint == "game_release" && g.ReleaseDate == nil {
 		*warns = append(*warns, validationIssue{Field: "external_url.releaseDate", Code: "missing", Message: "game_release without releaseDate"})
@@ -835,8 +841,11 @@ type foodDataValidation struct {
 	Rating      *float64 `json:"rating"`
 	ReviewCount *int     `json:"reviewCount"`
 	Cuisine     []string `json:"cuisine"`
+	Address     *string  `json:"address"`
 	Latitude    *float64 `json:"latitude"`
 	Longitude   *float64 `json:"longitude"`
+	MustTry     []string `json:"mustTry"`
+	NewOpening  *bool    `json:"newOpening"`
 }
 
 func validateFoodData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
@@ -849,16 +858,25 @@ func validateFoodData(externalURL string, errs *[]validationIssue, warns *[]vali
 		*errs = append(*errs, validationIssue{Field: "external_url.name", Code: "required", Message: "restaurant data missing name"})
 	}
 	if fd.Rating == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.rating", Code: "recommended", Message: `Add "rating": <number 1.0-5.0> to your external_url JSON for a richer RestaurantCard render. Example: "rating": 4.3`})
-	}
-	if fd.Latitude == nil || fd.Longitude == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.latitude", Code: "recommended", Message: `Add "latitude": <float> and "longitude": <float> to your external_url JSON. RestaurantCard shows a map pin when coordinates are present. Example: "latitude": 53.3498, "longitude": -6.2603`})
+		*errs = append(*errs, validationIssue{Field: "external_url.rating", Code: "required", Message: "rating is required (iOS RestaurantCard cannot decode without it). Example: \"rating\": 4.3"})
 	}
 	if fd.ReviewCount == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.reviewCount", Code: "recommended", Message: `Add "reviewCount": <integer> to your external_url JSON. RestaurantCard shows review count next to rating. Example: "reviewCount": 127`})
+		*errs = append(*errs, validationIssue{Field: "external_url.reviewCount", Code: "required", Message: "reviewCount is required (iOS RestaurantCard cannot decode without it). Example: \"reviewCount\": 127"})
 	}
 	if len(fd.Cuisine) == 0 {
-		*warns = append(*warns, validationIssue{Field: "external_url.cuisine", Code: "recommended", Message: `Add "cuisine": ["Italian", "Pizza"] to your external_url JSON. RestaurantCard displays cuisine tags.`})
+		*errs = append(*errs, validationIssue{Field: "external_url.cuisine", Code: "required", Message: "cuisine array is required (iOS RestaurantCard cannot decode without it). Example: \"cuisine\": [\"Italian\", \"Pizza\"]"})
+	}
+	if fd.Address == nil || *fd.Address == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.address", Code: "required", Message: "address is required (iOS RestaurantCard cannot decode without it). Example: \"address\": \"123 Main St\""})
+	}
+	if fd.Latitude == nil || fd.Longitude == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.latitude", Code: "required", Message: "latitude and longitude are required (iOS RestaurantCard cannot decode without them). Example: \"latitude\": 53.3498, \"longitude\": -6.2603"})
+	}
+	if fd.NewOpening == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.newOpening", Code: "required", Message: "newOpening is required (iOS RestaurantCard cannot decode without it). Example: \"newOpening\": false"})
+	}
+	if fd.MustTry == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.mustTry", Code: "required", Message: "mustTry array is required (iOS RestaurantCard cannot decode without it; use [] if unknown). Example: \"mustTry\": [\"espresso\", \"croissant\"]"})
 	}
 }
 
@@ -1064,7 +1082,7 @@ type travelDataValidation struct {
 	Country   *string  `json:"country"`
 	Latitude  *float64 `json:"latitude"`
 	Longitude *float64 `json:"longitude"`
-	KnownFor  *string  `json:"knownFor"`
+	KnownFor  []string `json:"knownFor"`
 }
 
 func validateTravelData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
@@ -1080,10 +1098,10 @@ func validateTravelData(externalURL string, errs *[]validationIssue, warns *[]va
 		*errs = append(*errs, validationIssue{Field: "external_url.country", Code: "required", Message: "country is required"})
 	}
 	if t.Latitude == nil || t.Longitude == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.latitude", Code: "recommended", Message: `Add "latitude": <float> and "longitude": <float> to your external_url JSON. DestinationCard shows a map pin when coordinates are present. Example: "latitude": 48.8566, "longitude": 2.3522`})
+		*errs = append(*errs, validationIssue{Field: "external_url.latitude", Code: "required", Message: "latitude and longitude are required (iOS DestinationCard cannot decode without them). Example: \"latitude\": 48.8566, \"longitude\": 2.3522"})
 	}
-	if t.KnownFor == nil || *t.KnownFor == "" {
-		*warns = append(*warns, validationIssue{Field: "external_url.knownFor", Code: "recommended", Message: `Add "knownFor": "<description>" to your external_url JSON. DestinationCard uses this as a subtitle. Example: "knownFor": "Art museums and riverside walks"`})
+	if t.KnownFor == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.knownFor", Code: "required", Message: "knownFor array is required (iOS DestinationCard cannot decode without it; use [] if unknown). Example: \"knownFor\": [\"Art museums\", \"riverside walks\"]"})
 	}
 }
 
@@ -1111,8 +1129,8 @@ func validateScienceData(externalURL string, errs *[]validationIssue, warns *[]v
 	if s.Headline == nil || *s.Headline == "" {
 		*errs = append(*errs, validationIssue{Field: "external_url.headline", Code: "required", Message: "headline is required"})
 	}
-	if len(s.Tags) == 0 {
-		*warns = append(*warns, validationIssue{Field: "external_url.tags", Code: "recommended", Message: `Add "tags": ["astronomy", "NASA"] to your external_url JSON. ScienceCard shows topic tags. Example: "tags": ["physics", "quantum"]`})
+	if s.Tags == nil {
+		*errs = append(*errs, validationIssue{Field: "external_url.tags", Code: "required", Message: "tags array is required (iOS ScienceCard cannot decode without it; use [] if none). Example: \"tags\": [\"astronomy\", \"NASA\"]"})
 	}
 }
 
@@ -1134,10 +1152,10 @@ func validateCreatorData(externalURL string, errs *[]validationIssue, warns *[]v
 		return
 	}
 	if c.Designation == nil || *c.Designation == "" {
-		*warns = append(*warns, validationIssue{
+		*errs = append(*errs, validationIssue{
 			Field:   "external_url.designation",
-			Code:    "recommended",
-			Message: "Add \"designation\": \"<role>\" (e.g. \"ceramicist\", \"muralist\", \"indie musician\") to your external_url JSON. CreatorSpotlightCard displays this prominently.",
+			Code:    "required",
+			Message: "designation is required (iOS CreatorSpotlightCard cannot decode without it). Example: \"designation\": \"ceramicist\"",
 		})
 	}
 	if c.Links == nil || len(c.Links) == 0 {

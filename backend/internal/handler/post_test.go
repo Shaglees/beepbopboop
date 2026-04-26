@@ -1174,17 +1174,17 @@ func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
 		"standings":         `{"league":"NBA","date":"2026-04-16","games":[{"home":"LAL","away":"BOS","homeScore":110,"awayScore":105,"status":"Final"}]}`,
 		"entertainment":     `{"subject":"Zendaya","headline":"Zendaya Named TIME Entertainer of the Year","source":"People","category":"award","tags":["entertainment"]}`,
 		"pet_spotlight":     `{"type":"adoption","name":"Biscuit","species":"dog","breed":"Labrador Mix","age":"Young","gender":"Male","shelterName":"SF SPCA","shelterCity":"San Francisco","petfinderUrl":"https://www.petfinder.com/dog/biscuit-12345678"}`,
-		"game_release":      `{"title":"Test Game","status":"upcoming"}`,
-		"game_review":       `{"title":"Test Game","status":"released"}`,
+		"game_release":      `{"title":"Test Game","status":"upcoming","platforms":["PC","PS5"],"genres":["RPG","Action"]}`,
+		"game_review":       `{"title":"Test Game","status":"released","platforms":["PC"],"genres":["Action","Adventure"]}`,
 		"box_score":         `{"status":"Final","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA"}`,
 		"feedback":          `{"feedback_type":"poll","question":"What do you think?","options":[{"key":"a","label":"Option A"}]}`,
 		"movie":             `{"tmdbId":550,"title":"Fight Club"}`,
 		"player_spotlight":  `{"playerName":"LeBron James","sport":"NBA","team":"Lakers"}`,
-		"science":           `{"category":"Space","source":"NASA","headline":"New Planet Discovered"}`,
-		"destination":       `{"city":"Paris","country":"France","latitude":48.8566,"longitude":2.3522}`,
+		"science":           `{"category":"Space","source":"NASA","headline":"New Planet Discovered","tags":["astronomy","exoplanet"]}`,
+		"destination":       `{"city":"Paris","country":"France","latitude":48.8566,"longitude":2.3522,"knownFor":["Art museums","riverside walks"]}`,
 		"fitness":           `{}`,
 		"show":              `{"tmdbId":1399,"title":"Game of Thrones"}`,
-		"restaurant":        `{"name":"Test Cafe","latitude":40.7,"longitude":-74.0}`,
+		"restaurant":        `{"name":"Test Cafe","rating":4.5,"reviewCount":87,"cuisine":["Coffee","Bakery"],"address":"123 Main St","latitude":40.7,"longitude":-74.0,"mustTry":["espresso"],"newOpening":false}`,
 		"creator_spotlight": `{"designation":"Painter","source":"Brooklyn Rail"}`,
 		"video_embed":       `{"provider":"youtube","video_id":"dQw4w9WgXcQ","embed_url":"https://www.youtube.com/embed/dQw4w9WgXcQ","watch_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg","channel_title":"Rick Astley"}`,
 	}
@@ -1381,26 +1381,26 @@ func TestPostHandler_LintCreatorSpotlight_RequiresDesignation(t *testing.T) {
 	h.LintPost(rec, req)
 
 	var result struct {
-		Valid    bool `json:"valid"`
-		Warnings []struct {
+		Valid  bool `json:"valid"`
+		Errors []struct {
 			Field string `json:"field"`
 			Code  string `json:"code"`
-		} `json:"warnings"`
+		} `json:"errors"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if !result.Valid {
-		t.Fatalf("expected valid=true, got false")
+	if result.Valid {
+		t.Fatalf("expected valid=false (designation is required for iOS decoding), got true")
 	}
 	found := false
-	for _, w := range result.Warnings {
-		if w.Field == "external_url.designation" {
+	for _, e := range result.Errors {
+		if e.Field == "external_url.designation" && e.Code == "required" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected warning for missing designation; got %+v", result.Warnings)
+		t.Errorf("expected error for missing designation; got %+v", result.Errors)
 	}
 }
 

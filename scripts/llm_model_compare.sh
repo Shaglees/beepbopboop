@@ -174,6 +174,8 @@ mkdir -p "$RESULTS_DIR"
 # ─── Cleanup mode ───
 if $CLEANUP; then
   echo "=== Cleaning up test data ==="
+  DB_CONTAINER="backend-db-1"
+  DB_CMD="docker exec $DB_CONTAINER psql -U beepbopboop -d beepbopboop -tAc"
 
   if ! docker exec "$DB_CONTAINER" pg_isready -U beepbopboop &>/dev/null; then
     echo "ERROR: Database container '$DB_CONTAINER' not running"

@@ -4,13 +4,9 @@
 
 ---
 
-## STOP — Pre-flight requirement for `display_hint: comparison`
-
-Before writing any comparison post, confirm you can produce the required `external_url` JSON. If you cannot, **use `display_hint: card` instead** — a plain card with good body text is better than a comparison hint with no structured data.
+## Required `external_url` JSON — copy and fill this in
 
 The `comparison` hint **requires** a structured JSON string in `external_url`. Without it, iOS falls back to a plain StandardCard and the comparison layout is never shown.
-
-### Required `external_url` JSON — copy and fill this in:
 
 ```json
 {
@@ -24,17 +20,12 @@ The `comparison` hint **requires** a structured JSON string in `external_url`. W
 ```
 
 **Required keys:**
-- `title` — short heading for the comparison card (required)
+- `title` — short heading for the comparison card
 - `items` — array, each with at minimum `name` (string) and `verdict` (string)
 
 **Optional per-item keys:** `detail`, `score`, `price`, `address`, `image_url`
 
-**Decision gate:**
-
-| Can you produce `title` + `items[]` with real `name` + `verdict` for each? | Use |
-|---|---|
-| Yes | `display_hint: comparison` with `external_url` JSON |
-| No (abstract comparison without specific named items) | `display_hint: card` |
+**Always attempt the comparison hint.** After researching the options in CP2, you will have names, specialties and prices for each place — that is everything needed to fill in `items`. Use `display_hint: article` only if the comparison is too abstract to produce named items (e.g. "compare Austin vs. Dallas as a city").
 
 ---
 

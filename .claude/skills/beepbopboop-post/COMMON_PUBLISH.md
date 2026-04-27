@@ -24,17 +24,24 @@ Evaluate visibility AFTER generating post content (since the body text determine
 
 ## Hint diversity requirement (batch mode)
 
-When publishing a batch of 8–10 posts, your `display_hint` selection **MUST** cover all of these categories. Do not publish a batch where any category is missing:
+When publishing a batch of 8–10 posts, your `display_hint` selection **MUST** include ALL of the following hints. Each one is individually required — do not skip any:
 
-| Category | Required hints (pick at least one) |
+| Required hint | Notes |
 |---|---|
-| Sports | `matchup`, `scoreboard`, `standings`, or `player_spotlight` |
-| Lifestyle | `fitness`, `restaurant`, `place`, or `deal` |
-| Culture | `entertainment`, `concert`, `album`, `movie`, or `show` |
-| Travel / Location | `destination` or `place` (with location focus) |
-| Analysis / Discovery | `comparison` (ranked 3+ items), `article`, or `card` |
+| `matchup` | Sports upcoming game — requires structured `external_url` JSON |
+| `destination` | Travel/place post — requires structured `external_url` JSON |
+| `entertainment` | Film, TV, music, podcast, or event — requires structured `external_url` JSON |
+| `fitness` | Workout or fitness activity — requires structured `external_url` JSON |
+| `comparison` | Ranked 3+ items — requires structured `external_url` JSON |
+| `concert` | Live music event — requires structured `external_url` JSON |
+| `restaurant` | Dining/food venue — requires structured `external_url` JSON |
+| `album` | Music album review or recommendation — requires structured `external_url` JSON |
 
-Before finalising your post plan, check this list. If any category is missing, add a post that covers it. Do not publish 10 `article` posts because they feel safe.
+These 8 hints all require structured `external_url` JSON. See `../_shared/HINT_DECISION.md` for the exact key schemas and fill-in templates. **Use the templates exactly — wrong keys return a 422.**
+
+With 8 required structured hints and a batch of 8–10 posts, most or all posts will have a structured hint. Fill remaining slots with `article`, `card`, `digest`, `event`, `place`, `video`, etc.
+
+Before finalising your post plan, check this list one by one. If any of the 8 is missing, add a post that uses it.
 
 ---
 
@@ -340,6 +347,21 @@ curl -s -X POST "<API_URL>/posts" \
 ```
 
 > `images` is an optional array of `{url, role, caption}` used by the `outfit` display hint. Roles: `hero`, `detail`, `product`. When set, `image_url` should still hold the hero URL.
+
+**If the API returns HTTP 422 (`invalid_external_url`):**
+
+The response body will contain `corrected_external_url` with the fixed JSON already applied. Retry the post immediately using the corrected value exactly as returned — do not modify it:
+
+```bash
+CORRECTED=$(echo "$RESPONSE" | jq -r '.corrected_external_url')
+# Re-submit with corrected external_url:
+curl -s -X POST "<API_URL>/posts" \
+  -H "Authorization: Bearer <AGENT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d "$(echo "$ORIGINAL_PAYLOAD" | jq --arg u "$CORRECTED" '.external_url = $u')" | jq .
+```
+
+Do not guess the correct schema — use `corrected_external_url` verbatim. If the 422 does not include `corrected_external_url`, check `../_shared/HINT_DECISION.md` for the fill-in template.
 
 **Notes:**
 

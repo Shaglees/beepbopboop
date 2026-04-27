@@ -15,6 +15,46 @@ enum FeedType {
     }
 }
 
+// MARK: - Spread / Content Mix
+
+struct SpreadTargets: Codable {
+    let targets: [String: Double]
+    let omega: String
+    let pinned: [String]
+    let autoAdjust: Bool
+    let actual30d: [String: Double]
+    let status: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case targets, omega, pinned
+        case autoAdjust = "auto_adjust"
+        case actual30d = "actual_30d"
+        case status
+    }
+}
+
+struct SpreadHistoryResponse: Codable {
+    let days: [SpreadHistoryDay]
+}
+
+struct SpreadHistoryDay: Codable {
+    let date: String
+    let target: [String: Double]
+    let actual: [String: Double]
+}
+
+struct PutSpreadRequest: Codable {
+    let targets: [String: Double]
+    let omega: String
+    let pinned: [String]
+    let autoAdjust: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case targets, omega, pinned
+        case autoAdjust = "auto_adjust"
+    }
+}
+
 class APIService: ObservableObject {
     private let baseURL: String
     private let authService: AuthService
@@ -164,6 +204,65 @@ class APIService: ObservableObject {
             throw APIError.httpError(httpResponse.statusCode)
         }
         return try JSONDecoder().decode(UserSettings.self, from: data)
+    }
+
+    // MARK: - Content Mix / Spread
+
+    @MainActor
+    func fetchSpreadTargets() async throws -> SpreadTargets {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/settings/spread") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+        return try JSONDecoder().decode(SpreadTargets.self, from: data)
+    }
+
+    @MainActor
+    func updateSpreadTargets(_ spread: PutSpreadRequest) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/settings/spread") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(spread)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
+    @MainActor
+    func fetchSpreadHistory() async throws -> SpreadHistoryResponse {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/settings/spread/history") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+        return try JSONDecoder().decode(SpreadHistoryResponse.self, from: data)
     }
 
     // MARK: - Feed weights
@@ -631,6 +730,75 @@ class APIService: ObservableObject {
 
         let body: [String: [ContentPref]] = ["prefs": prefs]
         request.httpBody = try JSONEncoder().encode(body)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
+    // MARK: - User Photos
+
+    @MainActor
+    func uploadPhoto(type: String, imageData: Data) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/photos/\(type)") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"photo.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
+    @MainActor
+    func getPhoto(type: String) async throws -> Data? {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/photos/\(type)") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        if httpResponse.statusCode == 404 {
+            return nil
+        }
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+        return data
+    }
+
+    @MainActor
+    func deletePhoto(type: String) async throws {
+        let token = authService.getToken()
+        guard let url = URL(string: "\(baseURL)/user/photos/\(type)") else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,

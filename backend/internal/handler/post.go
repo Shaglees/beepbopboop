@@ -66,6 +66,7 @@ var ValidDisplayHints = map[string]bool{
 	"feedback":          true,
 	"creator_spotlight": true,
 	"video_embed":       true,
+	"local_news":        true,
 }
 
 var ValidImageRoles = map[string]bool{
@@ -257,11 +258,11 @@ func validatePost(req *createPostRequest) validationResult {
 		req.DisplayHint == "album" || req.DisplayHint == "concert" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" ||
 		req.DisplayHint == "restaurant" || req.DisplayHint == "destination" ||
-		req.DisplayHint == "pet_spotlight" || req.DisplayHint == "fitness" ||
+		req.DisplayHint == "pet_spotlight" || req.DisplayHint == "fitness" || req.DisplayHint == "comparison" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
 		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" ||
 		req.DisplayHint == "feedback" || req.DisplayHint == "creator_spotlight" ||
-		req.DisplayHint == "video_embed"
+		req.DisplayHint == "video_embed" || req.DisplayHint == "local_news"
 	if req.ExternalURL != "" && !structuredHint {
 		if msg := validateURL(req.ExternalURL); msg != "" {
 			errs = append(errs, validationIssue{Field: "external_url", Code: "invalid_url", Message: msg})
@@ -356,6 +357,8 @@ func validatePost(req *createPostRequest) validationResult {
 			validateFoodData(req.ExternalURL, &errs, &warns)
 		case "fitness":
 			validateFitnessData(req.ExternalURL, &errs, &warns)
+		case "comparison":
+			validateComparisonData(req.ExternalURL, &errs, &warns)
 		case "feedback":
 			validateFeedbackData(req.ExternalURL, &errs, &warns)
 		case "album", "concert":
@@ -376,13 +379,15 @@ func validatePost(req *createPostRequest) validationResult {
 			validateVideoEmbedData(req.ExternalURL, &errs, &warns)
 		case "creator_spotlight":
 			validateCreatorData(req.ExternalURL, &errs, &warns)
+		case "local_news":
+			validateLocalNewsData(req.ExternalURL, &errs, &warns)
 		}
 	} else if req.DisplayHint == "weather" || req.DisplayHint == "scoreboard" || req.DisplayHint == "matchup" || req.DisplayHint == "standings" || req.DisplayHint == "entertainment" ||
 		req.DisplayHint == "game_release" || req.DisplayHint == "game_review" || req.DisplayHint == "restaurant" ||
-		req.DisplayHint == "destination" || req.DisplayHint == "fitness" ||
+		req.DisplayHint == "destination" || req.DisplayHint == "fitness" || req.DisplayHint == "comparison" ||
 		req.DisplayHint == "science" || req.DisplayHint == "movie" || req.DisplayHint == "show" ||
 		req.DisplayHint == "player_spotlight" || req.DisplayHint == "box_score" || req.DisplayHint == "pet_spotlight" || req.DisplayHint == "feedback" ||
-		req.DisplayHint == "video_embed" || req.DisplayHint == "creator_spotlight" {
+		req.DisplayHint == "video_embed" || req.DisplayHint == "creator_spotlight" || req.DisplayHint == "local_news" {
 		errs = append(errs, validationIssue{
 			Field:   "external_url",
 			Code:    "required",
@@ -479,10 +484,11 @@ func validateWeatherData(externalURL string, errs *[]validationIssue, warns *[]v
 // --- Game data validation (scoreboard/matchup) ---
 
 type gameDataValidation struct {
-	Sport    *string `json:"sport"`
-	Status   *string `json:"status"`
-	GameTime *string `json:"gameTime"`
-	Home     *struct {
+	Sport  *string `json:"sport"`
+	League *string `json:"league"`
+	Status *string `json:"status"`
+	Date   *string `json:"date"`
+	Home   *struct {
 		Name *string `json:"name"`
 		Abbr *string `json:"abbr"`
 	} `json:"home"`
@@ -499,9 +505,6 @@ func validateGameData(externalURL string, hint string, errs *[]validationIssue, 
 		return
 	}
 
-	if g.Status == nil {
-		*errs = append(*errs, validationIssue{Field: "external_url.status", Code: "required", Message: "game status is required"})
-	}
 	if g.Home == nil {
 		*errs = append(*errs, validationIssue{Field: "external_url.home", Code: "required", Message: "home team is required"})
 	} else {
@@ -523,12 +526,19 @@ func validateGameData(externalURL string, hint string, errs *[]validationIssue, 
 		}
 	}
 
-	// Warnings
-	if hint == "matchup" && g.GameTime == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.gameTime", Code: "recommended", Message: `Add "gameTime": "<RFC3339 datetime>" to your external_url JSON. MatchupCard displays the scheduled tip-off/kick-off time. Example: "gameTime": "2026-04-16T19:00:00Z"`})
+	if hint == "matchup" {
+		// matchup requires date (ISO string) — NOT gameTime
+		if g.Date == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.date", Code: "required", Message: `matchup requires "date" (ISO date string, e.g. "2026-04-27"). Do NOT use "gameTime".`})
+		}
+		// matchup requires league
+		if g.League == nil {
+			*errs = append(*errs, validationIssue{Field: "external_url.league", Code: "required", Message: `matchup requires "league" (e.g. "NBA", "NFL", "MLB", "NHL")`})
+		}
 	}
+
 	if g.Sport == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.sport", Code: "recommended", Message: `Add "sport": "<sport>" to your external_url JSON. Example: "sport": "basketball"`})
+		*warns = append(*warns, validationIssue{Field: "external_url.sport", Code: "recommended", Message: `Add "sport": "<sport name>" to your external_url JSON. Example: "sport": "basketball" (not the league abbreviation)`})
 	}
 }
 
@@ -591,11 +601,13 @@ func validateStandingsData(externalURL string, errs *[]validationIssue, warns *[
 }
 
 // --- Entertainment data validation ---
+// entertainment requires: title (string), type (string)
+// Valid type values: music, film, tv, podcast, event, other
+// Do NOT use subject, headline, category, tags, source.
 
 type entertainmentDataValidation struct {
-	Subject  *string `json:"subject"`
-	Headline *string `json:"headline"`
-	Source   *string `json:"source"`
+	Title *string `json:"title"`
+	Type  *string `json:"type"`
 }
 
 func validateEntertainmentData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
@@ -604,15 +616,16 @@ func validateEntertainmentData(externalURL string, errs *[]validationIssue, warn
 		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for entertainment hint"})
 		return
 	}
-
-	if e.Subject == nil {
-		*errs = append(*errs, validationIssue{Field: "external_url.subject", Code: "required", Message: "subject is required"})
+	if e.Title == nil || *e.Title == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.title", Code: "required", Message: `entertainment requires "title". Do NOT use "subject" or "headline".`})
 	}
-	if e.Headline == nil {
-		*errs = append(*errs, validationIssue{Field: "external_url.headline", Code: "required", Message: "headline is required"})
-	}
-	if e.Source == nil {
-		*errs = append(*errs, validationIssue{Field: "external_url.source", Code: "required", Message: "source is required"})
+	if e.Type == nil || *e.Type == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.type", Code: "required", Message: `entertainment requires "type" (music, film, tv, podcast, event, or other). Do NOT use "category".`})
+	} else {
+		validTypes := map[string]bool{"music": true, "film": true, "tv": true, "podcast": true, "event": true, "other": true}
+		if !validTypes[*e.Type] {
+			*warns = append(*warns, validationIssue{Field: "external_url.type", Code: "invalid", Message: fmt.Sprintf("entertainment type %q is not recognised; valid values: music, film, tv, podcast, event, other", *e.Type)})
+		}
 	}
 }
 
@@ -882,9 +895,12 @@ func validateFoodData(externalURL string, errs *[]validationIssue, warns *[]vali
 
 // --- Fitness data validation ---
 
+// fitness requires: title (string), type (string)
+// Valid type values: run, workout, yoga, cycling, swim, other
+// Do NOT use activity, intensity, duration_min, notes.
 type fitnessDataValidation struct {
-	Activity    *string `json:"activity"`
-	DurationMin *int    `json:"duration_min"`
+	Title *string `json:"title"`
+	Type  *string `json:"type"`
 }
 
 func validateFitnessData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
@@ -893,11 +909,16 @@ func validateFitnessData(externalURL string, errs *[]validationIssue, warns *[]v
 		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "fitness external_url must be valid JSON"})
 		return
 	}
-	if f.Activity == nil || *f.Activity == "" {
-		*warns = append(*warns, validationIssue{Field: "external_url.activity", Code: "recommended", Message: `Add "activity": "<activity name>" to your external_url JSON. FitnessCard uses this as the card title. Example: "activity": "Morning HIIT Circuit"`})
+	if f.Title == nil || *f.Title == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.title", Code: "required", Message: `fitness requires "title". Do NOT use "activity".`})
 	}
-	if f.DurationMin == nil {
-		*warns = append(*warns, validationIssue{Field: "external_url.duration_min", Code: "recommended", Message: `Add "duration_min": <integer> to your external_url JSON. FitnessCard shows workout duration. Example: "duration_min": 30`})
+	if f.Type == nil || *f.Type == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.type", Code: "required", Message: `fitness requires "type" (run, workout, yoga, cycling, swim, or other). Do NOT use "intensity".`})
+	} else {
+		validTypes := map[string]bool{"run": true, "workout": true, "yoga": true, "cycling": true, "swim": true, "other": true}
+		if !validTypes[*f.Type] {
+			*warns = append(*warns, validationIssue{Field: "external_url.type", Code: "invalid", Message: fmt.Sprintf("fitness type %q is not recognised; valid values: run, workout, yoga, cycling, swim, other", *f.Type)})
+		}
 	}
 }
 
@@ -1076,9 +1097,11 @@ func validatePetData(externalURL string, errs *[]validationIssue, warns *[]valid
 }
 
 // --- Travel data validation (destination) ---
+// destination requires: name (string), country (string)
+// Do NOT use "city", "location", or "place" — the key is "name".
 
 type travelDataValidation struct {
-	City      *string  `json:"city"`
+	Name      *string  `json:"name"`
 	Country   *string  `json:"country"`
 	Latitude  *float64 `json:"latitude"`
 	Longitude *float64 `json:"longitude"`
@@ -1091,11 +1114,11 @@ func validateTravelData(externalURL string, errs *[]validationIssue, warns *[]va
 		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for destination hint"})
 		return
 	}
-	if t.City == nil || *t.City == "" {
-		*errs = append(*errs, validationIssue{Field: "external_url.city", Code: "required", Message: "city is required"})
+	if t.Name == nil || *t.Name == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.name", Code: "required", Message: `destination requires "name". Do NOT use "city", "location", or "place".`})
 	}
 	if t.Country == nil || *t.Country == "" {
-		*errs = append(*errs, validationIssue{Field: "external_url.country", Code: "required", Message: "country is required"})
+		*warns = append(*warns, validationIssue{Field: "external_url.country", Code: "recommended", Message: `Add "country": "<country name>" to your external_url JSON. Example: "country": "United States"`})
 	}
 	if t.Latitude == nil || t.Longitude == nil {
 		*errs = append(*errs, validationIssue{Field: "external_url.latitude", Code: "required", Message: "latitude and longitude are required (iOS DestinationCard cannot decode without them). Example: \"latitude\": 48.8566, \"longitude\": 2.3522"})
@@ -1145,6 +1168,44 @@ type creatorDataValidation struct {
 	AreaName     *string                `json:"area_name"`
 }
 
+// --- Comparison data validation ---
+// comparison requires: title (string), items (array with name+verdict per item, min 3)
+
+type comparisonItemValidation struct {
+	Name    *string `json:"name"`
+	Verdict *string `json:"verdict"`
+}
+
+type comparisonDataValidation struct {
+	Title *string                    `json:"title"`
+	Items []comparisonItemValidation `json:"items"`
+}
+
+func validateComparisonData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var c comparisonDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &c); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "comparison external_url must be valid JSON"})
+		return
+	}
+	if c.Title == nil || *c.Title == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.title", Code: "required", Message: "comparison requires title"})
+	}
+	if len(c.Items) == 0 {
+		*errs = append(*errs, validationIssue{Field: "external_url.items", Code: "required", Message: "comparison requires items array (minimum 3 items)"})
+	} else if len(c.Items) < 3 {
+		*errs = append(*errs, validationIssue{Field: "external_url.items", Code: "invalid", Message: fmt.Sprintf("comparison requires at least 3 items, got %d", len(c.Items))})
+	} else {
+		for i, item := range c.Items {
+			if item.Name == nil || *item.Name == "" {
+				*errs = append(*errs, validationIssue{Field: fmt.Sprintf("external_url.items[%d].name", i), Code: "required", Message: fmt.Sprintf("item %d requires name", i)})
+			}
+			if item.Verdict == nil || *item.Verdict == "" {
+				*errs = append(*errs, validationIssue{Field: fmt.Sprintf("external_url.items[%d].verdict", i), Code: "required", Message: fmt.Sprintf("item %d requires verdict", i)})
+			}
+		}
+	}
+}
+
 func validateCreatorData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
 	var c creatorDataValidation
 	if err := json.Unmarshal([]byte(externalURL), &c); err != nil {
@@ -1188,6 +1249,40 @@ func validateCreatorData(externalURL string, errs *[]validationIssue, warns *[]v
 	}
 }
 
+// --- Local news data validation ---
+
+type localNewsDataValidation struct {
+	ContentKind *string `json:"content_kind"`
+	SourceName  *string `json:"source_name"`
+	SourceURL   *string `json:"source_url"`
+	ArticleURL  *string `json:"article_url"`
+	TrustScore  *int    `json:"trust_score"`
+}
+
+func validateLocalNewsData(externalURL string, errs *[]validationIssue, warns *[]validationIssue) {
+	var n localNewsDataValidation
+	if err := json.Unmarshal([]byte(externalURL), &n); err != nil {
+		*errs = append(*errs, validationIssue{Field: "external_url", Code: "invalid_json", Message: "external_url must be valid JSON for local_news hint"})
+		return
+	}
+	if n.ContentKind == nil || *n.ContentKind == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.content_kind", Code: "required", Message: "content_kind is required (article, video, hybrid)"})
+	} else {
+		switch *n.ContentKind {
+		case "article", "video", "hybrid":
+			// valid
+		default:
+			*errs = append(*errs, validationIssue{Field: "external_url.content_kind", Code: "invalid", Message: fmt.Sprintf("unknown content_kind %q; must be article, video, or hybrid", *n.ContentKind)})
+		}
+	}
+	if n.SourceName == nil || *n.SourceName == "" {
+		*errs = append(*errs, validationIssue{Field: "external_url.source_name", Code: "required", Message: "source_name is required"})
+	}
+	if n.SourceURL == nil || *n.SourceURL == "" {
+		*warns = append(*warns, validationIssue{Field: "external_url.source_url", Code: "recommended", Message: `Add "source_url" to your external_url JSON for source attribution.`})
+	}
+}
+
 func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	agentID := middleware.AgentIDFromContext(r.Context())
 
@@ -1195,6 +1290,42 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
+	}
+
+	// Check for wrong external_url keys before running full validation.
+	// Returns 422 with corrected JSON so the caller can retry immediately.
+	if req.ExternalURL != "" {
+		corrected, fixes, remapErr := remapExternalURL(req.DisplayHint, req.ExternalURL)
+		if remapErr == nil && len(fixes) > 0 {
+			// Parse corrected JSON to check remaining missing keys
+			var correctedData map[string]interface{}
+			json.Unmarshal([]byte(corrected), &correctedData) //nolint:errcheck — already parsed successfully in remap
+			missing := missingRequiredKeysForHint(req.DisplayHint, correctedData)
+			msg := fmt.Sprintf("external_url has wrong keys for display_hint %q. Use the corrected version below.", req.DisplayHint)
+			if len(missing) > 0 {
+				msg += fmt.Sprintf(" Still missing required keys after correction: %v", missing)
+			}
+			writeJSON(w, http.StatusUnprocessableEntity, wrongKeyResponse{
+				Error:                "invalid_external_url",
+				Message:              msg,
+				CorrectedExternalURL: corrected,
+				FixesApplied:         fixes,
+			})
+			return
+		}
+	}
+
+	// Check for completely missing external_url on structured hints
+	if req.ExternalURL == "" {
+		if tmpl := templateForHint(req.DisplayHint); tmpl != "" {
+			writeJSON(w, http.StatusUnprocessableEntity, wrongKeyResponse{
+				Error:                "invalid_external_url",
+				Message:              fmt.Sprintf("display_hint %q requires external_url with structured JSON. Copy the template below and fill in the ALLCAPS values.", req.DisplayHint),
+				CorrectedExternalURL: tmpl,
+				FixesApplied:         []string{"external_url was empty — template provided"},
+			})
+			return
+		}
 	}
 
 	result := validatePost(&req)

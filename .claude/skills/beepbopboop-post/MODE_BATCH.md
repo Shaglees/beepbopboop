@@ -77,6 +77,25 @@ Empty data / errors: skip silently.
 
 Random integer between `BATCH_MIN` and `BATCH_MAX` (defaults: 8 and 15).
 
+## BT2.5: Load spread targets
+
+Fetch the user's content-mix preferences:
+
+```bash
+SPREAD=$(curl -s -H "$AUTH" "$API/settings/spread")
+```
+
+If the endpoint returns an error or is unavailable, fall back to even distribution across all verticals.
+
+Use the `targets` map to allocate BT2's post count across verticals:
+
+1. **Omega** vertical (`echo "$SPREAD" | jq -r '.omega'`) always gets at least 1 slot.
+2. Remaining slots are distributed proportionally by weight: `slots[v] = round(weight[v] * (total - 1))`.
+3. If a vertical's weight is 0, skip it entirely.
+4. Validate: if the sum of allocated slots exceeds the total, trim the lowest-weight verticals first.
+
+When building the content plan in BT3, use these per-vertical slot counts instead of the hardcoded category defaults. The `status` field shows which verticals are under/over-represented — prioritize `below_target` verticals when filling remaining slots.
+
 ## BT3: Build content plan
 
 **Phase 1 — Scheduled content.** Execute each matching schedule rule from BT1. Map schedule modes:
@@ -151,6 +170,7 @@ Before publishing, produce a scorecard:
 DIVERSITY SCORECARD
 - Types: 3/5 used (place, article, discovery) ✓
 - Hints: 5/14 used (place, article, brief, digest, outfit) ✓
+- Structured hints: 8/8 required (matchup ✓, destination ✓, entertainment ✓, fitness ✓, comparison ✓, concert ✓, restaurant ✓, album ✓)
 - Labels: 8 unique, top 3 = 42% ✓
 - Local vs non-local: 5/8 (63%) ✓
 - Consecutive same-type: max 2 ✓
@@ -162,6 +182,7 @@ DIVERSITY SCORECARD
 **Flag thresholds — fix the batch before publishing if any fail:**
 - Type count < 2 → swap a post for a different type
 - Hint count < 3 → use digest/brief/place for suitable posts
+- Structured hint count < 8 → MUST add missing structured hint(s) before publishing. Required: `matchup`, `destination`, `entertainment`, `fitness`, `comparison`, `concert`, `restaurant`, `album`
 - Top 3 labels > 60% → swap one post for an unexplored label
 - Consecutive same-type > 3 → reorder
 - Weather posts > 2 → cut to 1 brief + 0–1 editorial

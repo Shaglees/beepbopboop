@@ -85,6 +85,47 @@ Batch tuning:
 - `BEEPBOPBOOP_BATCH_MIN` (default 8), `BEEPBOPBOOP_BATCH_MAX` (default 15)
 - `BEEPBOPBOOP_SCHEDULE` — pipe-separated triplets `DAY|MODE|ARGS` (days: `monday`–`sunday`, `daily`, `weekday`, `weekend`)
 
+## Step 0a: Fetch user profile from server
+
+After loading the config file, fetch the user's profile from the backend API. **Server profile is the primary source of truth** for identity and interests — config file values are fallbacks for fields the server doesn't have.
+
+```bash
+curl -s "$BEEPBOPBOOP_API_URL/user/profile" \
+  -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN"
+```
+
+Expected response (JSON):
+```json
+{
+  "identity": {
+    "display_name": "Shane",
+    "home_location": "Austin, TX",
+    "home_lat": 30.2672,
+    "home_lon": -97.7431,
+    "timezone": "UTC-6"
+  },
+  "interests": [
+    {"category": "Sports", "topic": "sports", "source": "user", "confidence": 1.0},
+    {"category": "Food", "topic": "food", "source": "user", "confidence": 1.0}
+  ],
+  "profile_initialized": true
+}
+```
+
+**Merge rules** (server wins where present, config fills gaps):
+
+| Field | Server source | Config fallback |
+|-------|--------------|-----------------|
+| Location name | `identity.home_location` | `BEEPBOPBOOP_DEFAULT_LOCATION` |
+| Latitude | `identity.home_lat` | `BEEPBOPBOOP_HOME_LAT` |
+| Longitude | `identity.home_lon` | `BEEPBOPBOOP_HOME_LON` |
+| Timezone | `identity.timezone` | (none) |
+| Interests | `interests[].topic` (comma-joined) | `BEEPBOPBOOP_INTERESTS` |
+
+**If the profile fetch fails** (network error, 401, 500): log a warning and continue with config-file values only. Do not stop the skill — the config file is a valid fallback.
+
+**If `profile_initialized` is false**: the user hasn't completed onboarding yet. Use config-file values and log a note.
+
 ## Gate
 
-**Do NOT proceed past Step 0 if `BEEPBOPBOOP_API_URL` or `BEEPBOPBOOP_AGENT_TOKEN` are missing.** Instead, invoke the init wizard of the calling skill (e.g. `beepbopboop-post/INIT_WIZARD.md`).
+**Do NOT proceed past Step 0/0a if `BEEPBOPBOOP_API_URL` or `BEEPBOPBOOP_AGENT_TOKEN` are missing.** Instead, invoke the init wizard of the calling skill (e.g. `beepbopboop-post/MODE_INIT.md`).

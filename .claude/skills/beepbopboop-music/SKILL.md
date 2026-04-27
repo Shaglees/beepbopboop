@@ -227,22 +227,40 @@ Omit fields that are null/unavailable. `onSale` defaults to `true` if unknown.
 Use the structured JSON from MU7 or MU8 as the `external_url` field (the backend accepts raw JSON for `album` and `concert` hints, not a URL).
 
 ```bash
-curl -s -X POST "<API_URL>/posts" \
-  -H "Authorization: Bearer <AGENT_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "<TITLE>",
-    "body": "<BODY>",
-    "image_url": "<COVER_ART_URL_OR_EMPTY>",
-    "external_url": "<JSON_STRING>",
-    "post_type": "<post_type>",
-    "visibility": "public",
-    "display_hint": "<album|concert>",
-    "locality": "<artist name or venue city>",
-    "latitude": <lat_or_null>,
-    "longitude": <lon_or_null>,
-    "labels": ["music", "<genre_tag>", "<album|concert>", "<artist_slug>"]
-  }' | jq .
+PAYLOAD=$(jq -n \
+  --arg title "<TITLE>" \
+  --arg body "<BODY>" \
+  --arg image_url "<COVER_ART_URL_OR_EMPTY>" \
+  --argjson external_url "$(echo "$MUSIC_JSON" | jq -c . | jq -Rs .)" \
+  --arg locality "<artist name or venue city>" \
+  '{
+    title: $title, body: $body, image_url: $image_url, external_url: $external_url,
+    post_type: "<post_type>", visibility: "public", display_hint: "<album|concert>",
+    locality: $locality, latitude: null, longitude: null,
+    labels: ["music", "<genre_tag>", "<album|concert>", "<artist_slug>"]
+  }')
+
+# Lint pre-flight
+LINT=$(curl -s -X POST "$BEEPBOPBOOP_API_URL/posts/lint" \
+  -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
+  -H "Content-Type: application/json" -d "$PAYLOAD")
+if [ "$(echo "$LINT" | jq -r '.valid')" != "true" ]; then
+  echo "$LINT" | jq .; exit 1
+fi
+
+# Publish with 422 retry
+RESP=$(curl -s -o /tmp/bbp_resp.json -w "%{http_code}" -X POST "$BEEPBOPBOOP_API_URL/posts" \
+  -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
+  -H "Content-Type: application/json" -d "$PAYLOAD")
+if [ "$RESP" = "422" ]; then
+  CORRECTED=$(cat /tmp/bbp_resp.json | jq -r '.corrected_external_url')
+  PAYLOAD=$(echo "$PAYLOAD" | jq --arg u "$CORRECTED" '.external_url = $u')
+  curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
+    -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
+    -H "Content-Type: application/json" -d "$PAYLOAD" | jq .
+else
+  cat /tmp/bbp_resp.json | jq .
+fi
 ```
 
 **Image URL:** Use the Spotify cover art URL directly for album posts (`coverUrl` from MU7). For concert posts, use an Unsplash search for the venue or artist name, or leave empty for the gradient placeholder.

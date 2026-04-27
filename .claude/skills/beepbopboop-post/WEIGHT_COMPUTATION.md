@@ -82,3 +82,19 @@ Summarize what changed:
 - Total events analyzed
 
 Keep it under 200 words. If nothing meaningful changed, respond with [SILENT].
+
+## Spread-Aware Weight Adjustment
+
+When `GET /settings/spread` returns `auto_adjust: true`, Lobs should also nudge the spread targets:
+
+1. Read `GET /settings/spread` to get current targets and `actual_30d`.
+2. For each non-pinned vertical:
+   - If `actual_30d[v]` < `targets[v]` and positive engagement signals exist (saves, more reactions) → nudge weight **up** by 2%.
+   - If `actual_30d[v]` > `targets[v]` and negative signals exist (less, not_for_me reactions) → nudge weight **down** by 2%.
+3. Maximum shift per vertical per run: ±2%.
+4. Re-normalize all non-pinned weights so they sum to 1.0 minus the sum of pinned weights.
+5. `PUT /settings/spread` with the updated targets.
+
+**Pinned verticals** are locked — never adjust their weights. The user explicitly chose them.
+
+**Auto-adjust disabled:** If `auto_adjust: false`, skip this entire section. Only the user can change weights manually.

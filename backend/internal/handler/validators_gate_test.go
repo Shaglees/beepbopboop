@@ -43,7 +43,7 @@ var structuredHintValidPayloads = map[string]string{
 	"player_spotlight": `{"playerName":"LeBron James","sport":"NBA","team":"Lakers"}`,
 	"box_score":        `{"status":"Final","home":{"name":"Lakers","abbr":"LAL"},"away":{"name":"Celtics","abbr":"BOS"},"sport":"NBA"}`,
 	"pet_spotlight":    `{"type":"adoption","name":"Biscuit","species":"dog","breed":"Labrador Mix","age":"Young","gender":"Male","shelterName":"SF SPCA","shelterCity":"San Francisco","petfinderUrl":"https://www.petfinder.com/dog/biscuit-12345678"}`,
-	"destination":      `{"city":"Paris","country":"France","latitude":48.8566,"longitude":2.3522,"knownFor":["Art museums","riverside walks"]}`,
+	"destination":      `{"name":"Paris","country":"France","latitude":48.8566,"longitude":2.3522,"knownFor":["Art museums","riverside walks"]}`,
 	"science":          `{"category":"Space","source":"NASA","headline":"New Planet Discovered","tags":["astronomy","exoplanet"]}`,
 	"creator_spotlight": `{"designation":"ceramicist","links":{"instagram":"@handle"},"area_name":"Mission District"}`,
 	"video_embed":      `{"provider":"youtube","video_id":"dQw4w9WgXcQ","embed_url":"https://www.youtube.com/embed/dQw4w9WgXcQ","watch_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg","channel_title":"Rick Astley"}`,

@@ -1181,12 +1181,13 @@ func TestValidDisplayHints_AllTestedViaLint(t *testing.T) {
 		"movie":             `{"tmdbId":550,"title":"Fight Club"}`,
 		"player_spotlight":  `{"playerName":"LeBron James","sport":"NBA","team":"Lakers"}`,
 		"science":           `{"category":"Space","source":"NASA","headline":"New Planet Discovered","tags":["astronomy","exoplanet"]}`,
-		"destination":       `{"city":"Paris","country":"France","latitude":48.8566,"longitude":2.3522,"knownFor":["Art museums","riverside walks"]}`,
+		"destination":       `{"name":"Paris","country":"France","latitude":48.8566,"longitude":2.3522,"knownFor":["Art museums","riverside walks"]}`,
 		"fitness":           `{}`,
 		"show":              `{"tmdbId":1399,"title":"Game of Thrones"}`,
 		"restaurant":        `{"name":"Test Cafe","rating":4.5,"reviewCount":87,"cuisine":["Coffee","Bakery"],"address":"123 Main St","latitude":40.7,"longitude":-74.0,"mustTry":["espresso"],"newOpening":false}`,
 		"creator_spotlight": `{"designation":"Painter","source":"Brooklyn Rail"}`,
 		"video_embed":       `{"provider":"youtube","video_id":"dQw4w9WgXcQ","embed_url":"https://www.youtube.com/embed/dQw4w9WgXcQ","watch_url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","thumbnail_url":"https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg","channel_title":"Rick Astley"}`,
+		"local_news":        `{"content_kind":"article","source_name":"Dublin Inquirer","source_url":"https://dublininquirer.com","article_url":"https://dublininquirer.com/2026/04/25/housing-report","trust_score":80}`,
 	}
 
 	for hint := range handler.ValidDisplayHints {
@@ -1229,7 +1230,7 @@ func TestValidImageRoles_AllTestedViaLint(t *testing.T) {
 func TestValidationMaps_Sorted(t *testing.T) {
 	expectedPostTypes := []string{"article", "discovery", "event", "place", "video"}
 	expectedVisibility := []string{"personal", "private", "public"}
-	expectedHints := []string{"album", "article", "box_score", "brief", "calendar", "card", "comparison", "concert", "creator_spotlight", "deal", "destination", "digest", "entertainment", "event", "feedback", "fitness", "game_release", "game_review", "matchup", "movie", "outfit", "pet_spotlight", "place", "player_spotlight", "restaurant", "science", "scoreboard", "show", "standings", "video_embed", "weather"}
+	expectedHints := []string{"album", "article", "box_score", "brief", "calendar", "card", "comparison", "concert", "creator_spotlight", "deal", "destination", "digest", "entertainment", "event", "feedback", "fitness", "game_release", "game_review", "local_news", "matchup", "movie", "outfit", "pet_spotlight", "place", "player_spotlight", "restaurant", "science", "scoreboard", "show", "standings", "video_embed", "weather"}
 	expectedRoles := []string{"detail", "hero", "product"}
 
 	checkMap := func(name string, m map[string]bool, expected []string) {
@@ -1583,5 +1584,199 @@ func TestPostRepo_PublishScheduled(t *testing.T) {
 	}
 	if published.Status != "published" {
 		t.Errorf("expected status=published after worker, got %s", published.Status)
+	}
+}
+
+// --- 422 wrong-key remapping tests ---
+
+func createCall(t *testing.T, h *handler.PostHandler, agentID, body string) (int, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/posts", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithAgentID(req.Context(), agentID))
+	rec := httptest.NewRecorder()
+	h.CreatePost(rec, req)
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	return rec.Code, resp
+}
+
+func setupCreateHandler(t *testing.T) (*handler.PostHandler, string) {
+	t.Helper()
+	db := database.OpenTestDB(t)
+	userRepo := repository.NewUserRepo(db)
+	agentRepo := repository.NewAgentRepo(db)
+	postRepo := repository.NewPostRepo(db)
+	user, _ := userRepo.FindOrCreateByFirebaseUID("firebase-remap-test")
+	agent, _ := agentRepo.Create(user.ID, "Remap Test Agent")
+	return handler.NewPostHandler(agentRepo, postRepo), agent.ID
+}
+
+func TestCreatePost_Matchup_GameTime_Returns422WithCorrectedDate(t *testing.T) {
+	h, agentID := setupCreateHandler(t)
+
+	extURL := `{"status":"Scheduled","sport":"basketball","league":"NBA","gameTime":"2026-04-27T19:00:00Z","home":{"name":"Thunder","abbr":"OKC"},"away":{"name":"Spurs","abbr":"SAS"}}`
+	code, resp := createCall(t, h, agentID, `{"title":"Game tonight","body":"Big game.","display_hint":"matchup","external_url":`+jsonString(extURL)+`}`)
+
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for gameTime key, got %d: %v", code, resp)
+	}
+	if resp["error"] != "invalid_external_url" {
+		t.Errorf("expected error=invalid_external_url, got %v", resp["error"])
+	}
+	corrected, _ := resp["corrected_external_url"].(string)
+	if corrected == "" {
+		t.Fatal("expected corrected_external_url in response")
+	}
+	var correctedJSON map[string]any
+	if err := json.Unmarshal([]byte(corrected), &correctedJSON); err != nil {
+		t.Fatalf("corrected_external_url is not valid JSON: %v", err)
+	}
+	if _, hasDate := correctedJSON["date"]; !hasDate {
+		t.Error("corrected JSON should have 'date' key")
+	}
+	if _, hasGameTime := correctedJSON["gameTime"]; hasGameTime {
+		t.Error("corrected JSON should NOT have 'gameTime' key")
+	}
+	fixes, _ := resp["fixes_applied"].([]any)
+	if len(fixes) == 0 {
+		t.Error("expected fixes_applied to be non-empty")
+	}
+}
+
+func TestCreatePost_Matchup_GameTime_AfterCorrection_Succeeds(t *testing.T) {
+	h, agentID := setupCreateHandler(t)
+
+	// Correct JSON (date not gameTime, league present, sport=basketball)
+	extURL := `{"sport":"basketball","league":"NBA","date":"2026-04-27","status":"Scheduled","home":{"name":"Thunder","abbr":"OKC"},"away":{"name":"Spurs","abbr":"SAS"}}`
+	body := `{"title":"Game tonight","body":"Big game at Toyota Center.","display_hint":"matchup","external_url":` + jsonString(extURL) + `}`
+	code, resp := createCall(t, h, agentID, body)
+
+	if code != http.StatusCreated {
+		t.Fatalf("expected 201 with correct matchup JSON, got %d: %v", code, resp)
+	}
+}
+
+func TestCreatePost_Destination_City_Returns422WithCorrectedName(t *testing.T) {
+	h, agentID := setupCreateHandler(t)
+
+	extURL := `{"city":"New Orleans","state":"Louisiana","country":"United States","latitude":29.9561,"longitude":-90.0734}`
+	body := `{"title":"Weekend in NOLA","body":"Great food city.","display_hint":"destination","external_url":` + jsonString(extURL) + `}`
+	code, resp := createCall(t, h, agentID, body)
+
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for city key, got %d: %v", code, resp)
+	}
+	corrected, _ := resp["corrected_external_url"].(string)
+	var correctedJSON map[string]any
+	json.Unmarshal([]byte(corrected), &correctedJSON)
+	if correctedJSON["name"] != "New Orleans" {
+		t.Errorf("expected name=New Orleans in corrected JSON, got %v", correctedJSON["name"])
+	}
+	if _, hasCity := correctedJSON["city"]; hasCity {
+		t.Error("corrected JSON should NOT have 'city' key")
+	}
+}
+
+func TestCreatePost_Entertainment_WrongKeys_Returns422(t *testing.T) {
+	h, agentID := setupCreateHandler(t)
+
+	extURL := `{"subject":"Sinners (2025)","headline":"Ryan Coogler horror","category":"film","source":"Austin Critics","tags":["horror"]}`
+	body := `{"title":"Sinners review","body":"Must see film.","display_hint":"entertainment","external_url":` + jsonString(extURL) + `}`
+	code, resp := createCall(t, h, agentID, body)
+
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for wrong entertainment keys, got %d: %v", code, resp)
+	}
+	corrected, _ := resp["corrected_external_url"].(string)
+	var correctedJSON map[string]any
+	json.Unmarshal([]byte(corrected), &correctedJSON)
+	if correctedJSON["title"] == nil {
+		t.Error("corrected JSON should have 'title' key")
+	}
+	if _, hasSubject := correctedJSON["subject"]; hasSubject {
+		t.Error("corrected JSON should NOT have 'subject' key")
+	}
+}
+
+func TestCreatePost_Fitness_WrongKeys_Returns422(t *testing.T) {
+	h, agentID := setupCreateHandler(t)
+
+	extURL := `{"activity":"Morning Run","intensity":"high","duration_min":30}`
+	body := `{"title":"Run tips","body":"Early morning running guide.","display_hint":"fitness","external_url":` + jsonString(extURL) + `}`
+	code, resp := createCall(t, h, agentID, body)
+
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for wrong fitness keys, got %d: %v", code, resp)
+	}
+	corrected, _ := resp["corrected_external_url"].(string)
+	var correctedJSON map[string]any
+	json.Unmarshal([]byte(corrected), &correctedJSON)
+	if correctedJSON["title"] == nil {
+		t.Error("corrected JSON should have 'title' key")
+	}
+	if _, hasActivity := correctedJSON["activity"]; hasActivity {
+		t.Error("corrected JSON should NOT have 'activity' key")
+	}
+}
+
+func TestCreatePost_Comparison_MissingExternalURL_Returns422WithTemplate(t *testing.T) {
+	h, agentID := setupCreateHandler(t)
+
+	body := `{"title":"Best BBQ in Austin","body":"A ranked list of Austin BBQ spots.","display_hint":"comparison"}`
+	code, resp := createCall(t, h, agentID, body)
+
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for missing comparison external_url, got %d: %v", code, resp)
+	}
+	tmpl, _ := resp["corrected_external_url"].(string)
+	if tmpl == "" {
+		t.Error("expected corrected_external_url template in response")
+	}
+	var tmplJSON map[string]any
+	if err := json.Unmarshal([]byte(tmpl), &tmplJSON); err != nil {
+		t.Fatalf("template is not valid JSON: %v", err)
+	}
+	if _, hasTitle := tmplJSON["title"]; !hasTitle {
+		t.Error("template should have 'title' key")
+	}
+	if _, hasItems := tmplJSON["items"]; !hasItems {
+		t.Error("template should have 'items' key")
+	}
+}
+
+func TestCreatePost_Comparison_ValidJSON_Succeeds(t *testing.T) {
+	h, agentID := setupCreateHandler(t)
+
+	extURL := `{"title":"Austin BBQ ranked","items":[{"name":"Franklin","verdict":"Best brisket"},{"name":"La Barbecue","verdict":"Best beef rib"},{"name":"Micklethwait","verdict":"Best sides"}]}`
+	body := `{"title":"Best BBQ in Austin","body":"A ranked list.","display_hint":"comparison","external_url":` + jsonString(extURL) + `}`
+	code, resp := createCall(t, h, agentID, body)
+
+	if code != http.StatusCreated {
+		t.Fatalf("expected 201 with valid comparison JSON, got %d: %v", code, resp)
+	}
+}
+
+func TestCreatePost_Matchup_SportAsLeagueAbbr_Normalized(t *testing.T) {
+	h, agentID := setupCreateHandler(t)
+
+	// sport="NBA" should be normalized to "basketball" and league inferred
+	extURL := `{"sport":"NBA","gameTime":"2026-04-27T19:00:00Z","home":{"name":"Thunder","abbr":"OKC"},"away":{"name":"Spurs","abbr":"SAS"}}`
+	body := `{"title":"Game tonight","body":"NBA playoff action.","display_hint":"matchup","external_url":` + jsonString(extURL) + `}`
+	code, resp := createCall(t, h, agentID, body)
+
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for sport=NBA + gameTime, got %d: %v", code, resp)
+	}
+	corrected, _ := resp["corrected_external_url"].(string)
+	var correctedJSON map[string]any
+	json.Unmarshal([]byte(corrected), &correctedJSON)
+	if correctedJSON["sport"] != "basketball" {
+		t.Errorf("sport should be normalized to 'basketball', got %v", correctedJSON["sport"])
+	}
+	if correctedJSON["league"] == nil {
+		t.Error("league should be inferred when sport was NBA")
+	}
+	if _, hasGameTime := correctedJSON["gameTime"]; hasGameTime {
+		t.Error("corrected JSON should NOT have 'gameTime'")
 	}
 }

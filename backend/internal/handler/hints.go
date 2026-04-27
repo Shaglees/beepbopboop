@@ -452,7 +452,7 @@ func buildHintCatalog() []hintDescriptor {
 			PostType:       "place",
 			StructuredJSON: true,
 			RequiredFields: []string{"title", "body", "external_url:city", "external_url:country", "external_url:latitude", "external_url:longitude", "external_url:knownFor"},
-			Example:   rawJSON(`{"title":"Weekend in Paris","body":"Museums, patisseries, the Seine at dusk.","post_type":"place","display_hint":"destination","external_url":"{\"city\":\"Paris\",\"country\":\"France\",\"latitude\":48.8566,\"longitude\":2.3522,\"knownFor\":[\"Art museums\",\"riverside walks\",\"patisseries\"]}"}`),
+			Example:   rawJSON(`{"title":"Weekend in Paris","body":"Museums, patisseries, the Seine at dusk.","post_type":"place","display_hint":"destination","external_url":"{\"name\":\"Paris\",\"country\":\"France\",\"latitude\":48.8566,\"longitude\":2.3522,\"knownFor\":[\"Art museums\",\"riverside walks\",\"patisseries\"]}"}`),
 			Renders:   &hintRenderInfo{Card: "DestinationCard", UsesFields: []string{"title", "body", "image_url", "external_url"}},
 			PickWhen:  "A city/region travel recommendation with known coordinates — renders a rich location card.",
 			AvoidWhen: "Single-venue recommendation (use `restaurant` or `place`) or purely editorial travel writing (use `article`).",
@@ -541,6 +541,22 @@ func buildHintCatalog() []hintDescriptor {
 			PickWhen:  "The main content is a video that should be embedded and played in-feed (YouTube or Vimeo).",
 			AvoidWhen: "The video is just a supplemental link in an article — put the URL in the body and use `article` instead.",
 			Generator: "beepbopboop-post",
+		},
+		{
+			Hint:           "local_news",
+			Description:    "Local news card — article, video, or hybrid from a community source. Structured JSON in external_url carries source metadata and content kind.",
+			PostType:       "article",
+			StructuredJSON: true,
+			RequiredFields: []string{"title", "body", "external_url"},
+			Example: rawJSON(`{"title":"Dublin housing report reveals 30% increase in builds","body":"A new report from the Dublin Inquirer shows significant growth in housing construction across the city centre.","post_type":"article","display_hint":"local_news","image_url":"https://example.com/thumb.jpg","external_url":"{\"content_kind\":\"article\",\"source_name\":\"Dublin Inquirer\",\"source_url\":\"https://dublininquirer.com\",\"source_logo_url\":\"https://example.com/logo.png\",\"thumbnail_url\":\"https://example.com/thumb.jpg\",\"article_url\":\"https://dublininquirer.com/2026/04/25/housing-report\",\"embed_url\":null,\"duration_seconds\":null,\"locality\":\"Dublin, Ireland\",\"published_at\":\"2026-04-25T10:00:00Z\",\"trust_score\":80}","locality":"Dublin, Ireland"}`),
+			Renders: &hintRenderInfo{
+				Card:          "LocalNewsCard",
+				UsesFields:    []string{"title", "body", "external_url", "image_url", "images"},
+				IgnoresFields: []string{},
+			},
+			PickWhen:  "Content from a local publication, community news source, or local video segment.",
+			AvoidWhen: "National/international news without a clear local source.",
+			Generator: "beepbopboop-local-news",
 		},
 	}
 	return entries

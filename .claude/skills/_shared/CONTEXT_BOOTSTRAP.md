@@ -8,7 +8,7 @@ The bootstrap is intentionally small: four GETs, at most ~50 KB of JSON total, a
 
 Without this step a skill would route straight into (say) `MODE_SPORTS.md` and compose a `matchup` post — but it would not know:
 
-- that the `matchup` display hint requires a JSON payload with a `gameTime` field (it would invent one),
+- that the `matchup` display hint requires a JSON payload with a `date` field (it would invent one),
 - that this user has reacted `not_for_me` to every `sports` post this week (the skill would publish anyway),
 - that the user is already saturated on `hockey` and under-posted on `food` (the feed would keep drifting),
 - that the Petfinder/beepbopgraph/image toolchain exists at all.
@@ -17,19 +17,71 @@ Bootstrap answers all four before any mode runs.
 
 ## Step 0d: Fetch server capabilities + user spread
 
-Run these four calls. Each one is independent; fire them in parallel with `&` and `wait`.
+### Hints cache
+
+The hints catalog changes rarely (only when new display hints are added). To avoid fetching on every invocation, use a local cache:
+
+```bash
+HINTS_CACHE="$HOME/.cache/beepbopboop/hints.json"
+HINTS_STALE=true
+
+if [ -f "$HINTS_CACHE" ]; then
+  FETCHED_AT=$(jq -r '.fetched_at // empty' "$HINTS_CACHE" 2>/dev/null)
+  if [ -n "$FETCHED_AT" ]; then
+    # Check if cache is < 24 hours old
+    CACHE_AGE=$(( $(date +%s) - $(date -d "$FETCHED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${FETCHED_AT%%.*}" +%s 2>/dev/null || echo 0) ))
+    if [ "$CACHE_AGE" -lt 86400 ]; then
+      HINTS=$(jq '.hints' "$HINTS_CACHE")
+      HINTS_STALE=false
+    fi
+  fi
+fi
+
+if [ "$HINTS_STALE" = true ]; then
+  HINTS=$(curl -s -H "$AUTH" "$API/posts/hints")
+  mkdir -p "$(dirname "$HINTS_CACHE")"
+  echo "{\"fetched_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"hints\": $HINTS}" > "$HINTS_CACHE"
+fi
+```
+
+When the cache is fresh, skip the `/posts/hints` fetch in the parallel block below. The other three fetches (`/posts/stats`, `/reactions/summary`, `/events/summary`) always run fresh — they contain time-sensitive data.
+
+### Parallel fetches
+
+Run these calls. Each one is independent; fire them in parallel with `&` and `wait`.
 
 ```bash
 API="$BEEPBOPBOOP_API_URL"
 AUTH="Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN"
 
-HINTS=$(curl -s -H "$AUTH" "$API/posts/hints")
+# HINTS already loaded from cache above; only fetch if stale
+PROFILE=$(curl -s -H "$AUTH" "$API/user/profile")
 STATS=$(curl -s -H "$AUTH" "$API/posts/stats")
 REACT=$(curl -s -H "$AUTH" "$API/reactions/summary")
 EVENTS=$(curl -s -H "$AUTH" "$API/events/summary")
 ```
 
 If any of them returns a non-JSON body or an HTTP error, log a warning and continue — none of them are strictly required to post, but every mode should try to honor them.
+
+### `/user/profile` — server-side user profile (Step 0a enrichment)
+
+**This is the primary source of truth for user identity and interests.** Config file values are fallbacks only.
+
+Parse the profile response and override config-file values where the server has data:
+
+```
+identity.home_location  → BEEPBOPBOOP_DEFAULT_LOCATION
+identity.home_lat       → BEEPBOPBOOP_HOME_LAT
+identity.home_lon       → BEEPBOPBOOP_HOME_LON
+identity.timezone       → user's timezone
+interests[].topic       → BEEPBOPBOOP_INTERESTS (comma-join all topics)
+```
+
+**Merge rule:** server profile wins when present. Config file fills gaps (e.g. `BEEPBOPBOOP_FAMILY`, `BEEPBOPBOOP_SOURCES`, API keys — things the server doesn't store).
+
+**If `profile_initialized` is false:** the user hasn't completed onboarding. Fall back to config-file values and proceed — the skill should still work, just with less personalization.
+
+**If the fetch fails:** log a warning and continue with config-file values only. This keeps backward compatibility with older backends that don't expose `/user/profile` on the agent auth group.
 
 ## What each response gives you
 
@@ -94,17 +146,18 @@ The catalog is fed by daily ingest of wimp.com's RSS feed (run manually via `bac
 
 After bootstrap, the calling skill should have the following in working memory for the rest of its turn:
 
-1. **Hint catalog** — full `display_hints[]` array; every `MODE_*.md` now references hint examples from this bundle rather than inline snippets.
-2. **Enums** — `VALID_POST_TYPES`, `VALID_VISIBILITY`, `VALID_IMAGE_ROLES`, `VALID_DISPLAY_HINTS`.
-3. **Spread summary** — top 5 over-represented labels, top 5 under-represented labels.
-4. **Feedback summary** — `not_for_me_labels`, `more_labels`, `stale_labels`.
-5. **Capabilities** — the `endpoints` map. Modes should prefer named endpoints over invented paths.
+1. **User profile** — location (name + lat/lon), interests, timezone. Source: server `/user/profile` (primary) merged with config file (fallback).
+2. **Hint catalog** — full `display_hints[]` array; every `MODE_*.md` now references hint examples from this bundle rather than inline snippets.
+3. **Enums** — `VALID_POST_TYPES`, `VALID_VISIBILITY`, `VALID_IMAGE_ROLES`, `VALID_DISPLAY_HINTS`.
+4. **Spread summary** — top 5 over-represented labels, top 5 under-represented labels.
+5. **Feedback summary** — `not_for_me_labels`, `more_labels`, `stale_labels`.
+6. **Capabilities** — the `endpoints` map. Modes should prefer named endpoints over invented paths.
 
 ## How mode files reference this bundle
 
 Mode files will say:
 
-> From the hint catalog loaded in Step 0d, take the entry for `matchup`. Copy `example`, override title/body/labels from Step 2, and substitute your `gameTime` / home / away values.
+> From the hint catalog loaded in Step 0d, take the entry for `matchup`. Copy `example`, override title/body/labels from Step 2, and substitute your `date` / home / away values.
 
 No mode file should include its own inline hint schema tables any more — that's what caused the drift this refactor is fixing.
 

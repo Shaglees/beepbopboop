@@ -31,6 +31,8 @@ cat ~/.config/beepbopboop/config 2>/dev/null
 Required: `BEEPBOPBOOP_API_URL`, `BEEPBOPBOOP_AGENT_TOKEN`
 Optional: `APIFOOTBALL_KEY` (richer goal/assist data)
 
+Read `../_shared/SPORTS_COMMON.md` for shared sport conventions (source rules, display hints, labels, team data, publishing).
+
 ---
 
 ## Step SC1: Resolve competition

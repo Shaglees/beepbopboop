@@ -167,3 +167,26 @@ func (r *UserInterestRepo) Delete(id string) error {
 	}
 	return nil
 }
+
+// UsersWithInterests returns distinct user IDs that have at least one active interest.
+func (r *UserInterestRepo) UsersWithInterests() ([]string, error) {
+	rows, err := r.db.Query(`
+		SELECT DISTINCT user_id FROM user_interests
+		WHERE dismissed = FALSE
+		  AND (paused_until IS NULL OR paused_until < NOW())
+		ORDER BY user_id`)
+	if err != nil {
+		return nil, fmt.Errorf("users with interests: %w", err)
+	}
+	defer rows.Close()
+
+	var result []string
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			return nil, fmt.Errorf("scan user_id: %w", err)
+		}
+		result = append(result, userID)
+	}
+	return result, rows.Err()
+}

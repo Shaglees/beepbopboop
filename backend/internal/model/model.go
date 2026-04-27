@@ -62,6 +62,37 @@ type UserSettings struct {
 	UpdatedAt            time.Time `json:"updated_at"`
 }
 
+// SpreadVertical holds a single vertical's weight and pin state.
+type SpreadVertical struct {
+	Weight float64 `json:"weight"`
+	Pinned bool    `json:"pinned"`
+}
+
+// SpreadTargets is the JSONB stored in user_settings.spread_targets.
+type SpreadTargets struct {
+	Verticals  map[string]SpreadVertical `json:"verticals"`
+	Omega      string                    `json:"omega"`
+	AutoAdjust bool                      `json:"auto_adjust"`
+	UpdatedAt  time.Time                 `json:"updated_at"`
+}
+
+// SpreadResponse is what GET /settings/spread returns.
+type SpreadResponse struct {
+	Targets    map[string]float64 `json:"targets"`
+	Omega      string             `json:"omega"`
+	Pinned     []string           `json:"pinned"`
+	AutoAdjust bool               `json:"auto_adjust"`
+	Actual30d  map[string]float64 `json:"actual_30d"`
+	Status     map[string]string  `json:"status"`
+}
+
+// SpreadHistoryDay is one day's snapshot.
+type SpreadHistoryDay struct {
+	Date   string             `json:"date"`
+	Target map[string]float64 `json:"target"`
+	Actual map[string]float64 `json:"actual"`
+}
+
 type CalendarEvent struct {
 	ID        string     `json:"id"`
 	UserID    string     `json:"user_id"`

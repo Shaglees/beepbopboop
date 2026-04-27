@@ -38,7 +38,7 @@ This SKILL.md is a **router**. Each mode lives in its own sibling file. After St
 | Digest (DG1–DG3) | `MODE_DIGEST.md` |
 | Brief (BR1–BR3) | `MODE_BRIEF.md` |
 | Interest discovery (ID1–ID4) | `MODE_DISCOVERY.md` |
-| Init / setup wizard | `INIT_WIZARD.md` |
+| Init / setup wizard | `MODE_INIT.md` |
 | Family context rules | `FAMILY_CONTEXT.md` |
 | Shared publish/dedup/label/report (4a–6) | `COMMON_PUBLISH.md` |
 | Sports schedule sources | `SPORTS_SOURCES.md` |
@@ -53,7 +53,7 @@ This SKILL.md is a **router**. Each mode lives in its own sibling file. After St
 
 ## Step 0: Load configuration
 
-Read `../_shared/CONFIG.md` and follow it. If the required keys are missing, jump to the Init Wizard (read `INIT_WIZARD.md`), then return here.
+Read `../_shared/CONFIG.md` and follow it. If the required keys are missing, jump to the Init Wizard (read `MODE_INIT.md`), then return here.
 
 ## Step 0-pre: Preflight checks
 
@@ -135,7 +135,7 @@ Parse the user's input to determine which mode to use. When a mode is detected, 
 
 | User input pattern | Mode | Read |
 |---|---|---|
-| `init`, `setup`, `configure`, `config` | Init Wizard | `INIT_WIZARD.md` |
+| `init`, `setup`, `configure`, `config` | Init Wizard | `MODE_INIT.md` |
 | `calendar`, `my calendar`, `upcoming events from calendar` | Calendar | `MODE_CALENDAR.md` |
 | `batch`, `my weekly feed`, `fill my feed`, `generate feed` | Batch | `MODE_BATCH.md` |
 | `weather`, `what should I do today` (no specific topic) | Weather | `MODE_WEATHER.md` |

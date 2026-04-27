@@ -14,10 +14,10 @@ Sport skills produce posts with these structured display hints:
 
 | Hint | When to use | Required external_url fields |
 |------|-------------|------------------------------|
-| `scoreboard` | Live or final game scores | `home_team`, `away_team`, `home_score`, `away_score`, `status`, `period` |
-| `matchup` | Upcoming game previews | `home_team`, `away_team`, `date`, `venue`, `odds` (optional) |
-| `standings` | League/division standings | `entries[]` with `team`, `wins`, `losses`, `pct`, `gb` |
-| `box_score` | Detailed post-game stats | `home_team`, `away_team`, `home_score`, `away_score`, `leaders[]` |
+| `scoreboard` | Live or final game scores | `sport`, `league`, `status`, `home{name,score}`, `away{name,score}` |
+| `matchup` | Upcoming game previews | `sport`, `league`, `date`, `home{name}`, `away{name}` |
+| `standings` | League/division standings | `league`, `season`, `teams[]` |
+| `box_score` | Detailed post-game stats | `sport`, `league`, `status`, `home{name,score}`, `away{name,score}` |
 | `player_spotlight` | Individual player features | `name`, `team`, `position`, `stats{}`, `headline` |
 
 All `external_url` values must be JSON strings (not raw objects). Use the canonical pattern from `PUBLISH_ENVELOPE.md`:

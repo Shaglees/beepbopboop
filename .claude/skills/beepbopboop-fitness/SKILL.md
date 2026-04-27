@@ -133,8 +133,8 @@ Extract actionable tip with mechanism — not generic advice.
 ### Workout JSON
 ```json
 {
+  "title": "45-min Intermediate Upper-Body Strength",
   "type": "workout",
-  "activity": "strength",
   "level": "intermediate",
   "durationMin": 45,
   "muscleGroups": ["chest", "shoulders", "triceps"],
@@ -151,17 +151,13 @@ Extract actionable tip with mechanism — not generic advice.
 }
 ```
 
+`title` = the post title (copy exactly). `type` must be one of: `run`, `workout`, `yoga`, `cycling`, `swim`.
+
 ### Nutrition JSON
 ```json
 {
-  "type": "nutrition",
-  "activity": null,
-  "level": null,
-  "durationMin": null,
-  "muscleGroups": [],
-  "exercises": null,
-  "caloriesBurn": null,
-  "equipmentNeeded": [],
+  "title": "<COPY POST TITLE>",
+  "type": "workout",
   "sourceUrl": "https://pubmed.ncbi.nlm.nih.gov/...",
   "latitude": null,
   "longitude": null
@@ -171,8 +167,8 @@ Extract actionable tip with mechanism — not generic advice.
 ### Local Event JSON
 ```json
 {
-  "type": "event",
-  "activity": "running",
+  "title": "Saturday Parkrun — Golden Gate Park",
+  "type": "run",
   "eventName": "Saturday Parkrun — Golden Gate Park",
   "date": "2026-04-19",
   "startTime": "09:00",
@@ -183,9 +179,6 @@ Extract actionable tip with mechanism — not generic advice.
   "longitude": -122.4862,
   "recurring": true,
   "recurrenceRule": "Every Saturday 9am",
-  "muscleGroups": [],
-  "exercises": null,
-  "equipmentNeeded": [],
   "sourceUrl": "https://www.parkrun.us/goldengate/"
 }
 ```
@@ -193,14 +186,8 @@ Extract actionable tip with mechanism — not generic advice.
 ### Wellness JSON
 ```json
 {
-  "type": "wellness",
-  "activity": null,
-  "level": null,
-  "durationMin": null,
-  "muscleGroups": [],
-  "exercises": null,
-  "caloriesBurn": null,
-  "equipmentNeeded": [],
+  "title": "<COPY POST TITLE>",
+  "type": "workout",
   "sourceUrl": "https://www.sleepfoundation.org/...",
   "latitude": null,
   "longitude": null
@@ -209,27 +196,39 @@ Extract actionable tip with mechanism — not generic advice.
 
 ### Publish
 ```bash
-CITY="${BEEPBOPBOOP_FITNESS_CITY:-}"
-LAT=""
-LON=""
+PAYLOAD=$(jq -n \
+  --arg title "<TITLE>" \
+  --arg body "<BODY>" \
+  --argjson external_url "$(echo "$FITNESS_JSON" | jq -c . | jq -Rs .)" \
+  --arg locality "<CITY or SOURCE NAME>" \
+  '{
+    title: $title, body: $body, external_url: $external_url,
+    locality: $locality, latitude: null, longitude: null,
+    post_type: "discovery", visibility: "public", display_hint: "fitness",
+    labels: ["fitness", "<activity-type>", "<subtype>", "<level-if-applicable>"]
+  }')
 
-# For event posts with coordinates, extract from JSON
-# FITNESS_JSON is the JSON payload from above
-
-curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
+# Lint pre-flight
+LINT=$(curl -s -X POST "$BEEPBOPBOOP_API_URL/posts/lint" \
   -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "$(jq -n \
-    --arg title "<TITLE>" \
-    --arg body "<BODY>" \
-    --argjson external_url "$(echo "$FITNESS_JSON" | jq -c . | jq -Rs .)" \
-    --arg locality "<CITY or SOURCE NAME>" \
-    '{
-      title: $title, body: $body, external_url: $external_url,
-      locality: $locality, latitude: (<LAT or null>), longitude: (<LON or null>),
-      post_type: "discovery", visibility: "public", display_hint: "fitness",
-      labels: ["fitness", "<activity-type>", "<subtype>", "<level-if-applicable>"]
-    }')" | jq .
+  -H "Content-Type: application/json" -d "$PAYLOAD")
+if [ "$(echo "$LINT" | jq -r '.valid')" != "true" ]; then
+  echo "$LINT" | jq .; exit 1
+fi
+
+# Publish with 422 retry
+RESP=$(curl -s -o /tmp/bbp_resp.json -w "%{http_code}" -X POST "$BEEPBOPBOOP_API_URL/posts" \
+  -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
+  -H "Content-Type: application/json" -d "$PAYLOAD")
+if [ "$RESP" = "422" ]; then
+  CORRECTED=$(cat /tmp/bbp_resp.json | jq -r '.corrected_external_url')
+  PAYLOAD=$(echo "$PAYLOAD" | jq --arg u "$CORRECTED" '.external_url = $u')
+  curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
+    -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
+    -H "Content-Type: application/json" -d "$PAYLOAD" | jq .
+else
+  cat /tmp/bbp_resp.json | jq .
+fi
 ```
 
 ### Labels

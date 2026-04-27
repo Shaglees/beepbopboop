@@ -69,6 +69,20 @@ curl -s "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard"
 
 Find scheduled games. Extract probable starters for tonight's games. Use `matchup` display_hint with pitcher names in the headline field. Skip to Step BS4 with `display_hint: "matchup"`.
 
+For matchup posts, use this external_url template:
+```json
+{
+  "sport": "baseball",
+  "league": "MLB",
+  "date": "YYYY-MM-DDThh:mm:ss-07:00",
+  "home": { "name": "Home Team", "abbr": "HOM", "record": "W-L", "color": "#RRGGBB" },
+  "away": { "name": "Away Team", "abbr": "AWY", "record": "W-L", "color": "#RRGGBB" },
+  "venue": "Stadium Name",
+  "broadcast": "Network",
+  "headline": "Pitcher A vs Pitcher B"
+}
+```
+
 ### Standings mode
 
 ```bash
@@ -176,17 +190,38 @@ Rules:
 ## Step BS6: Publish the post
 
 ```bash
-curl -s -X POST "${BEEPBOPBOOP_API_URL}/api/v1/posts" \
+PAYLOAD=$(jq -n \
+  --arg title "..." \
+  --arg body "..." \
+  --argjson external_url "$(echo "$BOX_SCORE_JSON" | jq -c . | jq -Rs .)" \
+  --arg locality "{city where game was played}" \
+  '{
+    title: $title, body: $body, display_hint: "box_score",
+    external_url: $external_url, locality: $locality,
+    labels: ["baseball", "mlb", "sports", "{home_team_slug}", "{away_team_slug}"]
+  }')
+
+# Lint pre-flight
+LINT=$(curl -s -X POST "${BEEPBOPBOOP_API_URL}/posts/lint" \
   -H "Authorization: Bearer ${BEEPBOPBOOP_AGENT_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "...",
-    "body": "...",
-    "display_hint": "box_score",
-    "external_url": "<JSON from Step BS5>",
-    "labels": ["baseball", "mlb", "sports", "{home_team_slug}", "{away_team_slug}"],
-    "locality": "{city where game was played}"
-  }'
+  -H "Content-Type: application/json" -d "$PAYLOAD")
+if [ "$(echo "$LINT" | jq -r '.valid')" != "true" ]; then
+  echo "$LINT" | jq .; exit 1
+fi
+
+# Publish with 422 retry
+RESP=$(curl -s -o /tmp/bbp_resp.json -w "%{http_code}" -X POST "${BEEPBOPBOOP_API_URL}/posts" \
+  -H "Authorization: Bearer ${BEEPBOPBOOP_AGENT_TOKEN}" \
+  -H "Content-Type: application/json" -d "$PAYLOAD")
+if [ "$RESP" = "422" ]; then
+  CORRECTED=$(cat /tmp/bbp_resp.json | jq -r '.corrected_external_url')
+  PAYLOAD=$(echo "$PAYLOAD" | jq --arg u "$CORRECTED" '.external_url = $u')
+  curl -s -X POST "${BEEPBOPBOOP_API_URL}/posts" \
+    -H "Authorization: Bearer ${BEEPBOPBOOP_AGENT_TOKEN}" \
+    -H "Content-Type: application/json" -d "$PAYLOAD" | jq .
+else
+  cat /tmp/bbp_resp.json | jq .
+fi
 ```
 
 Check the response for `"valid": true`. If there are validation errors, fix and retry.

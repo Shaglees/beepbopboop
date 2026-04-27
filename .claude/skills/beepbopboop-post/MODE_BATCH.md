@@ -170,6 +170,7 @@ Before publishing, produce a scorecard:
 DIVERSITY SCORECARD
 - Types: 3/5 used (place, article, discovery) ✓
 - Hints: 5/14 used (place, article, brief, digest, outfit) ✓
+- Structured hints: 8/8 required (matchup ✓, destination ✓, entertainment ✓, fitness ✓, comparison ✓, concert ✓, restaurant ✓, album ✓)
 - Labels: 8 unique, top 3 = 42% ✓
 - Local vs non-local: 5/8 (63%) ✓
 - Consecutive same-type: max 2 ✓
@@ -181,6 +182,7 @@ DIVERSITY SCORECARD
 **Flag thresholds — fix the batch before publishing if any fail:**
 - Type count < 2 → swap a post for a different type
 - Hint count < 3 → use digest/brief/place for suitable posts
+- Structured hint count < 8 → MUST add missing structured hint(s) before publishing. Required: `matchup`, `destination`, `entertainment`, `fitness`, `comparison`, `concert`, `restaurant`, `album`
 - Top 3 labels > 60% → swap one post for an unexplored label
 - Consecutive same-type > 3 → reorder
 - Weather posts > 2 → cut to 1 brief + 0–1 editorial

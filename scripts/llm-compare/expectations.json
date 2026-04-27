@@ -215,6 +215,12 @@
       "required_fields": ["external_url", "title"],
       "external_url_json": false,
       "description": "Video embed (YouTube/video URL in external_url)"
+    },
+    "local_news": {
+      "required_fields": ["title", "body"],
+      "recommended_fields": ["image_url", "external_url"],
+      "external_url_json": false,
+      "description": "Local news article card"
     }
   },
   "test_user_profile": {

@@ -8,7 +8,7 @@ The bootstrap is intentionally small: four GETs, at most ~50 KB of JSON total, a
 
 Without this step a skill would route straight into (say) `MODE_SPORTS.md` and compose a `matchup` post — but it would not know:
 
-- that the `matchup` display hint requires a JSON payload with a `gameTime` field (it would invent one),
+- that the `matchup` display hint requires a JSON payload with a `date` field (it would invent one),
 - that this user has reacted `not_for_me` to every `sports` post this week (the skill would publish anyway),
 - that the user is already saturated on `hockey` and under-posted on `food` (the feed would keep drifting),
 - that the Petfinder/beepbopgraph/image toolchain exists at all.
@@ -157,7 +157,7 @@ After bootstrap, the calling skill should have the following in working memory f
 
 Mode files will say:
 
-> From the hint catalog loaded in Step 0d, take the entry for `matchup`. Copy `example`, override title/body/labels from Step 2, and substitute your `gameTime` / home / away values.
+> From the hint catalog loaded in Step 0d, take the entry for `matchup`. Copy `example`, override title/body/labels from Step 2, and substitute your `date` / home / away values.
 
 No mode file should include its own inline hint schema tables any more — that's what caused the drift this refactor is fixing.
 

@@ -130,7 +130,7 @@ For `matchup` display_hint, use the extended GameData format:
   "sport": "football",
   "league": "NFL",
   "status": "Scheduled",
-  "gameTime": "2026-09-14T20:20:00-04:00",
+  "date": "2026-09-14T20:20:00-04:00",
   "week": 2,
   "home": { "name": "Chiefs", "abbr": "KC", "record": "1-0", "color": "#E31837" },
   "away": { "name": "Ravens", "abbr": "BAL", "record": "1-0", "color": "#241773" },
@@ -152,7 +152,7 @@ For `matchup` display_hint, use the extended GameData format:
 **Field rules:**
 - `sport` must be `"football"` (not `"nfl"` or `"american football"`)
 - `league` must be `"NFL"`
-- `gameTime` must be ISO-8601 with timezone offset
+- `date` must be ISO-8601 with timezone offset
 - `week` is the NFL week number (integer)
 - Team `color` must include the `#` prefix
 - `keyMatchup` — one sentence, stat-backed (rank or percentage)

@@ -163,23 +163,42 @@ Required fields: `name`, `rating`, `reviewCount`, `cuisine`, `address`, `latitud
 ## Step FD7 — Publish post
 
 ```bash
-curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
+PAYLOAD=$(jq -n \
+  --arg title "{TITLE}" \
+  --arg body "{BODY}" \
+  --arg image_url "{YELP_IMAGE_URL}" \
+  --argjson external_url "$(echo "$FOOD_DATA_JSON" | jq -c . | jq -Rs .)" \
+  --arg locality "{NEIGHBOURHOOD}" \
+  --argjson lat {LAT} \
+  --argjson lon {LON} \
+  '{
+    title: $title, body: $body, display_hint: "restaurant",
+    post_type: "place", image_url: $image_url, external_url: $external_url,
+    locality: $locality, latitude: $lat, longitude: $lon,
+    labels: ["food", "restaurant", "{CUISINE_LOWERCASE}", "{NEIGHBOURHOOD_LOWERCASE}"]
+  }')
+
+# Lint pre-flight
+LINT=$(curl -s -X POST "$BEEPBOPBOOP_API_URL/posts/lint" \
   -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "$(jq -n \
-    --arg title "{TITLE}" \
-    --arg body "{BODY}" \
-    --arg image_url "{YELP_IMAGE_URL}" \
-    --argjson external_url "$(echo "$FOOD_DATA_JSON" | jq -c . | jq -Rs .)" \
-    --arg locality "{NEIGHBOURHOOD}" \
-    --argjson lat {LAT} \
-    --argjson lon {LON} \
-    '{
-      title: $title, body: $body, display_hint: "restaurant",
-      post_type: "place", image_url: $image_url, external_url: $external_url,
-      locality: $locality, latitude: $lat, longitude: $lon,
-      labels: ["food", "restaurant", "{CUISINE_LOWERCASE}", "{NEIGHBOURHOOD_LOWERCASE}"]
-    }')"
+  -H "Content-Type: application/json" -d "$PAYLOAD")
+if [ "$(echo "$LINT" | jq -r '.valid')" != "true" ]; then
+  echo "$LINT" | jq .; exit 1
+fi
+
+# Publish with 422 retry
+RESP=$(curl -s -o /tmp/bbp_resp.json -w "%{http_code}" -X POST "$BEEPBOPBOOP_API_URL/posts" \
+  -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
+  -H "Content-Type: application/json" -d "$PAYLOAD")
+if [ "$RESP" = "422" ]; then
+  CORRECTED=$(cat /tmp/bbp_resp.json | jq -r '.corrected_external_url')
+  PAYLOAD=$(echo "$PAYLOAD" | jq --arg u "$CORRECTED" '.external_url = $u')
+  curl -s -X POST "$BEEPBOPBOOP_API_URL/posts" \
+    -H "Authorization: Bearer $BEEPBOPBOOP_AGENT_TOKEN" \
+    -H "Content-Type: application/json" -d "$PAYLOAD" | jq .
+else
+  cat /tmp/bbp_resp.json | jq .
+fi
 ```
 
 See `../_shared/PUBLISH_ENVELOPE.md` § Structured external_url for the canonical pattern.

@@ -54,7 +54,7 @@ Filter results to the user's preferred team(s).
     "sport": "hockey",
     "league": "NHL",
     "status": "Scheduled",
-    "gameTime": "2026-04-17T18:00:00-07:00",
+    "date": "2026-04-17T18:00:00-07:00",
     "home": { "name": "Oilers", "abbr": "EDM", "record": "45-25-4", "color": "#041E42" },
     "away": { "name": "Canucks", "abbr": "VAN", "record": "42-28-6", "color": "#00205B" },
     "venue": "Rogers Place",
@@ -63,7 +63,7 @@ Filter results to the user's preferred team(s).
   }
   ```
 
-  Include `series` only during playoffs. Team colors = team's primary brand hex. Use ESPN API for records/venue/broadcast. `gameTime` is ISO-8601 with timezone offset.
+  Include `series` only during playoffs. Team colors = team's primary brand hex. Use ESPN API for records/venue/broadcast. `date` is ISO-8601 with timezone offset.
 - `labels`: `["sports", "<league>", "<team-slug>", "event"]`
 
 ### Recent result (`status: "Final"`)

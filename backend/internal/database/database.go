@@ -451,5 +451,35 @@ func Open(url string) (*sql.DB, error) {
 		PRIMARY KEY (event_key, user_id, "window")
 	)`)
 
+	// User skills: niche skills authored from the iOS app, plus extension
+	// preferences layered on shipped skills. See docs/user-skills-protocol.md.
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_skills (
+		id          BIGSERIAL PRIMARY KEY,
+		user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		skill_name  TEXT NOT NULL,
+		version     INTEGER NOT NULL DEFAULT 1,
+		kind        TEXT NOT NULL DEFAULT 'standalone',
+		extends     TEXT,
+		intent      TEXT NOT NULL DEFAULT '',
+		hints       JSONB,
+		status      TEXT NOT NULL DEFAULT 'ready',
+		created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (user_id, skill_name)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_skills_user_id ON user_skills(user_id)")
+
+	db.Exec(`CREATE TABLE IF NOT EXISTS user_skill_files (
+		id          BIGSERIAL PRIMARY KEY,
+		skill_id    BIGINT NOT NULL REFERENCES user_skills(id) ON DELETE CASCADE,
+		path        TEXT NOT NULL,
+		sha256      TEXT NOT NULL,
+		size_bytes  INTEGER NOT NULL,
+		content     BYTEA NOT NULL,
+		updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (skill_id, path)
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_skill_files_skill_id ON user_skill_files(skill_id)")
+
 	return db, nil
 }

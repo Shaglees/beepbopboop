@@ -8,6 +8,10 @@ import (
 // UserSkill represents a niche skill authored from the iOS app, or an
 // extension preferences file layered on top of a shipped skill. See
 // docs/user-skills-protocol.md for the full contract.
+//
+// Cadence for a user-skill (how often it should produce posts) lives in the
+// existing spread system — user_settings.spread_targets keyed by skill name.
+// It is intentionally not duplicated on this row.
 type UserSkill struct {
 	ID        int64           `json:"-"`
 	UserID    string          `json:"-"`
@@ -46,10 +50,21 @@ type UserSkillFile struct {
 }
 
 // CreateUserSkillRequest is the iOS-facing request body for POST /skills/user.
+//
+// Weight is the cadence for a standalone skill — same wire shape as
+// PUT /settings/spread targets values. The iOS skill-builder slider produces
+// it directly ("every day" maps to a high weight, "every month" to a low
+// weight; iOS owns the mapping). Backend writes it into the spread for
+// standalone kinds and renormalizes other verticals so weights still sum to
+// 1.0. Extensions ignore the field.
+//
+// Zero / missing means "leave the spread alone" — the user can manage it
+// later via the existing PUT /settings/spread endpoint.
 type CreateUserSkillRequest struct {
 	Intent  string          `json:"intent"`
 	Kind    string          `json:"kind,omitempty"`
 	Extends string          `json:"extends,omitempty"`
+	Weight  float64         `json:"weight,omitempty"`
 	Hints   json.RawMessage `json:"hints,omitempty"`
 }
 

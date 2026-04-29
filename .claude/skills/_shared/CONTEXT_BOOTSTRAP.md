@@ -83,6 +83,48 @@ interests[].topic       → BEEPBOPBOOP_INTERESTS (comma-join all topics)
 
 **If the fetch fails:** log a warning and continue with config-file values only. This keeps backward compatibility with older backends that don't expose `/user/profile` on the agent auth group.
 
+### `/user/profile` → `user_skills` (Step 0a continued — install pending user-skills)
+
+The agent variant of `/user/profile` may include a `user_skills` array. Each entry is one user-authored skill (or extension preferences file) the user has created via the iOS skill-builder. Each entry contains the file-level manifest (path + sha256 + size) but **not** the file body — the body is fetched separately.
+
+**When this array is non-empty, install every entry** so the running agent has the latest user-authored content. Newly created skill *folders* won't be invocable until the next openclaw run (Claude Code only watches existing skill directories for live reloads), but file edits inside an already-installed user skill take effect within the current session — and either way the install must happen on every cycle so the next run sees the right state.
+
+For each entry in `profile.user_skills`, write any file whose on-disk sha256 doesn't match the manifest. Paths are relative to the project root (the directory openclaw runs Claude Code from), matching how Claude Code already resolves `.claude/skills/`.
+
+```bash
+USER_SKILLS_DIR=".claude/skills/_user"
+
+echo "$PROFILE" | jq -r '
+  .user_skills[]? |
+  .name as $name |
+  .files[] |
+  "\($name)\t\(.path)\t\(.sha256)"
+' | while IFS=$'\t' read -r SKILL_NAME REL_PATH WANT_SHA; do
+  LOCAL="$USER_SKILLS_DIR/$SKILL_NAME/$REL_PATH"
+  # macOS ships `shasum`, Linux ships `sha256sum`; either works.
+  HAVE_SHA=$( { sha256sum "$LOCAL" 2>/dev/null || shasum -a 256 "$LOCAL" 2>/dev/null; } | cut -d' ' -f1)
+  if [ "$HAVE_SHA" != "$WANT_SHA" ]; then
+    mkdir -p "$(dirname "$LOCAL")"
+    curl -s -H "$AUTH" \
+      "$API/skills/user/files/$SKILL_NAME/$REL_PATH" -o "$LOCAL"
+    echo "installed $SKILL_NAME/$REL_PATH"
+  fi
+done
+```
+
+Notes on the install loop:
+
+- The on-disk sha256 check short-circuits unchanged files. The same endpoint also honors `If-None-Match` (sha256 as the ETag) if you prefer to let the backend decide.
+- Do **not** delete files or skill directories under `_user/` that aren't in `user_skills`. v1 of the protocol is install-only; user-side cleanup of deleted skills is a future feature.
+- Standalone skills (`kind: "standalone"`) live at `_user/<name>/SKILL.md` (+ optional mode files). Extensions (`kind: "extension"`) write a single `_user/<extends>/preferences.md`; the running shipped skill should `Read` that file during its own context-load step and layer it on top of its own behavior when composing.
+- Log one line per installed file. The user reads the report.
+
+**For the current session** the install affects:
+
+- *Existing* user skill directories — Claude Code re-scans them on file edits, so a re-fetched MODE_*.md is visible immediately.
+- *New* user skill directories — won't load this session. The skill is now on disk and will be invocable starting next openclaw run.
+- *Extension preferences* (`_user/<shipped-name>/preferences.md`) — when the matching shipped skill runs in this session, it should `Read` the prefs file as part of its own context-load step.
+
 ## What each response gives you
 
 ### `/posts/hints` — authoritative payload schema

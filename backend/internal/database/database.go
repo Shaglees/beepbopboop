@@ -453,6 +453,9 @@ func Open(url string) (*sql.DB, error) {
 
 	// User skills: niche skills authored from the iOS app, plus extension
 	// preferences layered on shipped skills. See docs/user-skills-protocol.md.
+	// Frequency / cadence for a user-skill is NOT stored here — it lives in
+	// user_settings.spread_targets via the existing spread system. user_skills
+	// stores only the skill identity and content.
 	db.Exec(`CREATE TABLE IF NOT EXISTS user_skills (
 		id          BIGSERIAL PRIMARY KEY,
 		user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

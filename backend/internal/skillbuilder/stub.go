@@ -16,7 +16,8 @@ import (
 )
 
 // Result is what the builder hands back to the handler: the resolved skill
-// name plus the files to persist.
+// name plus the files to persist. Cadence is owned by the spread system and
+// applied by the handler, not the builder.
 type Result struct {
 	SkillName string
 	Files     []repository.FileInput

@@ -72,6 +72,64 @@ func (r *SpreadRepo) UpsertTargets(userID string, st *model.SpreadTargets) error
 	return nil
 }
 
+// UpsertVertical adds or updates one vertical's weight, scaling the rest so
+// total weights still sum to 1.0. Pinned status on the target vertical is
+// preserved. Weight is the same scale as PUT /settings/spread targets values
+// (a fraction in [0, 1]).
+//
+// Used by POST /skills/user to allocate a slot for a newly-created
+// standalone user-skill from the iOS skill-builder slider value, without
+// requiring the iOS app to issue a separate PUT /settings/spread call.
+func (r *SpreadRepo) UpsertVertical(userID, name string, weight float64) error {
+	if name == "" {
+		return fmt.Errorf("vertical name required")
+	}
+	if weight < 0 {
+		weight = 0
+	}
+	if weight > 1 {
+		weight = 1
+	}
+
+	targets, err := r.GetTargets(userID)
+	if err != nil {
+		return fmt.Errorf("load existing targets: %w", err)
+	}
+	if targets == nil {
+		targets = DefaultTargets()
+	}
+	if targets.Verticals == nil {
+		targets.Verticals = map[string]model.SpreadVertical{}
+	}
+
+	otherSum := 0.0
+	for k, v := range targets.Verticals {
+		if k != name {
+			otherSum += v.Weight
+		}
+	}
+
+	available := 1.0 - weight
+	if otherSum > 0 && available > 0 {
+		scale := available / otherSum
+		for k, v := range targets.Verticals {
+			if k == name {
+				continue
+			}
+			v.Weight *= scale
+			targets.Verticals[k] = v
+		}
+	}
+
+	pinned := false
+	if existing, ok := targets.Verticals[name]; ok {
+		pinned = existing.Pinned
+	}
+	targets.Verticals[name] = model.SpreadVertical{Weight: weight, Pinned: pinned}
+
+	return r.UpsertTargets(userID, targets)
+}
+
 // Actual30d computes the actual allocation over the last 30 days from posts.
 // It groups posts by their first label and returns the fraction for each label.
 func (r *SpreadRepo) Actual30d(userID string) (map[string]float64, error) {

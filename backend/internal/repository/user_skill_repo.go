@@ -33,7 +33,8 @@ type FileInput struct {
 
 // Upsert creates or replaces a user's skill atomically. On conflict by
 // (user_id, skill_name), the skill row is updated, version is bumped, and
-// all files are replaced.
+// all files are replaced. Cadence (spread weight) is owned by SpreadRepo,
+// not duplicated here.
 func (r *UserSkillRepo) Upsert(
 	userID, skillName, kind, extends, intent string,
 	hints json.RawMessage,

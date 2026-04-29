@@ -83,6 +83,41 @@ interests[].topic       → BEEPBOPBOOP_INTERESTS (comma-join all topics)
 
 **If the fetch fails:** log a warning and continue with config-file values only. This keeps backward compatibility with older backends that don't expose `/user/profile` on the agent auth group.
 
+### `/user/profile` → `user_skills` (Step 0a continued — install pending user-skills)
+
+The agent variant of `/user/profile` may include a `user_skills` array. Each entry is one user-authored skill (or extension preferences file) the user has created via the iOS skill-builder. Each entry contains the file-level manifest (path + sha256 + size) but **not** the file body — the body is fetched separately.
+
+**When this array is non-empty, install every entry** so the running agent has the latest user-authored content. Newly created skill *folders* won't be invocable until the next openclaw run (Claude Code only watches existing skill directories for live reloads), but file edits inside an already-installed user skill take effect within the current session — and either way the install must happen on every cycle so the next run sees the right state.
+
+For each `entry` in `profile.user_skills`:
+
+```bash
+SKILL_DIR=".claude/skills/_user/${entry.name}"
+mkdir -p "$SKILL_DIR"
+for file in entry.files:
+  LOCAL="$SKILL_DIR/${file.path}"
+  LOCAL_SHA=$(sha256sum "$LOCAL" 2>/dev/null | cut -d' ' -f1)
+  if [ "$LOCAL_SHA" != "${file.sha256}" ]; then
+    mkdir -p "$(dirname "$LOCAL")"
+    curl -s -H "$AUTH" --etag-compare "$LOCAL.etag" --etag-save "$LOCAL.etag" \
+      "$API/skills/user/files/${entry.name}/${file.path}" -o "$LOCAL"
+  fi
+done
+```
+
+Notes:
+
+- The fetch uses `If-None-Match` (the backend stores sha256 as the ETag) so unchanged files come back as 304 with no body.
+- Do **not** delete files or skill directories under `_user/` that aren't in `user_skills`. v1 of the protocol is install-only; user-side cleanup of deleted skills is a future feature.
+- Standalone skills (`kind: "standalone"`) live at `_user/<name>/SKILL.md` (+ optional mode files). Extensions (`kind: "extension"`) write a single `_user/<extends>/preferences.md`; the running shipped skill should layer that file on top of its own SKILL.md when composing.
+- After install, log one line per installed skill. The user reads the report.
+
+**For the current session** the install affects:
+
+- *Existing* user skill directories — Claude Code re-scans them on file edits, so a re-fetched MODE_*.md is visible immediately.
+- *New* user skill directories — won't load this session. The skill is now on disk and will be invocable starting next openclaw run.
+- *Extension preferences* (`_user/<shipped-name>/preferences.md`) — when the matching shipped skill runs in this session, it should `Read` the prefs file as part of its own context-load step.
+
 ## What each response gives you
 
 ### `/posts/hints` — authoritative payload schema

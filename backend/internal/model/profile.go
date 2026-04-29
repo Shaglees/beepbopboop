@@ -45,10 +45,18 @@ type UserProfileIdentity struct {
 }
 
 // UserProfile is the full profile response returned by GET /user/profile.
+//
+// UserSkills is populated only on the agent variant (GET /user/profile with
+// agent auth). It is the install-trigger for the user-skills protocol: the
+// agent compares each entry's per-file sha256 against on-disk state under
+// .claude/skills/_user/<name>/ and fetches anything new or changed via
+// GET /skills/user/files/{name}/{path}. See docs/user-skills-protocol.md.
+// Empty / absent means nothing to install.
 type UserProfile struct {
-	Identity           UserProfileIdentity `json:"identity"`
-	Interests          []UserInterest      `json:"interests"`
-	Lifestyle          []LifestyleTag      `json:"lifestyle"`
-	ContentPrefs       []ContentPref       `json:"content_prefs"`
-	ProfileInitialized bool                `json:"profile_initialized"`
+	Identity           UserProfileIdentity      `json:"identity"`
+	Interests          []UserInterest           `json:"interests"`
+	Lifestyle          []LifestyleTag           `json:"lifestyle"`
+	ContentPrefs       []ContentPref            `json:"content_prefs"`
+	ProfileInitialized bool                     `json:"profile_initialized"`
+	UserSkills         []UserSkillManifestEntry `json:"user_skills,omitempty"`
 }

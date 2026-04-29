@@ -17,10 +17,11 @@ import (
 )
 
 type userSkillTestEnv struct {
-	h         *handler.UserSkillHandler
-	userRepo  *repository.UserRepo
-	agentRepo *repository.AgentRepo
-	skillRepo *repository.UserSkillRepo
+	h          *handler.UserSkillHandler
+	userRepo   *repository.UserRepo
+	agentRepo  *repository.AgentRepo
+	skillRepo  *repository.UserSkillRepo
+	spreadRepo *repository.SpreadRepo
 }
 
 func setupUserSkillHandler(t *testing.T) userSkillTestEnv {
@@ -29,14 +30,15 @@ func setupUserSkillHandler(t *testing.T) userSkillTestEnv {
 	userRepo := repository.NewUserRepo(db)
 	agentRepo := repository.NewAgentRepo(db)
 	skillRepo := repository.NewUserSkillRepo(db)
-	h := handler.NewUserSkillHandler(userRepo, agentRepo, skillRepo)
-	return userSkillTestEnv{h: h, userRepo: userRepo, agentRepo: agentRepo, skillRepo: skillRepo}
+	spreadRepo := repository.NewSpreadRepo(db)
+	h := handler.NewUserSkillHandler(userRepo, agentRepo, skillRepo, spreadRepo)
+	return userSkillTestEnv{h: h, userRepo: userRepo, agentRepo: agentRepo, skillRepo: skillRepo, spreadRepo: spreadRepo}
 }
 
 func TestUserSkillHandler_Submit_Standalone(t *testing.T) {
 	env := setupUserSkillHandler(t)
 
-	body := `{"intent": "local high school football for Springfield, IL"}`
+	body := `{"intent": "local high school football for Springfield, IL", "frequency_per_month": 30}`
 	req := httptest.NewRequest("POST", "/skills/user", bytes.NewBufferString(body))
 	req = req.WithContext(middleware.WithFirebaseUID(req.Context(), "fb-submit-1"))
 	rec := httptest.NewRecorder()
@@ -57,7 +59,6 @@ func TestUserSkillHandler_Submit_Standalone(t *testing.T) {
 		t.Errorf("expected ready, got %s", resp.Status)
 	}
 
-	// Skill should be persisted and visible to repo lookups.
 	user, _ := env.userRepo.FindOrCreateByFirebaseUID("fb-submit-1")
 	skill, err := env.skillRepo.GetByName(user.ID, resp.SkillName)
 	if err != nil {
@@ -65,6 +66,43 @@ func TestUserSkillHandler_Submit_Standalone(t *testing.T) {
 	}
 	if skill.Kind != model.UserSkillKindStandalone {
 		t.Errorf("expected standalone kind, got %s", skill.Kind)
+	}
+	if skill.FrequencyPerMonth != 30 {
+		t.Errorf("frequency should be persisted, got %d", skill.FrequencyPerMonth)
+	}
+
+	// Spread should have a vertical for the new skill.
+	st, _ := env.spreadRepo.GetTargets(user.ID)
+	if st == nil {
+		t.Fatal("spread should be auto-created on standalone submit")
+	}
+	if v, ok := st.Verticals[resp.SkillName]; !ok || v.Weight == 0 {
+		t.Errorf("spread should have a slot for %s, got %+v", resp.SkillName, st.Verticals)
+	}
+}
+
+func TestUserSkillHandler_Submit_Extension_LeavesSpreadAlone(t *testing.T) {
+	env := setupUserSkillHandler(t)
+
+	body := `{"intent":"avoid paywalls","kind":"extension","extends":"beepbopboop-local-news"}`
+	req := httptest.NewRequest("POST", "/skills/user", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithFirebaseUID(req.Context(), "fb-submit-ext"))
+	rec := httptest.NewRecorder()
+
+	env.h.Submit(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	user, _ := env.userRepo.FindOrCreateByFirebaseUID("fb-submit-ext")
+	st, _ := env.spreadRepo.GetTargets(user.ID)
+	if st != nil {
+		// If a spread was written, it must NOT have an entry keyed by the
+		// shipped-skill name (extensions don't create new verticals).
+		if _, ok := st.Verticals["beepbopboop-local-news"]; ok {
+			t.Errorf("extensions must not add their target to the spread, got %+v", st.Verticals)
+		}
 	}
 }
 
@@ -97,7 +135,7 @@ func TestUserSkillHandler_Manifest(t *testing.T) {
 	env := setupUserSkillHandler(t)
 	user, _ := env.userRepo.FindOrCreateByFirebaseUID("fb-manifest")
 	agent, _ := env.agentRepo.Create(user.ID, "openclaw")
-	_, err := env.skillRepo.Upsert(user.ID, "my-skill", model.UserSkillKindStandalone, "", "intent", nil,
+	_, err := env.skillRepo.Upsert(user.ID, "my-skill", model.UserSkillKindStandalone, "", "intent", 7, nil,
 		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("---\nname: my-skill\n---\n")}})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -134,7 +172,7 @@ func TestUserSkillHandler_GetFile(t *testing.T) {
 
 	body := []byte("# preferences\n- avoid paywalls\n")
 	_, err := env.skillRepo.Upsert(user.ID, "beepbopboop-local-news", model.UserSkillKindExtension,
-		"beepbopboop-local-news", "avoid paywalls", nil,
+		"beepbopboop-local-news", "avoid paywalls", 7, nil,
 		[]repository.FileInput{{Path: "preferences.md", Content: body}})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -178,7 +216,7 @@ func TestUserSkillHandler_GetFile_ForeignUserDenied(t *testing.T) {
 	intruder, _ := env.userRepo.FindOrCreateByFirebaseUID("fb-intruder")
 	intruderAgent, _ := env.agentRepo.Create(intruder.ID, "intruder")
 
-	_, err := env.skillRepo.Upsert(owner.ID, "private", model.UserSkillKindStandalone, "", "x", nil,
+	_, err := env.skillRepo.Upsert(owner.ID, "private", model.UserSkillKindStandalone, "", "x", 7, nil,
 		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("secret")}})
 	if err != nil {
 		t.Fatalf("seed: %v", err)

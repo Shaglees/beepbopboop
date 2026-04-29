@@ -19,6 +19,7 @@ type ProfileHandler struct {
 	lifestyleRepo *repository.UserLifestyleRepo
 	prefsRepo     *repository.UserContentPrefsRepo
 	settingsRepo  *repository.UserSettingsRepo
+	userSkillRepo *repository.UserSkillRepo
 }
 
 func NewProfileHandler(
@@ -28,6 +29,7 @@ func NewProfileHandler(
 	lifestyleRepo *repository.UserLifestyleRepo,
 	prefsRepo *repository.UserContentPrefsRepo,
 	settingsRepo *repository.UserSettingsRepo,
+	userSkillRepo *repository.UserSkillRepo,
 ) *ProfileHandler {
 	return &ProfileHandler{
 		userRepo:      userRepo,
@@ -36,6 +38,7 @@ func NewProfileHandler(
 		lifestyleRepo: lifestyleRepo,
 		prefsRepo:     prefsRepo,
 		settingsRepo:  settingsRepo,
+		userSkillRepo: userSkillRepo,
 	}
 }
 
@@ -118,6 +121,11 @@ func (h *ProfileHandler) GetProfileFirebase(w http.ResponseWriter, r *http.Reque
 }
 
 // GetProfileAgent handles GET /user/profile (Agent auth).
+//
+// The agent variant attaches the user's user-skills manifest so the running
+// skill (in openclaw) can install / update files under
+// .claude/skills/_user/<name>/ during the existing CONTEXT_BOOTSTRAP step.
+// See docs/user-skills-protocol.md.
 func (h *ProfileHandler) GetProfileAgent(w http.ResponseWriter, r *http.Request) {
 	agentID := middleware.AgentIDFromContext(r.Context())
 	agent, err := h.agentRepo.GetByID(agentID)
@@ -130,6 +138,15 @@ func (h *ProfileHandler) GetProfileAgent(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to build profile"})
 		return
+	}
+
+	if h.userSkillRepo != nil {
+		skills, err := h.userSkillRepo.Manifest(agent.UserID)
+		if err != nil {
+			log.Printf("warning: user_skills manifest fetch failed for user=%s: %v", agent.UserID, err)
+		} else {
+			profile.UserSkills = skills
+		}
 	}
 
 	writeJSON(w, http.StatusOK, profile)

@@ -33,14 +33,22 @@ type FileInput struct {
 
 // Upsert creates or replaces a user's skill atomically. On conflict by
 // (user_id, skill_name), the skill row is updated, version is bumped, and
-// all files are replaced.
+// all files are replaced. frequency is clamped to [FrequencyMin, FrequencyMax].
 func (r *UserSkillRepo) Upsert(
 	userID, skillName, kind, extends, intent string,
+	frequencyPerMonth int,
 	hints json.RawMessage,
 	files []FileInput,
 ) (*model.UserSkill, error) {
 	if userID == "" || skillName == "" {
 		return nil, errors.New("user_id and skill_name are required")
+	}
+
+	if frequencyPerMonth < model.FrequencyMin {
+		frequencyPerMonth = model.FrequencyDefault
+	}
+	if frequencyPerMonth > model.FrequencyMax {
+		frequencyPerMonth = model.FrequencyMax
 	}
 
 	tx, err := r.db.Begin()
@@ -60,18 +68,19 @@ func (r *UserSkillRepo) Upsert(
 	var skillID int64
 	var version int
 	err = tx.QueryRow(`
-		INSERT INTO user_skills (user_id, skill_name, version, kind, extends, intent, hints, status, updated_at)
-		VALUES ($1, $2, 1, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+		INSERT INTO user_skills (user_id, skill_name, version, kind, extends, intent, frequency_per_month, hints, status, updated_at)
+		VALUES ($1, $2, 1, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
 		ON CONFLICT (user_id, skill_name) DO UPDATE SET
-			version    = user_skills.version + 1,
-			kind       = excluded.kind,
-			extends    = excluded.extends,
-			intent     = excluded.intent,
-			hints      = excluded.hints,
-			status     = excluded.status,
-			updated_at = CURRENT_TIMESTAMP
+			version             = user_skills.version + 1,
+			kind                = excluded.kind,
+			extends             = excluded.extends,
+			intent              = excluded.intent,
+			frequency_per_month = excluded.frequency_per_month,
+			hints               = excluded.hints,
+			status              = excluded.status,
+			updated_at          = CURRENT_TIMESTAMP
 		RETURNING id, version`,
-		userID, skillName, kind, extendsArg, intent, hints, model.UserSkillStatusReady,
+		userID, skillName, kind, extendsArg, intent, frequencyPerMonth, hints, model.UserSkillStatusReady,
 	).Scan(&skillID, &version)
 	if err != nil {
 		return nil, fmt.Errorf("upsert user_skill: %w", err)
@@ -106,13 +115,13 @@ func (r *UserSkillRepo) GetByName(userID, skillName string) (*model.UserSkill, e
 	var extends sql.NullString
 	var hints sql.NullString
 	err := r.db.QueryRow(`
-		SELECT id, user_id, skill_name, version, kind, extends, intent, hints, status, created_at, updated_at
+		SELECT id, user_id, skill_name, version, kind, extends, intent, frequency_per_month, hints, status, created_at, updated_at
 		FROM user_skills
 		WHERE user_id = $1 AND skill_name = $2`,
 		userID, skillName,
 	).Scan(
 		&s.ID, &s.UserID, &s.Name, &s.Version, &s.Kind,
-		&extends, &s.Intent, &hints, &s.Status,
+		&extends, &s.Intent, &s.FrequencyPerMonth, &hints, &s.Status,
 		&s.CreatedAt, &s.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {

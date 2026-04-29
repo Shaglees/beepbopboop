@@ -27,7 +27,7 @@ func TestUserSkillRepo_UpsertAndGetByName(t *testing.T) {
 		{Path: "SKILL.md", Content: []byte("---\nname: foo\n---\nbody\n")},
 		{Path: "MODE_brief.md", Content: []byte("brief\n")},
 	}
-	skill, err := repo.Upsert(userID, "foo", model.UserSkillKindStandalone, "", "make a foo skill", nil, files)
+	skill, err := repo.Upsert(userID, "foo", model.UserSkillKindStandalone, "", "make a foo skill", 14, nil, files)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestUserSkillRepo_UpsertAndGetByName(t *testing.T) {
 		t.Errorf("expected status ready, got %s", skill.Status)
 	}
 
-	again, err := repo.Upsert(userID, "foo", model.UserSkillKindStandalone, "", "make a foo skill v2", nil, files[:1])
+	again, err := repo.Upsert(userID, "foo", model.UserSkillKindStandalone, "", "make a foo skill v2", 30, nil, files[:1])
 	if err != nil {
 		t.Fatalf("upsert again: %v", err)
 	}
@@ -56,12 +56,12 @@ func TestUserSkillRepo_Manifest_OmitsForeignUsers(t *testing.T) {
 	otherUser, _ := repository.NewUserRepo(db).FindOrCreateByFirebaseUID("other-user")
 	otherRepo := repository.NewUserSkillRepo(db)
 
-	_, err := repo.Upsert(userID, "mine", model.UserSkillKindStandalone, "", "x", nil,
+	_, err := repo.Upsert(userID, "mine", model.UserSkillKindStandalone, "", "x", 7, nil,
 		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("mine")}})
 	if err != nil {
 		t.Fatalf("upsert mine: %v", err)
 	}
-	_, err = otherRepo.Upsert(otherUser.ID, "theirs", model.UserSkillKindStandalone, "", "y", nil,
+	_, err = otherRepo.Upsert(otherUser.ID, "theirs", model.UserSkillKindStandalone, "", "y", 7, nil,
 		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("theirs")}})
 	if err != nil {
 		t.Fatalf("upsert theirs: %v", err)
@@ -87,7 +87,7 @@ func TestUserSkillRepo_GetFile(t *testing.T) {
 
 	content := []byte("# preferences\n- avoid paywalls\n")
 	_, err := repo.Upsert(userID, "beepbopboop-local-news", model.UserSkillKindExtension,
-		"beepbopboop-local-news", "avoid paywalls", nil,
+		"beepbopboop-local-news", "avoid paywalls", 7, nil,
 		[]repository.FileInput{{Path: "preferences.md", Content: content}})
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
@@ -120,7 +120,7 @@ func TestUserSkillRepo_CountByUser(t *testing.T) {
 	if n, _ := repo.CountByUser(userID); n != 0 {
 		t.Errorf("expected 0, got %d", n)
 	}
-	_, err := repo.Upsert(userID, "a", model.UserSkillKindStandalone, "", "i", nil,
+	_, err := repo.Upsert(userID, "a", model.UserSkillKindStandalone, "", "i", 7, nil,
 		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("a")}})
 	if err != nil {
 		t.Fatalf("upsert: %v", err)

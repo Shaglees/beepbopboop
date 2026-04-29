@@ -72,6 +72,67 @@ func (r *SpreadRepo) UpsertTargets(userID string, st *model.SpreadTargets) error
 	return nil
 }
 
+// UpsertVerticalForFrequency adds or updates a vertical's weight from a
+// posts-per-month frequency (1-30, where 30 ≈ daily). Other verticals are
+// scaled so total weights still sum to 1.0. Pinned status on the target
+// vertical is preserved.
+//
+// Mapping: targetWeight = freq/30 * 0.1 (so daily = 0.1, monthly ≈ 0.003).
+// The 0.1 cap keeps a single user-skill from dominating a multi-vertical
+// spread.
+func (r *SpreadRepo) UpsertVerticalForFrequency(userID, name string, postsPerMonth int) error {
+	if name == "" {
+		return fmt.Errorf("vertical name required")
+	}
+	if postsPerMonth < 1 {
+		postsPerMonth = 1
+	}
+	if postsPerMonth > 30 {
+		postsPerMonth = 30
+	}
+
+	targets, err := r.GetTargets(userID)
+	if err != nil {
+		return fmt.Errorf("load existing targets: %w", err)
+	}
+	if targets == nil {
+		targets = DefaultTargets()
+	}
+	if targets.Verticals == nil {
+		targets.Verticals = map[string]model.SpreadVertical{}
+	}
+
+	targetWeight := float64(postsPerMonth) / 30.0 * 0.1
+
+	// Sum every vertical except the one we're upserting.
+	otherSum := 0.0
+	for k, v := range targets.Verticals {
+		if k != name {
+			otherSum += v.Weight
+		}
+	}
+
+	available := 1.0 - targetWeight
+	if otherSum > 0 && available > 0 {
+		scale := available / otherSum
+		for k, v := range targets.Verticals {
+			if k == name {
+				continue
+			}
+			v.Weight *= scale
+			targets.Verticals[k] = v
+		}
+	}
+
+	pinned := false
+	if existing, ok := targets.Verticals[name]; ok {
+		pinned = existing.Pinned
+	}
+	targets.Verticals[name] = model.SpreadVertical{Weight: targetWeight, Pinned: pinned}
+
+	return r.UpsertTargets(userID, targets)
+}
+
 // Actual30d computes the actual allocation over the last 30 days from posts.
 // It groups posts by their first label and returns the fraction for each label.
 func (r *SpreadRepo) Actual30d(userID string) (map[string]float64, error) {

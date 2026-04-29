@@ -153,7 +153,7 @@ func main() {
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
 	feedbackH := handler.NewFeedbackHandler(userRepo, feedbackRepo)
-	userSkillH := handler.NewUserSkillHandler(userRepo, agentRepo, userSkillRepo)
+	userSkillH := handler.NewUserSkillHandler(userRepo, agentRepo, userSkillRepo, spreadRepo)
 	userEmbedder := embedding.NewUserEmbedder(db, userEmbeddingRepo)
 
 	creatorRepo := repository.NewLocalCreatorRepo(db)
@@ -170,7 +170,7 @@ func main() {
 		}
 	}()
 	onboardingH := handler.NewOnboardingHandler(userRepo, prototypeStore, userEmbeddingRepo, interestRepo)
-	profileH := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, contentPrefsRepo, userSettingsRepo)
+	profileH := handler.NewProfileHandler(userRepo, agentRepo, interestRepo, lifestyleRepo, contentPrefsRepo, userSettingsRepo, userSkillRepo)
 	newsSourceH := handler.NewNewsSourceHandler(newsSourceRepo)
 	photoH := handler.NewPhotoHandler(userRepo, photoRepo, agentRepo)
 

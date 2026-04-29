@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -25,20 +26,23 @@ const UserSkillsPerUserCap = 50
 //
 // See docs/user-skills-protocol.md.
 type UserSkillHandler struct {
-	userRepo  *repository.UserRepo
-	agentRepo *repository.AgentRepo
-	skillRepo *repository.UserSkillRepo
+	userRepo   *repository.UserRepo
+	agentRepo  *repository.AgentRepo
+	skillRepo  *repository.UserSkillRepo
+	spreadRepo *repository.SpreadRepo
 }
 
 func NewUserSkillHandler(
 	userRepo *repository.UserRepo,
 	agentRepo *repository.AgentRepo,
 	skillRepo *repository.UserSkillRepo,
+	spreadRepo *repository.SpreadRepo,
 ) *UserSkillHandler {
 	return &UserSkillHandler{
-		userRepo:  userRepo,
-		agentRepo: agentRepo,
-		skillRepo: skillRepo,
+		userRepo:   userRepo,
+		agentRepo:  agentRepo,
+		skillRepo:  skillRepo,
+		spreadRepo: spreadRepo,
 	}
 }
 
@@ -87,12 +91,23 @@ func (h *UserSkillHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		kind,
 		req.Extends,
 		req.Intent,
+		result.FrequencyPerMonth,
 		req.Hints,
 		result.Files,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to persist skill"})
 		return
+	}
+
+	// Standalone skills get their own slot in the user's spread; extensions
+	// modify a shipped vertical that already exists, so they leave the
+	// spread alone. Spread update failures are logged but non-fatal — the
+	// skill is still installed and usable.
+	if kind == model.UserSkillKindStandalone {
+		if err := h.spreadRepo.UpsertVerticalForFrequency(user.ID, skill.Name, skill.FrequencyPerMonth); err != nil {
+			log.Printf("warning: spread update failed for user=%s skill=%s: %v", user.ID, skill.Name, err)
+		}
 	}
 
 	writeJSON(w, http.StatusAccepted, model.CreateUserSkillResponse{

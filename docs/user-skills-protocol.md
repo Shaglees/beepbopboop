@@ -28,47 +28,43 @@ This document is the shared contract between three codebases — the iOS app, th
 ```
 +----------+        POST /skills/user        +-------------------+
 |  iOS app | ------------------------------> |                   |
-+----------+                                 |  BeepBopBoop      |
++----------+        (intent + frequency)     |  BeepBopBoop      |
                                              |  backend          |
                                              |                   |
                                              |  - skill-builder  |
                                              |  - storage        |
-                                             |  - manifest       |
+                                             |  - spread updater |
                                              |                   |
-+-----------+   GET /skills/user/manifest    |                   |
-|  openclaw | <----------------------------- |                   |
-| bootstrap |   GET /skills/user/files/...   |                   |
-+-----------+ -----------------------------> +-------------------+
++-----------+         GET /user/profile      |                   |
+| openclaw  | <----------------------------- |                   |
+| (running  |   (profile.user_skills =       |                   |
+|  skill,   |    [{name, version, files...}])|                   |
+|  daily)   |                                |                   |
+|           |   GET /skills/user/files/...   |                   |
+|           | -----------------------------> +-------------------+
++-----------+
        |
        v
-  .claude/skills/_user/<skill>/
-       |
-       v
-  launches Claude Code
+  .claude/skills/_user/<skill>/   (next-run effective)
 ```
 
 Three runtimes:
 
-1. **iOS app.** Captures intent. Calls the backend.
-2. **Backend (this repo, Go).** Owns the skill-builder agent (server-side Claude API call), persistent storage, and the manifest endpoint.
-3. **openclaw.** Pulls the user's skill set into `.claude/skills/_user/` at bootstrap, then launches Claude Code.
+1. **iOS app.** Captures intent + frequency (slider: every-day → every-month). Calls `POST /skills/user`.
+2. **Backend (this repo, Go).** Owns the skill-builder, persistent storage, and the spread auto-updater. Returns `user_skills` on the agent variant of `/user/profile` so a running skill can install pending entries.
+3. **openclaw.** Runs Claude Code daily. The shipped skills' existing `_shared/CONTEXT_BOOTSTRAP.md` step calls `/user/profile`; if `profile.user_skills` is non-empty, the running skill curls the file endpoints and writes `.claude/skills/_user/<name>/`.
 
-The skill-builder is a server-side agent, not a Claude Code skill. It runs on the backend with backend-managed credentials.
+The skill-builder is server-side. It runs on the backend with backend-managed credentials, not as a Claude Code skill.
 
-## The hard constraint
+## How install timing works
 
-Claude Code reads every `SKILL.md` in `.claude/skills/` at process start and inserts the frontmatter `description` into the system prompt. Files written into `.claude/skills/` *after* the process has started are invisible until the next launch.
+Claude Code scans `.claude/skills/` and loads skill descriptions into the system prompt **before** SessionStart hooks run, so a SessionStart hook that creates a new skill folder is too late for that session. We work around this by piggybacking on the profile fetch:
 
-Therefore: **the sync must run before Claude Code starts, not from inside it.** A SessionStart hook is too late. openclaw's bootstrap sequence has to be:
+- A **new** user-skill folder created during a session won't be invocable until the **next** openclaw run. The user accepts a one-cycle latency on first install (see `docs/skill-prompting-playbook.md` — daily cadence).
+- An **edit** to a file inside an *already-installed* user-skill folder is picked up live by Claude Code's skill-directory watcher and is effective immediately in the current session.
+- An **extension** (`_user/<shipped-skill>/preferences.md`) is read by the matching shipped skill during its own context-load step, so it takes effect in the current session as long as the file is on disk before the shipped skill runs.
 
-```
-openclaw bootstrap:
-  1. authenticate as user (agent token)
-  2. sync user skills from backend into .claude/skills/_user/
-  3. launch Claude Code
-```
-
-This is the single most important constraint and dictates almost every other decision below.
+This means we never need a pre-launch wrapper or separate sync binary — the running skill is the installer, and the install runs as part of the bootstrap step that already calls `/user/profile`.
 
 ## Storage layout (on-disk, openclaw side)
 
@@ -89,8 +85,8 @@ This is the single most important constraint and dictates almost every other dec
 Rules:
 
 - Plugin install (#281) owns everything under `.claude/skills/` *except* `_user/`.
-- Sync owns everything under `.claude/skills/_user/`. Files not present in the manifest are deleted on sync.
-- The two namespaces never collide. A user skill named `beepbopboop-football` lives at `_user/beepbopboop-football/` and is treated as an extension overlay; a user-only skill named `local-hs-football` lives at `_user/local-hs-football/` as a standalone skill.
+- The running skill writes to `.claude/skills/_user/` based on `profile.user_skills`. v1 is **install-only**: files in the manifest are written / updated; files or folders absent from the manifest are NOT auto-deleted (deletes are a future feature). User-side cleanup is therefore manual until the delete contract is added.
+- The two namespaces never collide. A user-skill named `beepbopboop-football` lives at `_user/beepbopboop-football/` and is treated as an extension overlay (a `preferences.md` consumed by the matching shipped skill); a user-only skill named `local-hs-football` lives at `_user/local-hs-football/` as a standalone skill.
 
 ## Storage layout (backend side)
 
@@ -119,11 +115,11 @@ A user skill is a `(user_id, skill_name)` pair. Files live underneath. Version i
 
 ## API contract
 
-All three endpoints are authenticated with the existing agent token mechanism. Request/response are JSON unless noted. Paths assume the existing API base.
+`POST /skills/user` uses Firebase auth (iOS user submits). The two read endpoints (`/skills/user/manifest`, `/skills/user/files/...`) and the agent variant of `/user/profile` use agent auth (openclaw reads). Request / response are JSON unless noted. Paths assume the existing API base.
 
 ### POST /skills/user
 
-Submit user intent. Returns immediately; generation is async.
+Submit user intent. Returns immediately. The current backend builds the skill synchronously (stub builder); the response shape preserves the async-ready `status` field for when the real builder lands.
 
 **Request:**
 
@@ -132,17 +128,18 @@ Submit user intent. Returns immediately; generation is async.
   "intent": "local high school football for Springfield, IL — score recaps and matchup previews",
   "kind": "standalone",
   "extends": null,
+  "frequency_per_month": 14,
   "hints": {
-    "location": "Springfield, IL",
-    "frequency": "weekly"
+    "location": "Springfield, IL"
   }
 }
 ```
 
 - `intent` (required): free-form user description, captured from the iOS intake screen.
 - `kind`: `"standalone"` for a brand-new skill (#283), `"extension"` for prefs on a shipped skill (#285). Default `"standalone"`.
-- `extends`: when `kind == "extension"`, the shipped skill name (e.g. `"beepbopboop-football"`). Required for extensions, ignored otherwise.
-- `hints`: optional structured side-channel from the intake screen. Backend treats these as additional context for the skill-builder.
+- `extends`: when `kind == "extension"`, the shipped-skill name (e.g. `"beepbopboop-football"`). Required for extensions, ignored otherwise.
+- `frequency_per_month`: integer 1-30 from the iOS skill-builder slider (30 = "every day", 1 = "every month"). The backend uses it to allocate a slot in the user's spread on **standalone** skills (extensions don't change the spread). Missing / zero defaults to `7` (weekly). Out-of-range values are clamped.
+- `hints`: optional structured side-channel for the skill-builder. Frequency lives in its own top-level field, not here.
 
 **Response (202 Accepted):**
 
@@ -217,44 +214,45 @@ Fetches a single file by path. `path` may contain `/` (URL-encoded).
 - `404` — skill or file does not exist.
 - `403` — caller does not own the skill.
 
-## Sync protocol (openclaw side)
+## GET /user/profile (agent variant) — install trigger
 
+The agent variant of `/user/profile` carries the user-skills manifest inline as `user_skills`. This is the **trigger and source of truth** for installs — there is no separate sync runner.
+
+```json
+{
+  "identity": { "...": "..." },
+  "interests": [],
+  "lifestyle": [],
+  "content_prefs": [],
+  "profile_initialized": true,
+  "user_skills": [
+    {
+      "name": "local-hs-football",
+      "version": 3,
+      "kind": "standalone",
+      "extends": null,
+      "files": [
+        {"path": "SKILL.md",      "sha256": "...", "size": 2104},
+        {"path": "MODE_brief.md", "sha256": "...", "size": 1822}
+      ]
+    }
+  ]
+}
 ```
-sync():
-  manifest = GET /skills/user/manifest
-  on_disk  = scan(.claude/skills/_user/)
 
-  for each skill in manifest.skills:
-    target_dir = .claude/skills/_user/<skill.name>/
-    for each file in skill.files:
-      local = on_disk[skill.name][file.path]
-      if local is None or local.sha256 != file.sha256:
-        body = GET /skills/user/files/<skill.name>/<file.path>
-        atomically write target_dir/<file.path> with body
-    delete any local files under target_dir not present in skill.files
+The bootstrap step in `_shared/CONTEXT_BOOTSTRAP.md` interprets `user_skills` and installs each entry by fetching `/skills/user/files/{name}/{path}` (using `If-None-Match` to short-circuit unchanged files) and writing under `.claude/skills/_user/<name>/`. See that doc for the install loop.
 
-  for each skill on disk not in manifest.skills:
-    rm -rf .claude/skills/_user/<skill_name>/
+If the field is absent or empty, there is nothing to install — the skill proceeds to its mode-specific work.
 
-  if any sync step failed:
-    log error, leave on-disk state as-is, proceed to launch Claude Code
-```
-
-Atomicity:
-
-- File writes are write-to-temp-then-rename within the same directory.
-- Whole-skill deletion happens only after manifest fetch succeeds. If the manifest call fails, openclaw proceeds with the previous on-disk state (degraded but functional).
-- openclaw never touches anything outside `.claude/skills/_user/`.
-
-Sync runs once per openclaw bootstrap. There is no in-cycle re-sync.
+`/skills/user/manifest` (the standalone manifest endpoint) remains available for tools that want a fully detailed view (admin / debugging / iOS "what skills did I create" UIs). The piggyback on `/user/profile` is the production install path; the standalone manifest is a convenience.
 
 ## Identity binding
 
-- iOS authenticates against the backend with the user's account credentials and acquires an agent token (existing mechanism per `.claude/connection-details.md`).
-- The same agent token is provisioned to openclaw at bootstrap, scoped to the same user.
-- All three endpoints accept the agent token via the existing auth middleware. The user_id is derived from the token, never from the request body.
+- iOS authenticates against the backend with Firebase. `POST /skills/user` derives `user_id` from the Firebase UID.
+- openclaw authenticates with an agent token. The agent's `user_id` (via `agents.user_id`) scopes both `/user/profile` and the `/skills/user/...` reads.
+- The mapping iOS-user ↔ openclaw-agent's user must be 1:1 and stable. If a user has multiple agents, they all see the same skill set.
 
-The mapping iOS-user ↔ openclaw-user must be 1:1 and stable. If a user has multiple openclaw instances (rare, but possible), they all share the same skill set.
+`user_id` is always derived from auth state, never from the request body.
 
 ## Failure modes
 
@@ -262,10 +260,11 @@ The mapping iOS-user ↔ openclaw-user must be 1:1 and stable. If a user has mul
 |---|---|
 | iOS submit fails network | iOS retries with backoff; user sees "couldn't save, try again" |
 | Backend skill-builder errors | Skill not added to manifest. Backend logs and retries on a queue. iOS may surface "still building" in a future enhancement. |
-| openclaw manifest fetch fails | Bootstrap proceeds with previous on-disk state. Logged. |
-| openclaw individual file fetch fails | That file's previous on-disk version is retained. Skill may be partially stale; logged. |
-| Skill-builder produces invalid SKILL.md (missing frontmatter, etc.) | Backend rejects internally and does not bump version. Manifest continues to point at the previous valid version. |
-| User deletes a skill in iOS | Backend removes from `user_skills`. Manifest no longer lists it. openclaw deletes on next sync. |
+| `/user/profile` fetch fails on the agent | Bootstrap step logs and proceeds without installing — existing on-disk skills remain usable. |
+| Individual file fetch fails | That file's previous on-disk copy is retained. Skill may be partially stale; logged. |
+| Skill-builder produces invalid SKILL.md (missing frontmatter, etc.) | Backend rejects internally and does not bump version. `profile.user_skills` continues to advertise the previous valid version. |
+| Spread auto-update fails on `POST /skills/user` | Logged but non-fatal — the skill is installed, the spread just isn't allocated a new slot. User can fix via `PUT /settings/spread`. |
+| User deletes a skill in iOS | Backend deletes the row. The next `/user/profile` fetch will not list it. v1 leaves the on-disk copy in `_user/` (no auto-cleanup); a future delete contract handles removal. |
 
 The system is built around "no half-synced state ever appears in the manifest." Validity is enforced at the backend before the manifest changes.
 
@@ -281,18 +280,19 @@ The system is built around "no half-synced state ever appears in the manifest." 
 
 - **Per-user cap.** What's a reasonable upper bound on user skills? Suggest 50.
 - **File size cap.** Per-file? Per-skill? Suggest 64 KB per file, 256 KB per skill, to keep openclaw context manageable.
-- **Manifest caching.** Should the manifest endpoint support `If-None-Match` so openclaw can skip the body when nothing changed? Cheap to add and worth it for sessions where nothing has changed.
-- **Async submit feedback.** v1 returns `queued` and never tells iOS when ready. Should there be a `GET /skills/user/<name>` for status polling, or do we lean on next-cycle visibility as the only signal? Lean: skip for v1, add if iOS UX demands it.
-- **Plugin packaging interaction.** When the plugin (#281) installs / updates, it must respect `.claude/skills/_user/`. Worth a smoke test in CI.
-- **Pre-launch hook in openclaw.** This protocol assumes openclaw exposes a pre-launch step we can wire sync into. If not, this whole design needs a different shape — confirm before implementing the openclaw side.
+- **Per-file `If-None-Match` is implemented; manifest-level isn't.** `GET /skills/user/files/...` honors `If-None-Match` (sha256 ETag). If `/user/profile` becomes expensive, we could add an ETag there too; not worth it yet.
+- **Async submit feedback.** Stub builder returns `status: "ready"` synchronously. When the real builder is async, `status: "queued"` is the contract; iOS may want a `GET /skills/user/<name>` poll endpoint at that point.
+- **Plugin packaging interaction.** When the plugin (#281) installs / updates, it must not touch `.claude/skills/_user/`. Worth a smoke test once #281 is real.
+- **Auto-delete on iOS-side delete.** v1 leaves on-disk copies after iOS-side deletes. A delete contract (likely "manifest entries gain a `deleted_at`, agent removes the folder when seen") is a clean follow-up.
 
 ## Phasing
 
-Suggested order:
+Status as of this revision:
 
-1. **Spec sign-off** (this doc).
-2. **Backend endpoints + storage**, with a stub skill-builder that produces a fixed example skill. End-to-end wiring without the AI piece.
-3. **openclaw bootstrap sync** against the stubbed backend. Verifies the on-disk lifecycle.
-4. **Real skill-builder agent** on the backend.
-5. **iOS intake screen.**
-6. **Conversational pref capture (#285)** layered on top once the standalone-skill flow is solid.
+1. ✅ **Spec sign-off** (PR #286).
+2. ✅ **Backend endpoints + storage** with stub skill-builder (PR #287).
+3. ✅ **Profile piggyback + spread auto-update + bootstrap install step** (this PR). Replaces the originally planned "openclaw bootstrap sync" — there is no separate sync runner; the running skill is the installer.
+4. **Real skill-builder agent** on the backend. Replaces the stub with a Claude API call that does source discovery, sibling-skill inheritance, and proper SKILL.md generation.
+5. **iOS intake screen.** Slider for `frequency_per_month`, intent text field, kind picker.
+6. **Conversational pref capture (#285).** Layered on top of the standalone flow.
+7. **Delete contract.** Auto-cleanup on disk when a user deletes a skill in iOS (see Open questions).

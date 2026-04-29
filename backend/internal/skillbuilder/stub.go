@@ -16,10 +16,12 @@ import (
 )
 
 // Result is what the builder hands back to the handler: the resolved skill
-// name plus the files to persist.
+// name, the files to persist, and the resolved frequency (slider value clamped
+// to [FrequencyMin, FrequencyMax], with FrequencyDefault when unset).
 type Result struct {
-	SkillName string
-	Files     []repository.FileInput
+	SkillName         string
+	Files             []repository.FileInput
+	FrequencyPerMonth int
 }
 
 // Build returns a stub skill for the given request. It validates the
@@ -36,6 +38,17 @@ func Build(req model.CreateUserSkillRequest) (*Result, error) {
 		kind = model.UserSkillKindStandalone
 	}
 
+	freq := req.FrequencyPerMonth
+	if freq <= 0 {
+		freq = model.FrequencyDefault
+	}
+	if freq > model.FrequencyMax {
+		freq = model.FrequencyMax
+	}
+	if freq < model.FrequencyMin {
+		freq = model.FrequencyMin
+	}
+
 	switch kind {
 	case model.UserSkillKindStandalone:
 		name := slugify(intent)
@@ -43,8 +56,9 @@ func Build(req model.CreateUserSkillRequest) (*Result, error) {
 			return nil, errors.New("could not derive a skill name from intent")
 		}
 		return &Result{
-			SkillName: name,
-			Files:     standaloneFiles(name, intent),
+			SkillName:         name,
+			Files:             standaloneFiles(name, intent),
+			FrequencyPerMonth: freq,
 		}, nil
 
 	case model.UserSkillKindExtension:
@@ -52,8 +66,9 @@ func Build(req model.CreateUserSkillRequest) (*Result, error) {
 			return nil, errors.New("extends is required when kind is extension")
 		}
 		return &Result{
-			SkillName: req.Extends,
-			Files:     extensionFiles(req.Extends, intent),
+			SkillName:         req.Extends,
+			Files:             extensionFiles(req.Extends, intent),
+			FrequencyPerMonth: freq,
 		}, nil
 
 	default:

@@ -50,6 +50,38 @@ func TestUserSkillRepo_UpsertAndGetByName(t *testing.T) {
 	}
 }
 
+func TestUserSkillRepo_UpsertRejectsUnsafeNameAndPath(t *testing.T) {
+	repo, userID := setupUserSkillRepo(t)
+
+	if _, err := repo.Upsert(userID, "../escape", model.UserSkillKindStandalone, "", "x", nil,
+		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("x")}}); err == nil {
+		t.Fatal("expected unsafe skill name to be rejected")
+	}
+	if _, err := repo.Upsert(userID, "safe-name", model.UserSkillKindStandalone, "", "x", nil,
+		[]repository.FileInput{{Path: "../secret.md", Content: []byte("x")}}); err == nil {
+		t.Fatal("expected unsafe file path to be rejected")
+	}
+}
+
+func TestUserSkillRepo_UpsertWithCapAllowsUpdateButRejectsNewSkill(t *testing.T) {
+	repo, userID := setupUserSkillRepo(t)
+
+	if _, err := repo.UpsertWithCap(userID, "first", model.UserSkillKindStandalone, "", "x", nil,
+		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("x")}}, 1); err != nil {
+		t.Fatalf("upsert first: %v", err)
+	}
+	if updated, err := repo.UpsertWithCap(userID, "first", model.UserSkillKindStandalone, "", "x2", nil,
+		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("x2")}}, 1); err != nil {
+		t.Fatalf("update at cap should be allowed: %v", err)
+	} else if updated.Version != 2 {
+		t.Fatalf("expected version 2, got %d", updated.Version)
+	}
+	if _, err := repo.UpsertWithCap(userID, "second", model.UserSkillKindStandalone, "", "y", nil,
+		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("y")}}, 1); !errors.Is(err, repository.ErrUserSkillCapReached) {
+		t.Fatalf("expected ErrUserSkillCapReached, got %v", err)
+	}
+}
+
 func TestUserSkillRepo_Manifest_OmitsForeignUsers(t *testing.T) {
 	repo, userID := setupUserSkillRepo(t)
 	db := database.OpenTestDB(t)

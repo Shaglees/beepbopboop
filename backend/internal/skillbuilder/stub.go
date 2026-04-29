@@ -6,6 +6,7 @@
 package skillbuilder
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -48,12 +49,16 @@ func Build(req model.CreateUserSkillRequest) (*Result, error) {
 		}, nil
 
 	case model.UserSkillKindExtension:
-		if req.Extends == "" {
+		extends := strings.TrimSpace(req.Extends)
+		if extends == "" {
 			return nil, errors.New("extends is required when kind is extension")
 		}
+		if err := repository.ValidateUserSkillName(extends); err != nil {
+			return nil, fmt.Errorf("invalid extends: %w", err)
+		}
 		return &Result{
-			SkillName: req.Extends,
-			Files:     extensionFiles(req.Extends, intent),
+			SkillName: extends,
+			Files:     extensionFiles(extends, intent),
 		}, nil
 
 	default:
@@ -80,7 +85,7 @@ This skill was generated from a user intent submitted via the iOS app.
 
 This is a placeholder produced by the skill-builder stub. A future
 revision will replace this body with a real, sourced skill.
-`, name, desc, name, intent)
+`, yamlString(name), yamlString(desc), name, intent)
 
 	modeBrief := fmt.Sprintf(`# Brief mode
 
@@ -99,6 +104,11 @@ A single post under 80 words.
 		{Path: "SKILL.md", Content: []byte(skillMD)},
 		{Path: "MODE_brief.md", Content: []byte(modeBrief)},
 	}
+}
+
+func yamlString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }
 
 func extensionFiles(extends, intent string) []repository.FileInput {

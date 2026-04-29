@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -19,7 +18,7 @@ import (
 const UserSkillsPerUserCap = 50
 
 // UserSkillHandler exposes the three endpoints for the user-skills protocol:
-//   - POST /skills/user           (firebase-auth, iOS)
+//   - POST /skills/user           (firebase-auth or agent-auth)
 //   - GET  /skills/user/manifest  (agent-auth,    openclaw)
 //   - GET  /skills/user/files/... (agent-auth,    openclaw)
 //
@@ -42,13 +41,13 @@ func NewUserSkillHandler(
 	}
 }
 
-// Submit handles POST /skills/user. Authenticated as a Firebase user (iOS
-// app). The skill is built synchronously by the stub builder and stored
-// before the response returns. The returned status reflects the stub's
-// synchronous nature; the real builder will move this back to "queued".
+// Submit handles POST /skills/user. Authenticated as either a Firebase user
+// (iOS app) or an agent token. The skill is built synchronously by the stub
+// builder and stored before the response returns. The returned status reflects
+// the stub's synchronous nature; the real builder will move this back to
+// "queued".
 func (h *UserSkillHandler) Submit(w http.ResponseWriter, r *http.Request) {
-	uid := middleware.FirebaseUIDFromContext(r.Context())
-	user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+	userID, err := h.userIDForSubmit(r)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to resolve user"})
 		return
@@ -57,16 +56,6 @@ func (h *UserSkillHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	var req model.CreateUserSkillRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	count, err := h.skillRepo.CountByUser(user.ID)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to check skill count"})
-		return
-	}
-	if count >= UserSkillsPerUserCap {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "user skill cap reached"})
 		return
 	}
 
@@ -80,17 +69,26 @@ func (h *UserSkillHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	if kind == "" {
 		kind = model.UserSkillKindStandalone
 	}
+	extends := req.Extends
+	if kind == model.UserSkillKindExtension {
+		extends = result.SkillName
+	}
 
-	skill, err := h.skillRepo.Upsert(
-		user.ID,
+	skill, err := h.skillRepo.UpsertWithCap(
+		userID,
 		result.SkillName,
 		kind,
-		req.Extends,
+		extends,
 		req.Intent,
 		req.Hints,
 		result.Files,
+		UserSkillsPerUserCap,
 	)
 	if err != nil {
+		if errors.Is(err, repository.ErrUserSkillCapReached) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "user skill cap reached"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to persist skill"})
 		return
 	}
@@ -100,6 +98,24 @@ func (h *UserSkillHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		Status:      skill.Status,
 		SubmittedAt: skill.UpdatedAt,
 	})
+}
+
+func (h *UserSkillHandler) userIDForSubmit(r *http.Request) (string, error) {
+	if uid := middleware.FirebaseUIDFromContext(r.Context()); uid != "" {
+		user, err := h.userRepo.FindOrCreateByFirebaseUID(uid)
+		if err != nil {
+			return "", err
+		}
+		return user.ID, nil
+	}
+	if agentID := middleware.AgentIDFromContext(r.Context()); agentID != "" {
+		agent, err := h.agentRepo.GetByID(agentID)
+		if err != nil {
+			return "", err
+		}
+		return agent.UserID, nil
+	}
+	return "", errors.New("missing authenticated user")
 }
 
 // Manifest handles GET /skills/user/manifest. Authenticated as an agent
@@ -145,6 +161,14 @@ func (h *UserSkillHandler) GetFile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "skill name and path are required"})
 		return
 	}
+	if err := repository.ValidateUserSkillName(skillName); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid skill name"})
+		return
+	}
+	if err := repository.ValidateUserSkillFilePath(path); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid file path"})
+		return
+	}
 
 	file, err := h.skillRepo.GetFile(agent.UserID, skillName, path)
 	if err != nil {
@@ -156,9 +180,8 @@ func (h *UserSkillHandler) GetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	etag := `"` + hex.EncodeToString([]byte(file.SHA256)) + `"`
 	w.Header().Set("ETag", `"`+file.SHA256+`"`)
-	if match := r.Header.Get("If-None-Match"); match != "" && (match == file.SHA256 || match == `"`+file.SHA256+`"` || match == etag) {
+	if match := r.Header.Get("If-None-Match"); match != "" && (match == file.SHA256 || match == `"`+file.SHA256+`"`) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}

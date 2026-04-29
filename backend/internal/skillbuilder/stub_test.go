@@ -27,7 +27,7 @@ func TestBuild_Standalone(t *testing.T) {
 	if res.Files[0].Path != "SKILL.md" {
 		t.Errorf("expected SKILL.md, got %s", res.Files[0].Path)
 	}
-	if !strings.Contains(skillMD, "name: "+res.SkillName) {
+	if !strings.Contains(skillMD, `name: "`+res.SkillName+`"`) {
 		t.Errorf("SKILL.md missing frontmatter name: %s", skillMD)
 	}
 	if !strings.Contains(skillMD, "Springfield") {
@@ -55,6 +55,19 @@ func TestBuild_Extension(t *testing.T) {
 	}
 }
 
+func TestBuild_QuotesFrontmatterDescription(t *testing.T) {
+	res, err := Build(model.CreateUserSkillRequest{
+		Intent: "local news: prioritize city council and budgets",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	skillMD := string(res.Files[0].Content)
+	if !strings.Contains(skillMD, `description: "local news: prioritize city council and budgets"`) {
+		t.Errorf("description should be quoted YAML scalar: %s", skillMD)
+	}
+}
+
 func TestBuild_Errors(t *testing.T) {
 	cases := []struct {
 		name string
@@ -63,6 +76,7 @@ func TestBuild_Errors(t *testing.T) {
 		{"empty intent", model.CreateUserSkillRequest{}},
 		{"whitespace intent", model.CreateUserSkillRequest{Intent: "   "}},
 		{"extension without extends", model.CreateUserSkillRequest{Kind: model.UserSkillKindExtension, Intent: "x"}},
+		{"extension with unsafe extends", model.CreateUserSkillRequest{Kind: model.UserSkillKindExtension, Extends: "../escape", Intent: "x"}},
 		{"unknown kind", model.CreateUserSkillRequest{Kind: "weird", Intent: "x"}},
 		{"intent with no alphanumeric", model.CreateUserSkillRequest{Intent: "!!!"}},
 	}
@@ -77,11 +91,11 @@ func TestBuild_Errors(t *testing.T) {
 
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
-		"Hello World":                      "hello-world",
-		"Local HS Football!":               "local-hs-football",
-		"   spaces   ":                     "spaces",
-		"emoji 🎉 stripped":                 "emoji-stripped",
-		"":                                 "",
+		"Hello World":        "hello-world",
+		"Local HS Football!": "local-hs-football",
+		"   spaces   ":       "spaces",
+		"emoji 🎉 stripped":   "emoji-stripped",
+		"":                   "",
 	}
 	for in, want := range cases {
 		if got := slugify(in); got != want {

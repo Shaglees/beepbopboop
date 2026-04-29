@@ -68,6 +68,26 @@ func TestUserSkillHandler_Submit_Standalone(t *testing.T) {
 	}
 }
 
+func TestUserSkillHandler_Submit_AgentAuth(t *testing.T) {
+	env := setupUserSkillHandler(t)
+	user, _ := env.userRepo.FindOrCreateByFirebaseUID("fb-agent-submit")
+	agent, _ := env.agentRepo.Create(user.ID, "openclaw")
+
+	body := `{"intent": "local high school football for Springfield, IL"}`
+	req := httptest.NewRequest("POST", "/skills/user", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithAgentID(req.Context(), agent.ID))
+	rec := httptest.NewRecorder()
+
+	env.h.Submit(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if n, err := env.skillRepo.CountByUser(user.ID); err != nil || n != 1 {
+		t.Fatalf("expected skill stored for agent user, count=%d err=%v", n, err)
+	}
+}
+
 func TestUserSkillHandler_Submit_BadRequest(t *testing.T) {
 	env := setupUserSkillHandler(t)
 
@@ -78,6 +98,7 @@ func TestUserSkillHandler_Submit_BadRequest(t *testing.T) {
 	}{
 		{"empty intent", `{"intent": ""}`, http.StatusBadRequest},
 		{"extension without extends", `{"intent":"x","kind":"extension"}`, http.StatusBadRequest},
+		{"extension with unsafe extends", `{"intent":"x","kind":"extension","extends":"../escape"}`, http.StatusBadRequest},
 		{"invalid json", `not json`, http.StatusBadRequest},
 	}
 	for _, tc := range cases {
@@ -169,6 +190,19 @@ func TestUserSkillHandler_GetFile(t *testing.T) {
 	env.h.GetFile(rec3, req3)
 	if rec3.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", rec3.Code)
+	}
+}
+
+func TestUserSkillHandler_GetFile_RejectsUnsafePath(t *testing.T) {
+	env := setupUserSkillHandler(t)
+	user, _ := env.userRepo.FindOrCreateByFirebaseUID("fb-unsafe-path")
+	agent, _ := env.agentRepo.Create(user.ID, "openclaw")
+
+	req := newFileRequest(agent.ID, "beepbopboop-local-news", "../secret.md")
+	rec := httptest.NewRecorder()
+	env.h.GetFile(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
 	}
 }
 

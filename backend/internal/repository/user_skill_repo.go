@@ -7,12 +7,51 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
+	"strings"
 
 	"github.com/shanegleeson/beepbopboop/backend/internal/model"
 )
 
 // ErrUserSkillNotFound is returned when a (user, skill_name) pair has no row.
 var ErrUserSkillNotFound = errors.New("user skill not found")
+
+// ErrUserSkillCapReached is returned when creating a new skill would exceed
+// the per-user cap.
+var ErrUserSkillCapReached = errors.New("user skill cap reached")
+
+// ValidateUserSkillName enforces the directory-safe name shape used by the
+// openclaw sync target: .claude/skills/_user/<skill_name>/.
+func ValidateUserSkillName(name string) error {
+	if name == "" {
+		return errors.New("skill_name is required")
+	}
+	if strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") {
+		return errors.New("skill_name must not start or end with '-'")
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			continue
+		}
+		return errors.New("skill_name must contain only lowercase letters, numbers, and '-'")
+	}
+	return nil
+}
+
+// ValidateUserSkillFilePath ensures file paths stay relative to the skill dir.
+func ValidateUserSkillFilePath(p string) error {
+	if p == "" {
+		return errors.New("file path is required")
+	}
+	if strings.Contains(p, "\\") || strings.HasPrefix(p, "/") {
+		return errors.New("file path must be relative")
+	}
+	clean := path.Clean(p)
+	if clean == "." || clean != p || strings.HasPrefix(clean, "../") || clean == ".." {
+		return errors.New("file path must not escape the skill directory")
+	}
+	return nil
+}
 
 // UserSkillRepo persists user-authored skills and extension preferences.
 // See docs/user-skills-protocol.md for the contract.
@@ -39,8 +78,31 @@ func (r *UserSkillRepo) Upsert(
 	hints json.RawMessage,
 	files []FileInput,
 ) (*model.UserSkill, error) {
-	if userID == "" || skillName == "" {
-		return nil, errors.New("user_id and skill_name are required")
+	return r.upsert(userID, skillName, kind, extends, intent, hints, files, 0)
+}
+
+// UpsertWithCap creates or replaces a skill while atomically enforcing a
+// per-user skill cap. Updates to existing skills are allowed at the cap.
+func (r *UserSkillRepo) UpsertWithCap(
+	userID, skillName, kind, extends, intent string,
+	hints json.RawMessage,
+	files []FileInput,
+	maxSkills int,
+) (*model.UserSkill, error) {
+	return r.upsert(userID, skillName, kind, extends, intent, hints, files, maxSkills)
+}
+
+func (r *UserSkillRepo) upsert(
+	userID, skillName, kind, extends, intent string,
+	hints json.RawMessage,
+	files []FileInput,
+	maxSkills int,
+) (*model.UserSkill, error) {
+	if userID == "" {
+		return nil, errors.New("user_id is required")
+	}
+	if err := ValidateUserSkillName(skillName); err != nil {
+		return nil, err
 	}
 
 	tx, err := r.db.Begin()
@@ -48,6 +110,27 @@ func (r *UserSkillRepo) Upsert(
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
+
+	if maxSkills > 0 {
+		var lockedUserID string
+		if err := tx.QueryRow(`SELECT id FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&lockedUserID); err != nil {
+			return nil, fmt.Errorf("lock user: %w", err)
+		}
+
+		var exists bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM user_skills WHERE user_id = $1 AND skill_name = $2)`, userID, skillName).Scan(&exists); err != nil {
+			return nil, fmt.Errorf("check existing skill: %w", err)
+		}
+		if !exists {
+			var count int
+			if err := tx.QueryRow(`SELECT COUNT(*) FROM user_skills WHERE user_id = $1`, userID).Scan(&count); err != nil {
+				return nil, fmt.Errorf("count user skills: %w", err)
+			}
+			if count >= maxSkills {
+				return nil, ErrUserSkillCapReached
+			}
+		}
+	}
 
 	var extendsArg any
 	if extends != "" {
@@ -82,6 +165,9 @@ func (r *UserSkillRepo) Upsert(
 		return nil, fmt.Errorf("clear files: %w", err)
 	}
 	for _, f := range files {
+		if err := ValidateUserSkillFilePath(f.Path); err != nil {
+			return nil, fmt.Errorf("invalid file path %q: %w", f.Path, err)
+		}
 		sum := sha256.Sum256(f.Content)
 		if _, err := tx.Exec(`
 			INSERT INTO user_skill_files (skill_id, path, sha256, size_bytes, content)

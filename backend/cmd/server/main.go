@@ -16,9 +16,9 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/ab"
 	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
-	"github.com/shanegleeson/beepbopboop/backend/internal/entertainment"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
+	"github.com/shanegleeson/beepbopboop/backend/internal/entertainment"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/interest"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
@@ -272,6 +272,7 @@ func main() {
 		r.Get("/user/photos/bodyshot", photoH.GetBodyshot)
 		r.Get("/skills/user/manifest", userSkillH.Manifest)
 		r.Get("/skills/user/files/{name}/*", userSkillH.GetFile)
+		r.Post("/skills/user", userSkillH.Submit)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())

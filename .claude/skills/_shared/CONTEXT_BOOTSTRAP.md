@@ -89,28 +89,35 @@ The agent variant of `/user/profile` may include a `user_skills` array. Each ent
 
 **When this array is non-empty, install every entry** so the running agent has the latest user-authored content. Newly created skill *folders* won't be invocable until the next openclaw run (Claude Code only watches existing skill directories for live reloads), but file edits inside an already-installed user skill take effect within the current session — and either way the install must happen on every cycle so the next run sees the right state.
 
-For each `entry` in `profile.user_skills`:
+For each entry in `profile.user_skills`, write any file whose on-disk sha256 doesn't match the manifest. Paths are relative to the project root (the directory openclaw runs Claude Code from), matching how Claude Code already resolves `.claude/skills/`.
 
 ```bash
-SKILL_DIR=".claude/skills/_user/${entry.name}"
-mkdir -p "$SKILL_DIR"
-for file in entry.files:
-  LOCAL="$SKILL_DIR/${file.path}"
-  LOCAL_SHA=$(sha256sum "$LOCAL" 2>/dev/null | cut -d' ' -f1)
-  if [ "$LOCAL_SHA" != "${file.sha256}" ]; then
+USER_SKILLS_DIR=".claude/skills/_user"
+
+echo "$PROFILE" | jq -r '
+  .user_skills[]? |
+  .name as $name |
+  .files[] |
+  "\($name)\t\(.path)\t\(.sha256)"
+' | while IFS=$'\t' read -r SKILL_NAME REL_PATH WANT_SHA; do
+  LOCAL="$USER_SKILLS_DIR/$SKILL_NAME/$REL_PATH"
+  # macOS ships `shasum`, Linux ships `sha256sum`; either works.
+  HAVE_SHA=$( { sha256sum "$LOCAL" 2>/dev/null || shasum -a 256 "$LOCAL" 2>/dev/null; } | cut -d' ' -f1)
+  if [ "$HAVE_SHA" != "$WANT_SHA" ]; then
     mkdir -p "$(dirname "$LOCAL")"
-    curl -s -H "$AUTH" --etag-compare "$LOCAL.etag" --etag-save "$LOCAL.etag" \
-      "$API/skills/user/files/${entry.name}/${file.path}" -o "$LOCAL"
+    curl -s -H "$AUTH" \
+      "$API/skills/user/files/$SKILL_NAME/$REL_PATH" -o "$LOCAL"
+    echo "installed $SKILL_NAME/$REL_PATH"
   fi
 done
 ```
 
-Notes:
+Notes on the install loop:
 
-- The fetch uses `If-None-Match` (the backend stores sha256 as the ETag) so unchanged files come back as 304 with no body.
+- The on-disk sha256 check short-circuits unchanged files. The same endpoint also honors `If-None-Match` (sha256 as the ETag) if you prefer to let the backend decide.
 - Do **not** delete files or skill directories under `_user/` that aren't in `user_skills`. v1 of the protocol is install-only; user-side cleanup of deleted skills is a future feature.
-- Standalone skills (`kind: "standalone"`) live at `_user/<name>/SKILL.md` (+ optional mode files). Extensions (`kind: "extension"`) write a single `_user/<extends>/preferences.md`; the running shipped skill should layer that file on top of its own SKILL.md when composing.
-- After install, log one line per installed skill. The user reads the report.
+- Standalone skills (`kind: "standalone"`) live at `_user/<name>/SKILL.md` (+ optional mode files). Extensions (`kind: "extension"`) write a single `_user/<extends>/preferences.md`; the running shipped skill should `Read` that file during its own context-load step and layer it on top of its own behavior when composing.
+- Log one line per installed file. The user reads the report.
 
 **For the current session** the install affects:
 

@@ -7,7 +7,7 @@ Tracking issues:
 - [#281 plugin packaging](https://github.com/Shaglees/beepbopboop/issues/281)
 - [#284 post-skill provenance tag](https://github.com/Shaglees/beepbopboop/issues/284)
 
-This document is the shared contract between three codebases — the iOS app, the BeepBopBoop backend, and openclaw — for creating user-owned skills from inside the app and getting them loaded by the agent. It does not prescribe internal implementation; it pins down the wire format, storage layout, and lifecycle so each side can build in parallel.
+This document is the shared contract between three actors — the iOS app, the BeepBopBoop backend, and a BeepBopBoop skill running under Claude Code in openclaw — for creating user-owned skills from inside the app and getting them loaded by the agent. All three live in this repo (Swift, Go, and markdown respectively); openclaw is the hosted runtime that executes Claude Code on this project. The contract pins down the wire format, storage layout, and lifecycle so each side can build in parallel.
 
 ## Goals
 
@@ -79,7 +79,8 @@ This means we never need a pre-launch wrapper or separate sync binary — the ru
     MODE_*.md
     reference/
   beepbopboop-football/          # extension to a shipped skill (#285)
-    preferences.md               # auto-loaded after the shipped SKILL.md
+    preferences.md               # the shipped skill Reads this in its own
+                                 # context-load step (no auto-load by Claude Code)
 ```
 
 Rules:
@@ -90,28 +91,37 @@ Rules:
 
 ## Storage layout (backend side)
 
-Backend is the source of truth for `_user/`. Suggested model — final shape is the backend's call:
+Backend is the source of truth for `_user/`. Schema as implemented (see `internal/database/database.go`):
 
 ```
 user_skills
-  user_id          uuid     # owner
-  skill_name       text     # e.g. "local-hs-football" or "beepbopboop-football"
-  version          integer  # bumped on each successful skill-builder run
-  kind             enum     # "standalone" | "extension"
-  created_at       timestamp
-  updated_at       timestamp
+  id          BIGSERIAL PK
+  user_id     TEXT NOT NULL  -> users(id) ON DELETE CASCADE
+  skill_name  TEXT NOT NULL
+  version     INTEGER         -- bumped on each successful skill-builder run
+  kind        TEXT            -- 'standalone' | 'extension'
+  extends     TEXT            -- shipped-skill name when kind='extension'
+  intent      TEXT            -- raw user intent from the iOS submission
+  hints       JSONB           -- structured side-channel from the intake
+  status      TEXT            -- 'queued' | 'building' | 'ready' | 'failed'
+  created_at  TIMESTAMPTZ
+  updated_at  TIMESTAMPTZ
+  UNIQUE (user_id, skill_name)
 
 user_skill_files
-  user_id          uuid
-  skill_name       text
-  path             text     # relative path under the skill dir, e.g. "SKILL.md", "MODE_brief.md"
-  sha256           text
-  size_bytes       integer
-  content          bytea    # or object storage URL
-  updated_at       timestamp
+  id          BIGSERIAL PK
+  skill_id    BIGINT NOT NULL -> user_skills(id) ON DELETE CASCADE
+  path        TEXT NOT NULL   -- relative path under the skill dir
+  sha256      TEXT NOT NULL
+  size_bytes  INTEGER NOT NULL
+  content     BYTEA NOT NULL  -- inline; small files (<64 KB target)
+  updated_at  TIMESTAMPTZ
+  UNIQUE (skill_id, path)
 ```
 
-A user skill is a `(user_id, skill_name)` pair. Files live underneath. Version is bumped atomically when the skill-builder writes a new revision.
+Cadence is **not** stored on `user_skills` — it lives on `user_settings.spread_targets` (existing schema) keyed by skill name, alongside shipped-skill verticals. `POST /skills/user` writes the requested weight there via `SpreadRepo.UpsertVertical`.
+
+A user-skill is a `(user_id, skill_name)` pair. Files live underneath. `version` bumps atomically when the skill-builder writes a new revision.
 
 ## API contract
 
@@ -146,13 +156,13 @@ Submit user intent. Returns immediately. The current backend builds the skill sy
 ```json
 {
   "skill_name": "local-hs-football",
-  "status": "queued",
+  "status": "ready",
   "submitted_at": "2026-04-28T18:02:00Z"
 }
 ```
 
-- `status`: `"queued"` initially. Polling not required — openclaw discovers the skill via the manifest endpoint at next bootstrap.
-- The backend may rename the user's intended skill name to avoid collisions; the response is authoritative.
+- `status`: the stub builder returns `"ready"` synchronously (the skill is persisted before the response fires). The real Claude-API-backed builder will return `"queued"` and finish asynchronously; the wire field tolerates both. Polling is not required — the running skill discovers new entries via `profile.user_skills` on its next cycle.
+- `skill_name`: the backend may slugify or de-collide the caller's intended name; the response is authoritative.
 
 **Failure cases:**
 
@@ -195,8 +205,8 @@ Lists every user skill the caller owns, with file-level metadata.
 }
 ```
 
-- Manifest is authoritative for the `_user/` namespace. Skills not listed must be deleted from disk on sync.
-- `version` is monotonically increasing per skill. openclaw can use it as a quick check before re-fetching files, but the canonical change signal is `sha256` per file.
+- Manifest lists every ready skill the caller owns. v1 is install-only on the agent side: a missing entry does NOT trigger an on-disk delete (deletes are tracked as a follow-up in Open questions).
+- `version` is monotonically increasing per skill. The running skill compares per-file `sha256` to decide what to fetch; `version` is a cheap top-level "did anything change" hint for tooling.
 - A skill that is still being built (queued or in-progress) **must not appear in the manifest** until at least one valid file revision exists. No half-synced skills.
 
 ### GET /skills/user/files/{skill_name}/{path}
@@ -206,13 +216,12 @@ Fetches a single file by path. `path` may contain `/` (URL-encoded).
 **Response (200):**
 
 - `Content-Type: text/markdown` (or whatever the file's actual type is).
-- `ETag: "<sha256>"` so openclaw can avoid re-downloading unchanged files on subsequent syncs.
+- `ETag: "<sha256>"` — the running skill uses `If-None-Match` to short-circuit unchanged files (304 with no body).
 - Body: the raw file contents.
 
 **Failure cases:**
 
-- `404` — skill or file does not exist.
-- `403` — caller does not own the skill.
+- `404` — skill or file does not exist, or the caller does not own it. Foreign-user access deliberately returns 404 (not 403) to avoid leaking the existence of someone else's skill names.
 
 ## GET /user/profile (agent variant) — install trigger
 

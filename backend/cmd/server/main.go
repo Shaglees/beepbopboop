@@ -16,9 +16,9 @@ import (
 	"github.com/shanegleeson/beepbopboop/backend/internal/ab"
 	"github.com/shanegleeson/beepbopboop/backend/internal/calendar"
 	"github.com/shanegleeson/beepbopboop/backend/internal/config"
-	"github.com/shanegleeson/beepbopboop/backend/internal/entertainment"
 	"github.com/shanegleeson/beepbopboop/backend/internal/database"
 	"github.com/shanegleeson/beepbopboop/backend/internal/embedding"
+	"github.com/shanegleeson/beepbopboop/backend/internal/entertainment"
 	"github.com/shanegleeson/beepbopboop/backend/internal/handler"
 	"github.com/shanegleeson/beepbopboop/backend/internal/interest"
 	"github.com/shanegleeson/beepbopboop/backend/internal/middleware"
@@ -88,6 +88,7 @@ func main() {
 	contentPrefsRepo := repository.NewUserContentPrefsRepo(db)
 	newsSourceRepo := repository.NewNewsSourceRepo(db)
 	photoRepo := repository.NewUserPhotoRepo(db)
+	userSkillRepo := repository.NewUserSkillRepo(db)
 
 	var ranker *ranking.Ranker
 	if cfg.RankerModelPath != "" {
@@ -152,6 +153,7 @@ func main() {
 	sportsSvc := sports.NewService()
 	sportsH := handler.NewSportsHandler(sportsSvc)
 	feedbackH := handler.NewFeedbackHandler(userRepo, feedbackRepo)
+	userSkillH := handler.NewUserSkillHandler(userRepo, agentRepo, userSkillRepo)
 	userEmbedder := embedding.NewUserEmbedder(db, userEmbeddingRepo)
 
 	creatorRepo := repository.NewLocalCreatorRepo(db)
@@ -236,6 +238,7 @@ func main() {
 		r.Get("/user/photos/headshot", photoH.GetHeadshot)
 		r.Get("/user/photos/bodyshot", photoH.GetBodyshot)
 		r.Delete("/user/photos/{type}", photoH.DeletePhoto)
+		r.Post("/skills/user", userSkillH.Submit)
 	})
 
 	// Agent-token-authenticated routes (Claude skill / agent client)
@@ -267,6 +270,9 @@ func main() {
 		r.Get("/news-sources/{id}", newsSourceH.Get)
 		r.Get("/user/photos/headshot", photoH.GetHeadshot)
 		r.Get("/user/photos/bodyshot", photoH.GetBodyshot)
+		r.Get("/skills/user/manifest", userSkillH.Manifest)
+		r.Get("/skills/user/files/{name}/*", userSkillH.GetFile)
+		r.Post("/skills/user", userSkillH.Submit)
 	})
 
 	workerCtx, workerCancel := context.WithCancel(context.Background())

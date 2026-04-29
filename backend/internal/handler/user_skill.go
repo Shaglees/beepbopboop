@@ -91,7 +91,6 @@ func (h *UserSkillHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		kind,
 		req.Extends,
 		req.Intent,
-		result.FrequencyPerMonth,
 		req.Hints,
 		result.Files,
 	)
@@ -100,12 +99,14 @@ func (h *UserSkillHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Standalone skills get their own slot in the user's spread; extensions
-	// modify a shipped vertical that already exists, so they leave the
-	// spread alone. Spread update failures are logged but non-fatal — the
-	// skill is still installed and usable.
-	if kind == model.UserSkillKindStandalone {
-		if err := h.spreadRepo.UpsertVerticalForFrequency(user.ID, skill.Name, skill.FrequencyPerMonth); err != nil {
+	// Standalone skills get their own slot in the user's spread when the
+	// caller provided a weight (iOS slider). Extensions modify a shipped
+	// vertical that already exists, so they leave the spread alone. A zero
+	// weight means "leave the spread alone" — the user can manage it later
+	// via the existing PUT /settings/spread. Update failures are logged but
+	// non-fatal: the skill is still installed and usable.
+	if kind == model.UserSkillKindStandalone && req.Weight > 0 {
+		if err := h.spreadRepo.UpsertVertical(user.ID, skill.Name, req.Weight); err != nil {
 			log.Printf("warning: spread update failed for user=%s skill=%s: %v", user.ID, skill.Name, err)
 		}
 	}

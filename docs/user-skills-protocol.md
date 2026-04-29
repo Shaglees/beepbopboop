@@ -28,7 +28,7 @@ This document is the shared contract between three codebases — the iOS app, th
 ```
 +----------+        POST /skills/user        +-------------------+
 |  iOS app | ------------------------------> |                   |
-+----------+        (intent + frequency)     |  BeepBopBoop      |
++----------+      (intent + spread weight)   |  BeepBopBoop      |
                                              |  backend          |
                                              |                   |
                                              |  - skill-builder  |
@@ -50,8 +50,8 @@ This document is the shared contract between three codebases — the iOS app, th
 
 Three runtimes:
 
-1. **iOS app.** Captures intent + frequency (slider: every-day → every-month). Calls `POST /skills/user`.
-2. **Backend (this repo, Go).** Owns the skill-builder, persistent storage, and the spread auto-updater. Returns `user_skills` on the agent variant of `/user/profile` so a running skill can install pending entries.
+1. **iOS app.** Captures intent + skill-builder slider value (every-day → every-month) and submits it as a spread weight. Calls `POST /skills/user`.
+2. **Backend (this repo, Go).** Owns the skill-builder, persistent storage, and a thin spread updater. Cadence for a user-skill lives in the existing `user_settings.spread_targets` (same schema as `PUT /settings/spread`); the backend writes the requested weight into that table and renormalizes the rest. Returns `user_skills` on the agent variant of `/user/profile` so a running skill can install pending entries.
 3. **openclaw.** Runs Claude Code daily. The shipped skills' existing `_shared/CONTEXT_BOOTSTRAP.md` step calls `/user/profile`; if `profile.user_skills` is non-empty, the running skill curls the file endpoints and writes `.claude/skills/_user/<name>/`.
 
 The skill-builder is server-side. It runs on the backend with backend-managed credentials, not as a Claude Code skill.
@@ -128,7 +128,7 @@ Submit user intent. Returns immediately. The current backend builds the skill sy
   "intent": "local high school football for Springfield, IL — score recaps and matchup previews",
   "kind": "standalone",
   "extends": null,
-  "frequency_per_month": 14,
+  "weight": 0.1,
   "hints": {
     "location": "Springfield, IL"
   }
@@ -138,8 +138,8 @@ Submit user intent. Returns immediately. The current backend builds the skill sy
 - `intent` (required): free-form user description, captured from the iOS intake screen.
 - `kind`: `"standalone"` for a brand-new skill (#283), `"extension"` for prefs on a shipped skill (#285). Default `"standalone"`.
 - `extends`: when `kind == "extension"`, the shipped-skill name (e.g. `"beepbopboop-football"`). Required for extensions, ignored otherwise.
-- `frequency_per_month`: integer 1-30 from the iOS skill-builder slider (30 = "every day", 1 = "every month"). The backend uses it to allocate a slot in the user's spread on **standalone** skills (extensions don't change the spread). Missing / zero defaults to `7` (weekly). Out-of-range values are clamped.
-- `hints`: optional structured side-channel for the skill-builder. Frequency lives in its own top-level field, not here.
+- `weight`: the cadence for this skill, **same wire scale and semantics as `PUT /settings/spread` `targets` values** (a fraction in [0, 1]; the iOS skill-builder slider produces this value directly — "every day" → high weight, "every month" → low weight; iOS owns the mapping). Backend writes it to `user_settings.spread_targets` and renormalizes other verticals so total stays at 1.0. **Standalone only** — extensions ignore the field. Zero / missing means "leave the spread alone"; the user can adjust later via the existing `PUT /settings/spread`.
+- `hints`: optional structured side-channel for the skill-builder.
 
 **Response (202 Accepted):**
 
@@ -293,6 +293,6 @@ Status as of this revision:
 2. ✅ **Backend endpoints + storage** with stub skill-builder (PR #287).
 3. ✅ **Profile piggyback + spread auto-update + bootstrap install step** (this PR). Replaces the originally planned "openclaw bootstrap sync" — there is no separate sync runner; the running skill is the installer.
 4. **Real skill-builder agent** on the backend. Replaces the stub with a Claude API call that does source discovery, sibling-skill inheritance, and proper SKILL.md generation.
-5. **iOS intake screen.** Slider for `frequency_per_month`, intent text field, kind picker.
+5. **iOS intake screen.** Slider that produces a spread `weight`, intent text field, kind picker.
 6. **Conversational pref capture (#285).** Layered on top of the standalone flow.
 7. **Delete contract.** Auto-cleanup on disk when a user deletes a skill in iOS (see Open questions).

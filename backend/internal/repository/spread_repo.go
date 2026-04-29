@@ -72,23 +72,23 @@ func (r *SpreadRepo) UpsertTargets(userID string, st *model.SpreadTargets) error
 	return nil
 }
 
-// UpsertVerticalForFrequency adds or updates a vertical's weight from a
-// posts-per-month frequency (1-30, where 30 ≈ daily). Other verticals are
-// scaled so total weights still sum to 1.0. Pinned status on the target
-// vertical is preserved.
+// UpsertVertical adds or updates one vertical's weight, scaling the rest so
+// total weights still sum to 1.0. Pinned status on the target vertical is
+// preserved. Weight is the same scale as PUT /settings/spread targets values
+// (a fraction in [0, 1]).
 //
-// Mapping: targetWeight = freq/30 * 0.1 (so daily = 0.1, monthly ≈ 0.003).
-// The 0.1 cap keeps a single user-skill from dominating a multi-vertical
-// spread.
-func (r *SpreadRepo) UpsertVerticalForFrequency(userID, name string, postsPerMonth int) error {
+// Used by POST /skills/user to allocate a slot for a newly-created
+// standalone user-skill from the iOS skill-builder slider value, without
+// requiring the iOS app to issue a separate PUT /settings/spread call.
+func (r *SpreadRepo) UpsertVertical(userID, name string, weight float64) error {
 	if name == "" {
 		return fmt.Errorf("vertical name required")
 	}
-	if postsPerMonth < 1 {
-		postsPerMonth = 1
+	if weight < 0 {
+		weight = 0
 	}
-	if postsPerMonth > 30 {
-		postsPerMonth = 30
+	if weight > 1 {
+		weight = 1
 	}
 
 	targets, err := r.GetTargets(userID)
@@ -102,9 +102,6 @@ func (r *SpreadRepo) UpsertVerticalForFrequency(userID, name string, postsPerMon
 		targets.Verticals = map[string]model.SpreadVertical{}
 	}
 
-	targetWeight := float64(postsPerMonth) / 30.0 * 0.1
-
-	// Sum every vertical except the one we're upserting.
 	otherSum := 0.0
 	for k, v := range targets.Verticals {
 		if k != name {
@@ -112,7 +109,7 @@ func (r *SpreadRepo) UpsertVerticalForFrequency(userID, name string, postsPerMon
 		}
 	}
 
-	available := 1.0 - targetWeight
+	available := 1.0 - weight
 	if otherSum > 0 && available > 0 {
 		scale := available / otherSum
 		for k, v := range targets.Verticals {
@@ -128,7 +125,7 @@ func (r *SpreadRepo) UpsertVerticalForFrequency(userID, name string, postsPerMon
 	if existing, ok := targets.Verticals[name]; ok {
 		pinned = existing.Pinned
 	}
-	targets.Verticals[name] = model.SpreadVertical{Weight: targetWeight, Pinned: pinned}
+	targets.Verticals[name] = model.SpreadVertical{Weight: weight, Pinned: pinned}
 
 	return r.UpsertTargets(userID, targets)
 }

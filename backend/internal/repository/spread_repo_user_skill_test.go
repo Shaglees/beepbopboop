@@ -34,72 +34,51 @@ func sumWeights(t *testing.T, r *repository.SpreadRepo, userID string) float64 {
 	return sum
 }
 
-func TestSpreadRepo_UpsertVerticalForFrequency_Daily(t *testing.T) {
+func TestSpreadRepo_UpsertVertical_AddsAndNormalizes(t *testing.T) {
 	repo, userID := setupSpreadRepo(t)
 
-	if err := repo.UpsertVerticalForFrequency(userID, "local-hs-football", 30); err != nil {
+	if err := repo.UpsertVertical(userID, "local-hs-football", 0.1); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 
 	st, _ := repo.GetTargets(userID)
-	if st == nil || st.Verticals["local-hs-football"].Weight == 0 {
-		t.Fatalf("new vertical not added: %+v", st)
+	if st == nil {
+		t.Fatal("targets should exist after upsert")
 	}
-	// Daily -> 30/30 * 0.1 = 0.1
 	if got := st.Verticals["local-hs-football"].Weight; math.Abs(got-0.1) > 1e-9 {
-		t.Errorf("daily weight = %v, want 0.1", got)
+		t.Errorf("weight = %v, want 0.1", got)
 	}
 	if sum := sumWeights(t, repo, userID); math.Abs(sum-1.0) > 1e-9 {
 		t.Errorf("weights should sum to 1.0, got %v", sum)
 	}
 }
 
-func TestSpreadRepo_UpsertVerticalForFrequency_Monthly(t *testing.T) {
+func TestSpreadRepo_UpsertVertical_ReUpsertChangesWeight(t *testing.T) {
 	repo, userID := setupSpreadRepo(t)
 
-	if err := repo.UpsertVerticalForFrequency(userID, "rare-skill", 1); err != nil {
-		t.Fatalf("upsert: %v", err)
+	if err := repo.UpsertVertical(userID, "skill-a", 0.05); err != nil {
+		t.Fatalf("upsert first: %v", err)
 	}
-
-	st, _ := repo.GetTargets(userID)
-	got := st.Verticals["rare-skill"].Weight
-	want := 1.0 / 30.0 * 0.1
-	if math.Abs(got-want) > 1e-9 {
-		t.Errorf("monthly weight = %v, want %v", got, want)
-	}
-	if sum := sumWeights(t, repo, userID); math.Abs(sum-1.0) > 1e-9 {
-		t.Errorf("weights should sum to 1.0, got %v", sum)
-	}
-}
-
-func TestSpreadRepo_UpsertVerticalForFrequency_ReUpsertChangesWeight(t *testing.T) {
-	repo, userID := setupSpreadRepo(t)
-
-	if err := repo.UpsertVerticalForFrequency(userID, "skill-a", 7); err != nil {
-		t.Fatalf("upsert weekly: %v", err)
-	}
-	if err := repo.UpsertVerticalForFrequency(userID, "skill-a", 30); err != nil {
-		t.Fatalf("upsert daily: %v", err)
+	if err := repo.UpsertVertical(userID, "skill-a", 0.1); err != nil {
+		t.Fatalf("upsert second: %v", err)
 	}
 
 	st, _ := repo.GetTargets(userID)
 	if got := st.Verticals["skill-a"].Weight; math.Abs(got-0.1) > 1e-9 {
-		t.Errorf("after re-upsert to daily, weight = %v, want 0.1", got)
+		t.Errorf("after re-upsert, weight = %v, want 0.1", got)
 	}
 	if sum := sumWeights(t, repo, userID); math.Abs(sum-1.0) > 1e-9 {
 		t.Errorf("weights should still sum to 1.0 after re-upsert, got %v", sum)
 	}
 }
 
-func TestSpreadRepo_UpsertVerticalForFrequency_PreservesPinned(t *testing.T) {
+func TestSpreadRepo_UpsertVertical_PreservesPinned(t *testing.T) {
 	repo, userID := setupSpreadRepo(t)
 
-	// Seed with a pinned default; re-upsert and ensure pinned survives.
 	defaults := repository.DefaultTargets()
 	if err := repo.UpsertTargets(userID, defaults); err != nil {
 		t.Fatalf("seed defaults: %v", err)
 	}
-	// Manually pin "sports".
 	st, _ := repo.GetTargets(userID)
 	v := st.Verticals["sports"]
 	v.Pinned = true
@@ -108,8 +87,8 @@ func TestSpreadRepo_UpsertVerticalForFrequency_PreservesPinned(t *testing.T) {
 		t.Fatalf("pin sports: %v", err)
 	}
 
-	if err := repo.UpsertVerticalForFrequency(userID, "sports", 30); err != nil {
-		t.Fatalf("upsert sports daily: %v", err)
+	if err := repo.UpsertVertical(userID, "sports", 0.2); err != nil {
+		t.Fatalf("upsert sports: %v", err)
 	}
 	st, _ = repo.GetTargets(userID)
 	if !st.Verticals["sports"].Pinned {
@@ -117,25 +96,22 @@ func TestSpreadRepo_UpsertVerticalForFrequency_PreservesPinned(t *testing.T) {
 	}
 }
 
-func TestSpreadRepo_UpsertVerticalForFrequency_OutOfRange(t *testing.T) {
+func TestSpreadRepo_UpsertVertical_ClampsOutOfRange(t *testing.T) {
 	repo, userID := setupSpreadRepo(t)
 
-	// Below min -> clamped to 1.
-	if err := repo.UpsertVerticalForFrequency(userID, "low", -5); err != nil {
+	if err := repo.UpsertVertical(userID, "neg", -1); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	st, _ := repo.GetTargets(userID)
-	want := 1.0 / 30.0 * 0.1
-	if math.Abs(st.Verticals["low"].Weight-want) > 1e-9 {
-		t.Errorf("low clamp: got %v, want %v", st.Verticals["low"].Weight, want)
+	if got := st.Verticals["neg"].Weight; got != 0 {
+		t.Errorf("negative weight should clamp to 0, got %v", got)
 	}
 
-	// Above max -> clamped to 30.
-	if err := repo.UpsertVerticalForFrequency(userID, "high", 999); err != nil {
+	if err := repo.UpsertVertical(userID, "huge", 5); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	st, _ = repo.GetTargets(userID)
-	if math.Abs(st.Verticals["high"].Weight-0.1) > 1e-9 {
-		t.Errorf("high clamp: got %v, want 0.1", st.Verticals["high"].Weight)
+	if got := st.Verticals["huge"].Weight; math.Abs(got-1) > 1e-9 {
+		t.Errorf("over-1 weight should clamp to 1, got %v", got)
 	}
 }

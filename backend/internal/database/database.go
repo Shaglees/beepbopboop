@@ -453,22 +453,23 @@ func Open(url string) (*sql.DB, error) {
 
 	// User skills: niche skills authored from the iOS app, plus extension
 	// preferences layered on shipped skills. See docs/user-skills-protocol.md.
+	// Frequency / cadence for a user-skill is NOT stored here — it lives in
+	// user_settings.spread_targets via the existing spread system. user_skills
+	// stores only the skill identity and content.
 	db.Exec(`CREATE TABLE IF NOT EXISTS user_skills (
-		id                   BIGSERIAL PRIMARY KEY,
-		user_id              TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		skill_name           TEXT NOT NULL,
-		version              INTEGER NOT NULL DEFAULT 1,
-		kind                 TEXT NOT NULL DEFAULT 'standalone',
-		extends              TEXT,
-		intent               TEXT NOT NULL DEFAULT '',
-		frequency_per_month  INTEGER NOT NULL DEFAULT 7,
-		hints                JSONB,
-		status               TEXT NOT NULL DEFAULT 'ready',
-		created_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		id          BIGSERIAL PRIMARY KEY,
+		user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		skill_name  TEXT NOT NULL,
+		version     INTEGER NOT NULL DEFAULT 1,
+		kind        TEXT NOT NULL DEFAULT 'standalone',
+		extends     TEXT,
+		intent      TEXT NOT NULL DEFAULT '',
+		hints       JSONB,
+		status      TEXT NOT NULL DEFAULT 'ready',
+		created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE (user_id, skill_name)
 	)`)
-	db.Exec("ALTER TABLE user_skills ADD COLUMN IF NOT EXISTS frequency_per_month INTEGER NOT NULL DEFAULT 7")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_user_skills_user_id ON user_skills(user_id)")
 
 	db.Exec(`CREATE TABLE IF NOT EXISTS user_skill_files (

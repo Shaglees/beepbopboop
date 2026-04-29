@@ -108,7 +108,7 @@ func TestGetProfileAgent_IncludesUserSkills(t *testing.T) {
 
 	user, _ := userRepo.FindOrCreateByFirebaseUID("fb-profile-agent")
 	agent, _ := agentRepo.Create(user.ID, "openclaw")
-	_, err := skillRepo.Upsert(user.ID, "local-skill", model.UserSkillKindStandalone, "", "intent", 14, nil,
+	_, err := skillRepo.Upsert(user.ID, "local-skill", model.UserSkillKindStandalone, "", "intent", nil,
 		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("---\nname: local-skill\n---\n")}})
 	if err != nil {
 		t.Fatalf("seed skill: %v", err)
@@ -148,7 +148,7 @@ func TestGetProfileFirebase_OmitsUserSkills(t *testing.T) {
 	skillRepo := repository.NewUserSkillRepo(db)
 
 	user, _ := userRepo.FindOrCreateByFirebaseUID("fb-profile-fb")
-	_, err := skillRepo.Upsert(user.ID, "ios-only", model.UserSkillKindStandalone, "", "intent", 14, nil,
+	_, err := skillRepo.Upsert(user.ID, "ios-only", model.UserSkillKindStandalone, "", "intent", nil,
 		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("---\nname: ios-only\n---\n")}})
 	if err != nil {
 		t.Fatalf("seed: %v", err)

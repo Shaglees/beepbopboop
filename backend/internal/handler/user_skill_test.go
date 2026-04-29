@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -38,7 +39,7 @@ func setupUserSkillHandler(t *testing.T) userSkillTestEnv {
 func TestUserSkillHandler_Submit_Standalone(t *testing.T) {
 	env := setupUserSkillHandler(t)
 
-	body := `{"intent": "local high school football for Springfield, IL", "frequency_per_month": 30}`
+	body := `{"intent": "local high school football for Springfield, IL", "weight": 0.1}`
 	req := httptest.NewRequest("POST", "/skills/user", bytes.NewBufferString(body))
 	req = req.WithContext(middleware.WithFirebaseUID(req.Context(), "fb-submit-1"))
 	rec := httptest.NewRecorder()
@@ -67,17 +68,43 @@ func TestUserSkillHandler_Submit_Standalone(t *testing.T) {
 	if skill.Kind != model.UserSkillKindStandalone {
 		t.Errorf("expected standalone kind, got %s", skill.Kind)
 	}
-	if skill.FrequencyPerMonth != 30 {
-		t.Errorf("frequency should be persisted, got %d", skill.FrequencyPerMonth)
-	}
 
-	// Spread should have a vertical for the new skill.
+	// Spread should have a vertical for the new skill at the requested weight.
 	st, _ := env.spreadRepo.GetTargets(user.ID)
 	if st == nil {
-		t.Fatal("spread should be auto-created on standalone submit")
+		t.Fatal("spread should be auto-created on standalone submit with a weight")
 	}
-	if v, ok := st.Verticals[resp.SkillName]; !ok || v.Weight == 0 {
-		t.Errorf("spread should have a slot for %s, got %+v", resp.SkillName, st.Verticals)
+	v, ok := st.Verticals[resp.SkillName]
+	if !ok {
+		t.Fatalf("spread should have a slot for %s, got %+v", resp.SkillName, st.Verticals)
+	}
+	if math.Abs(v.Weight-0.1) > 1e-9 {
+		t.Errorf("expected weight 0.1, got %v", v.Weight)
+	}
+}
+
+func TestUserSkillHandler_Submit_Standalone_NoWeight_LeavesSpreadAlone(t *testing.T) {
+	env := setupUserSkillHandler(t)
+
+	body := `{"intent": "no-weight skill"}`
+	req := httptest.NewRequest("POST", "/skills/user", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithFirebaseUID(req.Context(), "fb-no-weight"))
+	rec := httptest.NewRecorder()
+
+	env.h.Submit(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+	user, _ := env.userRepo.FindOrCreateByFirebaseUID("fb-no-weight")
+	st, _ := env.spreadRepo.GetTargets(user.ID)
+	if st != nil {
+		// If a spread exists, it must NOT have an entry for this skill.
+		var resp model.CreateUserSkillResponse
+		json.NewDecoder(rec.Body).Decode(&resp)
+		if _, ok := st.Verticals[resp.SkillName]; ok {
+			t.Errorf("submit without weight must not write to spread, got %+v", st.Verticals)
+		}
 	}
 }
 
@@ -135,7 +162,7 @@ func TestUserSkillHandler_Manifest(t *testing.T) {
 	env := setupUserSkillHandler(t)
 	user, _ := env.userRepo.FindOrCreateByFirebaseUID("fb-manifest")
 	agent, _ := env.agentRepo.Create(user.ID, "openclaw")
-	_, err := env.skillRepo.Upsert(user.ID, "my-skill", model.UserSkillKindStandalone, "", "intent", 7, nil,
+	_, err := env.skillRepo.Upsert(user.ID, "my-skill", model.UserSkillKindStandalone, "", "intent", nil,
 		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("---\nname: my-skill\n---\n")}})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -172,7 +199,7 @@ func TestUserSkillHandler_GetFile(t *testing.T) {
 
 	body := []byte("# preferences\n- avoid paywalls\n")
 	_, err := env.skillRepo.Upsert(user.ID, "beepbopboop-local-news", model.UserSkillKindExtension,
-		"beepbopboop-local-news", "avoid paywalls", 7, nil,
+		"beepbopboop-local-news", "avoid paywalls", nil,
 		[]repository.FileInput{{Path: "preferences.md", Content: body}})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -216,7 +243,7 @@ func TestUserSkillHandler_GetFile_ForeignUserDenied(t *testing.T) {
 	intruder, _ := env.userRepo.FindOrCreateByFirebaseUID("fb-intruder")
 	intruderAgent, _ := env.agentRepo.Create(intruder.ID, "intruder")
 
-	_, err := env.skillRepo.Upsert(owner.ID, "private", model.UserSkillKindStandalone, "", "x", 7, nil,
+	_, err := env.skillRepo.Upsert(owner.ID, "private", model.UserSkillKindStandalone, "", "x", nil,
 		[]repository.FileInput{{Path: "SKILL.md", Content: []byte("secret")}})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
